@@ -39,6 +39,9 @@ export function createApp({
 
   // ---------- Hoteles con datos reales de LiteAPI (si hay LITEAPI_KEY) ----------
   const LIVE_DAYS = 30;
+  // Con la clave real de LiteAPI cada reserva es real y se carga a la cuenta del
+  // titular de la clave: en una web pública se desactivan salvo ALLOW_REAL_BOOKINGS=1.
+  const liveBookingEnabled = !!live && (live.sandbox || process.env.ALLOW_REAL_BOOKINGS === '1');
   const isLive = (id) => !!live && String(id || '').startsWith('lite-');
 
   async function liveHotels(q, res) {
@@ -55,7 +58,7 @@ export function createApp({
         summary: { freeDays: 0, minPrice: null, maxPrice: null, avgPrice: null },
         bestStay: null,
       }));
-      res.json({ start, days: LIVE_DAYS, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city } });
+      res.json({ start, days: LIVE_DAYS, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled } });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudo consultar LiteAPI ahora mismo. Inténtalo de nuevo en unos segundos.' });
@@ -89,6 +92,7 @@ export function createApp({
   });
 
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {
     try {
@@ -124,6 +128,9 @@ export function createApp({
     if (name.length < 2) return res.status(400).json({ error: 'Indica tu nombre.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email no válido.' });
     if (isLive(body.itemId)) {
+      if (!liveBookingEnabled) {
+        return res.status(403).json({ error: 'En esta web de demostración las reservas reales están desactivadas: puedes ver precios y disponibilidad reales, pero no reservar.' });
+      }
       try {
         const q = await live.quote(body);
         const b = await live.book({ offerId: q.offerId, name, email, units: q.units });

@@ -11,7 +11,7 @@ function fakeLiteApi(log) {
     const u = String(url);
     const body = opts.body ? JSON.parse(opts.body) : null;
     log.push(`${opts.method} ${u.replace(/^https:\/\/[^/]+\/v3\.0/, '')}`);
-    assert.equal(opts.headers['X-API-Key'], 'sand_test');
+    assert.ok(['sand_test', 'prod_test'].includes(opts.headers['X-API-Key']));
     if (u.includes('/data/places')) return Response.json({ data: [{ placeId: 'P1', types: ['locality'] }] });
     if (u.includes('/data/hotels')) {
       return Response.json({ data: [
@@ -93,6 +93,27 @@ test('hoteles, precios por noche, reserva y cancelación con LiteAPI', async () 
     assert.equal(cancel.status, 'cancelada');
     assert.equal(cancel.cancellation.refund, 241.5);
     assert.ok(log.some((l) => l.startsWith('PUT /bookings/BK1')));
+  } finally {
+    server.close();
+  }
+});
+
+test('con la clave real, sin ALLOW_REAL_BOOKINGS se ven precios pero no se reserva', async () => {
+  delete process.env.ALLOW_REAL_BOOKINGS;
+  const live = new LiteApi({ key: 'prod_test', fetchImpl: fakeLiteApi([]) });
+  const server = createApp({ store: new BookingStore(null), osm: null, live }).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://localhost:${server.address().port}`;
+  try {
+    const data = await fetch(`${base}/api/hotels?destination=Granada`).then((r) => r.json());
+    assert.equal(data.live.sandbox, false);
+    assert.equal(data.live.bookingEnabled, false);
+    const body = JSON.stringify({ type: 'hotel', itemId: data.results[0].id, checkIn: '2026-11-10', checkOut: '2026-11-12', units: 1, name: 'Ana López', email: 'ana@test.com' });
+    const headers = { 'Content-Type': 'application/json' };
+    assert.equal((await fetch(`${base}/api/quote`, { method: 'POST', headers, body })).status, 200);
+    const res = await fetch(`${base}/api/bookings`, { method: 'POST', headers, body });
+    assert.equal(res.status, 403);
+    assert.match((await res.json()).error, /reservas reales están desactivadas/);
   } finally {
     server.close();
   }

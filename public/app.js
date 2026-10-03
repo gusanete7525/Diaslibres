@@ -535,7 +535,7 @@ async function refreshQuote() {
       : '';
     extra.hidden = !q.roomName;
     err.hidden = true;
-    btn.disabled = false;
+    btn.disabled = !!state.bookingBlocked;
   } catch (e) {
     $('#bookTotal').textContent = '—';
     err.textContent = e.message;
@@ -556,6 +556,11 @@ function openBooking(item, ui, isFlight) {
   $('#bookError').hidden = true;
   $('#bookTotal').textContent = '…';
   $('#bookExtra').hidden = true;
+  state.bookingBlocked = !isFlight && item.origin === 'liteapi' && state.data.live?.bookingEnabled === false;
+  $('#bookConfirm').hidden = state.bookingBlocked;
+  if (state.bookingBlocked) {
+    $('#bookSummary').insertAdjacentHTML('beforeend', '<br><span class="meta">Precio real de hoy. En esta demostración no se puede reservar.</span>');
+  }
   dialog.showModal();
   refreshQuote();
 }

@@ -50,3 +50,16 @@ Tests: `npm test`
 ## Notas
 
 Los **24 hoteles son reales** (2 por ciudad): nombre, categoría, dirección, web oficial y una fuente pública de verificación están en `src/catalog.js`. Lo que **no** es real es el inventario: precios y ocupación de «otros clientes» se generan de forma determinista según temporada y fin de semana, y se suman las reservas reales hechas en la web. Las reservas no se envían al hotel y no hay pasarela de pago; para producción haría falta una base de datos, pagos y conexión a proveedores reales (channel manager / GDS).
+
+## Publicar en internet (Render)
+
+El repositorio incluye `render.yaml` para desplegar en [Render](https://render.com) con su plan gratuito:
+
+1. Crea una cuenta en Render y conecta tu GitHub.
+2. **New → Blueprint** y elige este repositorio (rama `main`).
+3. Render pedirá los valores de `LITEAPI_KEY` (y opcionalmente `ANTHROPIC_API_KEY`). No se guardan en el repositorio.
+4. Al terminar, la web queda en `https://diaslibres.onrender.com` (o un nombre parecido).
+
+Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la primera visita tarda ~1 min en despertar) y el disco no es permanente, así que las reservas de `data/bookings.json` se pierden al reiniciar.
+
+**Clave real de LiteAPI:** con una clave que no empieza por `sand_` los precios y la disponibilidad son los reales, y cada reserva sería real y se cargaría a la cuenta de LiteAPI del titular. Por eso, con esa clave, las reservas están **desactivadas** salvo que definas `ALLOW_REAL_BOOKINGS=1`. Para cobrar a los clientes haría falta además integrar el pago de LiteAPI.
