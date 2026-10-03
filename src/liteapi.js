@@ -62,9 +62,11 @@ export class LiteApi {
 
   // ---------- Peticiones con límite de concurrencia y reintentos en 429 ----------
 
-  async #slot() {
+  // Las peticiones prioritarias (buscar hoteles, presupuesto, reserva) se cuelan
+  // delante de los precios del calendario, que pueden ser decenas en cola.
+  async #slot(priority) {
     if (this.active < CONCURRENCY) return void this.active++;
-    await new Promise((r) => this.waiting.push(r));
+    await new Promise((r) => (priority ? this.waiting.unshift(r) : this.waiting.push(r)));
     this.active++;
   }
 
@@ -73,8 +75,8 @@ export class LiteApi {
     this.waiting.shift()?.();
   }
 
-  async #request(method, url, body) {
-    await this.#slot();
+  async #request(method, url, body, { priority = true } = {}) {
+    await this.#slot(priority);
     try {
       for (let attempt = 0; ; attempt++) {
         const res = await this.fetch(url, {
@@ -187,7 +189,7 @@ export class LiteApi {
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 6,
-    });
+    }, { priority: false });
     const found = new Map(data.map((r) => [r.hotelId, r.price]));
     for (const h of missing) {
       const p = found.get(h.liteId);

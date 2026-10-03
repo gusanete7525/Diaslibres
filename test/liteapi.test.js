@@ -140,3 +140,31 @@ test('/api/health muestra el último error de LiteAPI sin la clave', async () =>
     server.close();
   }
 });
+
+test('buscar hoteles no espera detrás de los precios del calendario en cola', async () => {
+  const order = [];
+  let release;
+  const gate = new Promise((r) => (release = r));
+  const fetchImpl = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.endsWith('/hotels/min-rates')) {
+      order.push('precio');
+      await gate; // los precios tardan
+      return Response.json({ data: [] });
+    }
+    order.push('hoteles');
+    if (u.includes('/data/places')) return Response.json({ data: [{ placeId: 'P', types: ['locality'] }] });
+    return Response.json({ data: [{ id: 'lpX', name: 'X', city: 'Roma', country: 'it' }] });
+  };
+  const live = new LiteApi({ key: 'sand_t', fetchImpl });
+  await live.hotels('Roma');
+  const id = 'lite-lpX';
+  const prices = live.nightlyPrices([id], '2030-01-01', 10); // 10 noches: 3 en curso y 7 en cola
+  await new Promise((r) => setTimeout(r, 20));
+  const search = live.hotels('Milán'); // llega después, pero debe ir antes que los 7 precios en cola
+  await new Promise((r) => setTimeout(r, 20));
+  release();
+  await Promise.all([prices, search]);
+  const firstSearch = order.indexOf('hoteles', 2);
+  assert.ok(firstSearch > 0 && firstSearch <= 6, `la búsqueda se atendió en el puesto ${firstSearch}: ${order.join(',')}`);
+});
