@@ -118,3 +118,25 @@ test('con la clave real, sin ALLOW_REAL_BOOKINGS se ven precios pero no se reser
     server.close();
   }
 });
+
+test('la clave se limpia de espacios y comillas al pegarla', () => {
+  const live = new LiteApi({ key: '  "sand_abc"\n', fetchImpl: async () => Response.json({}) });
+  assert.equal(live.key, 'sand_abc');
+  assert.equal(live.sandbox, true);
+});
+
+test('/api/health muestra el último error de LiteAPI sin la clave', async () => {
+  const live = new LiteApi({ key: 'sand_secreta', fetchImpl: async () => Response.json({ error: { description: 'invalid api key' } }, { status: 401 }) });
+  const server = createApp({ store: new BookingStore(null), osm: null, live }).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://localhost:${server.address().port}`;
+  try {
+    assert.equal((await fetch(`${base}/api/hotels?destination=Roma`)).status, 502);
+    const h = await fetch(`${base}/api/health`).then((r) => r.text());
+    assert.match(h, /invalid api key/);
+    assert.match(h, /"status":401/);
+    assert.doesNotMatch(h, /secreta/);
+  } finally {
+    server.close();
+  }
+});

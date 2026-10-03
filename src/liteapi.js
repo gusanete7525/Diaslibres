@@ -45,8 +45,11 @@ export class LiteApiError extends Error {}
 
 export class LiteApi {
   constructor({ key, fetchImpl = globalThis.fetch } = {}) {
+    // Quita espacios, saltos de línea y comillas que suelen colarse al pegar la clave.
+    key = String(key || '').trim().replace(/^["']|["']$/g, '').trim();
     if (!key) throw new Error('Falta LITEAPI_KEY');
     this.key = key;
+    this.lastError = null; // último error de LiteAPI (sin la clave), para /api/health
     this.fetch = fetchImpl;
     this.sandbox = key.startsWith('sand_');
     this.active = 0;
@@ -86,6 +89,7 @@ export class LiteApi {
         }
         if (!res.ok || data.error) {
           const msg = data.error?.description || data.error?.message || `LiteAPI respondió ${res.status}`;
+          this.lastError = { at: new Date().toISOString(), status: res.status, message: String(msg).slice(0, 200) };
           throw new LiteApiError(msg);
         }
         return data;

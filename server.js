@@ -14,7 +14,7 @@ const root = dirname(fileURLToPath(import.meta.url));
 export function createApp({
   store = new BookingStore(join(root, 'data', 'bookings.json')),
   osm = process.env.DIASLIBRES_OSM === 'off' ? null : new OsmHotels({ file: join(root, 'data', 'osm-cache.json') }),
-  live = process.env.LITEAPI_KEY ? new LiteApi({ key: process.env.LITEAPI_KEY }) : null,
+  live = process.env.LITEAPI_KEY?.trim() ? new LiteApi({ key: process.env.LITEAPI_KEY }) : null,
 } = {}) {
   const app = express();
   app.use(express.json({ limit: '20kb' }));
@@ -92,7 +92,7 @@ export function createApp({
   });
 
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
-  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, lastLiteApiError: live?.lastError ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {
     try {
@@ -214,7 +214,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   createApp().listen(port, () => {
     console.log(`DíasLibres en http://localhost:${port}`);
     if (!process.env.ANTHROPIC_API_KEY) console.log('Sin ANTHROPIC_API_KEY: la búsqueda con IA usa el intérprete local.');
-    if (process.env.LITEAPI_KEY) console.log(`Hoteles con datos reales de LiteAPI${process.env.LITEAPI_KEY.startsWith('sand_') ? ' (entorno de pruebas)' : ''}.`);
+    if (process.env.LITEAPI_KEY?.trim()) console.log(`Hoteles con datos reales de LiteAPI${process.env.LITEAPI_KEY.trim().replace(/^["']/, '').startsWith('sand_') ? ' (entorno de pruebas)' : ''}.`);
     else console.log('Sin LITEAPI_KEY: hoteles con precios y disponibilidad simulados.');
   });
 }
