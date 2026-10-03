@@ -83,15 +83,18 @@ const norm = (s) =>
     .replace(/[̀-ͯ]/g, '')
     .trim();
 
-export function searchHotels(bookings, f = {}) {
+// `extra`: hoteles adicionales ya acotados al destino (p. ej. de OpenStreetMap).
+export function searchHotels(bookings, f = {}, extra = []) {
   const start = f.start && f.start >= todayISO() ? f.start : todayISO();
   const days = Math.min(MAX_DAYS, Math.max(7, Number(f.days) || 60));
   const nights = Math.max(1, Math.min(30, Number(f.nights) || 3));
   const q = norm(f.destination);
   const tags = (f.tags || []).map(norm).filter(Boolean);
 
-  let list = HOTELS.filter((h) => {
-    if (q && !norm(`${h.city} ${h.country} ${h.name}`).includes(q)) return false;
+  const curated = new Set(HOTELS.map((h) => norm(h.name)));
+  const pool = [...HOTELS, ...extra.filter((h) => !curated.has(norm(h.name)))];
+  let list = pool.filter((h) => {
+    if (q && h.origin !== 'osm' && !norm(`${h.city} ${h.country} ${h.name}`).includes(q)) return false;
     if (f.minStars && h.stars < Number(f.minStars)) return false;
     if (tags.length && !tags.some((t) => h.tags.map(norm).includes(t))) return false;
     return true;
@@ -128,11 +131,11 @@ export function searchFlights(bookings, f = {}) {
 }
 
 // Valida y calcula el precio de una reserva. Lanza Error con mensaje en español.
-export function quote(bookings, req) {
+export function quote(bookings, req, extraHotels = []) {
   const units = Math.max(1, Math.min(4, Number(req.units) || 1));
   const today = todayISO();
   if (req.type === 'hotel') {
-    const hotel = HOTELS.find((h) => h.id === req.itemId);
+    const hotel = HOTELS.find((h) => h.id === req.itemId) || extraHotels.find((h) => h.id === req.itemId);
     if (!hotel) throw new Error('Hotel no encontrado.');
     if (!isISODate(req.checkIn) || !isISODate(req.checkOut)) throw new Error('Fechas no válidas.');
     const nights = daysBetween(req.checkIn, req.checkOut);

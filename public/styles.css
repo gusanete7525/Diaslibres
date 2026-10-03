@@ -223,3 +223,5 @@ body[data-view="hotels"] .flight-only, body[data-view="flights"] .hotel-only { d
   .theme-toggle { margin-left: auto; }
   .filters input, .filters select { width: 130px; }
 }
+.tag.osm { text-decoration: none; color: var(--brand); }
+.footer a { color: inherit; }

@@ -96,6 +96,9 @@ function filterParams() {
 
 async function search() {
   results.classList.add('loading');
+  if (state.view === 'hotels' && filters.destination.value.trim()) {
+    results.innerHTML = `<p class="count">Buscando hoteles reales en ${esc(filters.destination.value.trim())} (OpenStreetMap)…</p>`;
+  }
   try {
     const p = filterParams();
     const data = await api(`/api/${state.view === 'flights' ? 'flights' : 'hotels'}?${p}`);
@@ -181,7 +184,9 @@ function renderResults() {
   }
   const one = list.length === 1;
   const kind = state.view === 'flights' ? (one ? 'vuelo' : 'vuelos') : one ? 'hotel' : 'hoteles';
-  results.innerHTML = `<p class="count">${list.length} ${kind} · disponibilidad de los próximos ${state.data.days} días</p>`;
+  const osm = state.data.osm;
+  const osmNote = osm?.count ? ` · ${osm.count} de OpenStreetMap` : '';
+  results.innerHTML = `<p class="count">${list.length} ${kind}${osmNote} · disponibilidad de los próximos ${state.data.days} días</p>${osm?.error ? `<p class="count">⚠️ ${esc(osm.error)}</p>` : ''}`;
   for (const item of list) results.append(renderCard(item));
 }
 
@@ -206,7 +211,7 @@ function renderCard(item) {
         <h3>${esc(item.name)}</h3>
         <div class="meta">${item.stars ? `<span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}</div>
         ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">Web oficial ↗</a>` : ''}</div>` : ''}
-        <div class="tags">${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="Ficha en OpenStreetMap">🗺️ OpenStreetMap</a>` : ''}${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       </div>`;
   el.innerHTML = `
     <div>

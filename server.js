@@ -6,19 +6,41 @@ import { BookingStore } from './src/store.js';
 import { searchHotels, searchFlights, quote } from './src/availability.js';
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
+import { OsmHotels } from './src/osm.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
-export function createApp({ store = new BookingStore(join(root, 'data', 'bookings.json')) } = {}) {
+export function createApp({
+  store = new BookingStore(join(root, 'data', 'bookings.json')),
+  osm = process.env.DIASLIBRES_OSM === 'off' ? null : new OsmHotels({ file: join(root, 'data', 'osm-cache.json') }),
+} = {}) {
   const app = express();
   app.use(express.json({ limit: '20kb' }));
   app.use(express.static(join(root, 'public')));
 
   const list = (v) => (Array.isArray(v) ? v : v ? String(v).split(',') : []);
 
-  app.get('/api/hotels', (req, res) => {
+  // Con destino, se añaden hoteles reales de OpenStreetMap (si responde a tiempo).
+  async function osmHotels(destination) {
+    if (!osm || !destination || String(destination).trim().length < 2) return { hotels: [], error: null };
+    let timer;
+    try {
+      const timeout = new Promise((_, reject) => (timer = setTimeout(() => reject(new Error('OpenStreetMap tarda demasiado')), 20000)));
+      return { hotels: await Promise.race([osm.hotelsFor(String(destination)), timeout]), error: null };
+    } catch (err) {
+      console.error('[osm]', err.message);
+      return { hotels: [], error: 'No se pudo consultar OpenStreetMap; se muestran solo los hoteles del catálogo.' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  app.get('/api/hotels', async (req, res) => {
     const q = req.query;
-    res.json(searchHotels(store.all(), { ...q, tags: list(q.tags) }));
+    const extra = await osmHotels(q.destination);
+    const data = searchHotels(store.all(), { ...q, tags: list(q.tags) }, extra.hotels);
+    data.osm = { count: data.results.filter((h) => h.origin === 'osm').length, error: extra.error };
+    res.json(data);
   });
 
   app.get('/api/flights', (req, res) => {
@@ -37,7 +59,7 @@ export function createApp({ store = new BookingStore(join(root, 'data', 'booking
 
   app.post('/api/quote', (req, res) => {
     try {
-      const q = quote(store.all(), req.body || {});
+      const q = quote(store.all(), req.body || {}, osm?.known());
       res.json({ total: q.total, units: q.units, nights: q.nights, perNight: q.perNight });
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -51,7 +73,7 @@ export function createApp({ store = new BookingStore(join(root, 'data', 'booking
     if (name.length < 2) return res.status(400).json({ error: 'Indica tu nombre.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email no válido.' });
     try {
-      const q = quote(store.all(), body);
+      const q = quote(store.all(), body, osm?.known());
       const booking = store.add({
         code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
         type: body.type,

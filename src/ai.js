@@ -33,7 +33,7 @@ const FILTER_SCHEMA = {
 const SYSTEM = `Eres el buscador inteligente de DíasLibres, una agencia de reservas de hoteles y vuelos.
 Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
 - kind: "flight" si pide vuelos/avión/volar; si no, "hotel".
-- destination: una de estas ciudades de hotel: ${CITIES.join(', ')}; o, para vuelos, un aeropuerto: ${Object.entries(AIRPORTS).map(([c, n]) => `${c} (${n})`).join(', ')}. Si menciona una zona o país, elige la ciudad más adecuada o déjalo en null si encajan varias.
+- destination: para hoteles, la ciudad o pueblo que pida (cualquiera del mundo: la web busca hoteles reales en OpenStreetMap; ciudades con catálogo propio: ${CITIES.join(', ')}). Para vuelos, un aeropuerto de esta lista: ${Object.entries(AIRPORTS).map(([c, n]) => `${c} (${n})`).join(', ')}. Si menciona una zona o país, elige la ciudad más adecuada o déjalo en null si encajan varias.
 - origin: solo para vuelos (código IATA), si lo dice.
 - checkIn: solo si da una fecha o mes concreto (para un mes sin día, usa el primer día futuro de ese mes). Si no, null: la web enseña un calendario de disponibilidad y el usuario no está obligado a elegir fechas.
 - nights: duración de la estancia (fin de semana = 2, una semana = 7).
@@ -138,6 +138,11 @@ export function localParse(text) {
     destination = findCity(route[2]);
   }
   destination ??= findCity(t);
+  // Cualquier otra ciudad escrita con mayúscula tras "en"/"a" (hoteles vía OpenStreetMap).
+  if (!destination && kind === 'hotel') {
+    const m = text.match(/\b(?:en|a|de)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)(?:\s+(?:de\s+|del\s+|la\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)*)/u);
+    if (m && !MONTHS.includes(norm(m[1]))) destination = m[1];
+  }
 
   let nights = null;
   const n = t.match(/(\d+|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|quince)\s+(noche|dia|semana)/);

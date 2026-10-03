@@ -8,7 +8,7 @@ delete process.env.ANTHROPIC_API_KEY;
 let server, base;
 
 before(async () => {
-  server = createApp({ store: new BookingStore(null) }).listen(0);
+  server = createApp({ store: new BookingStore(null), osm: null }).listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://localhost:${server.address().port}`;
 });
