@@ -512,8 +512,16 @@ $('#mineForm').addEventListener('submit', (e) => {
   loadMine(email);
 });
 $('#mineList').addEventListener('click', async (e) => {
-  const code = e.target.dataset.cancel;
-  if (!code || !confirm(`¿Cancelar la reserva ${code}?`)) return;
+  const btn = e.target.closest('[data-cancel]');
+  if (!btn) return;
+  const code = btn.dataset.cancel;
+  // Confirmación en dos pasos dentro de la página (sin diálogos del navegador).
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = '1';
+    btn.textContent = '¿Seguro? Pulsa otra vez';
+    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Cancelar'; } }, 4000);
+    return;
+  }
   const email = $('#mineForm').email.value.trim();
   try {
     await api(`/api/bookings/${encodeURIComponent(code)}/cancel`, { method: 'POST', body: JSON.stringify({ email }) });
