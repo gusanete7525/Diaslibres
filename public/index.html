@@ -26,7 +26,7 @@
     <form id="aiForm" class="ai-box" autocomplete="off">
       <span class="ai-badge" aria-hidden="true">✨ IA</span>
       <input id="aiQuery" type="search" placeholder="Ej.: algo de playa barato para una semana en julio" aria-label="Describe tu viaje" />
-      <button type="submit" class="btn primary">Buscar</button>
+      <button type="button" data-send class="btn primary">Buscar</button>
     </form>
     <div class="examples" id="examples">
       <button type="button">Escapada romántica de fin de semana</button>
@@ -59,7 +59,7 @@
       <input type="hidden" name="tags" />
       <input type="hidden" name="minStars" />
       <input type="hidden" name="checkIn" />
-      <button class="btn" type="submit">Aplicar</button>
+      <button class="btn" type="button" data-send>Aplicar</button>
       <button class="btn ghost" type="button" id="clearFilters">Limpiar</button>
     </form>
   </section>
@@ -70,13 +70,13 @@
     <h2>Mis reservas</h2>
     <form id="mineForm" class="filters">
       <label>Email <input name="email" type="email" required placeholder="tu@email.com" /></label>
-      <button class="btn primary">Ver reservas</button>
+      <button class="btn primary" type="button" data-send>Ver reservas</button>
     </form>
     <div id="mineList"></div>
   </section>
 
   <dialog id="bookDialog" class="dialog">
-    <form method="dialog" id="bookForm">
+    <form id="bookForm">
       <h2 id="bookTitle">Reservar</h2>
       <div id="bookSummary" class="summary"></div>
       <label><span id="unitsLabel">Habitaciones</span>
@@ -88,8 +88,8 @@
       <p class="meta">ℹ️ Demo: precio y disponibilidad simulados; la reserva no se envía al hotel ni a la aerolínea.</p>
       <p id="bookError" class="error" role="alert" hidden></p>
       <div class="actions">
-        <button value="cancel" formnovalidate class="btn ghost">Cancelar</button>
-        <button id="bookConfirm" value="confirm" class="btn primary">Confirmar reserva</button>
+        <button type="button" id="bookCancel" class="btn ghost">Cancelar</button>
+        <button type="button" data-send id="bookConfirm" class="btn primary">Confirmar reserva</button>
       </div>
     </form>
   </dialog>

@@ -131,7 +131,18 @@ function initialUi(item, data, checkIn) {
   return ui;
 }
 
-filters.addEventListener('submit', (e) => { e.preventDefault(); search(); });
+// Algunos visores (iframes aislados) bloquean el envío de formularios y el evento
+// submit nunca llega: los formularios se envían con clic en su botón o con Enter.
+function onSend(form, handler) {
+  const run = () => { if (form.reportValidity()) handler(); };
+  form.addEventListener('submit', (e) => e.preventDefault());
+  form.querySelectorAll('[data-send]').forEach((b) => b.addEventListener('click', run));
+  form.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); run(); }
+  });
+}
+
+onSend(filters, search);
 $('#clearFilters').addEventListener('click', () => {
   filters.reset();
   filters.tags.value = filters.minStars.value = filters.checkIn.value = '';
@@ -139,8 +150,7 @@ $('#clearFilters').addEventListener('click', () => {
   search();
 });
 
-$('#aiForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
+async function aiSearchSubmit() {
   const query = $('#aiQuery').value.trim();
   if (!query) return;
   const btn = $('#aiForm button');
@@ -168,11 +178,12 @@ $('#aiForm').addEventListener('submit', async (e) => {
     btn.disabled = false;
     btn.textContent = 'Buscar';
   }
-});
+}
+onSend($('#aiForm'), aiSearchSubmit);
 $('#examples').addEventListener('click', (e) => {
   if (e.target.tagName !== 'BUTTON') return;
   $('#aiQuery').value = e.target.textContent;
-  $('#aiForm').requestSubmit();
+  aiSearchSubmit();
 });
 
 // ---------- Render ----------
@@ -463,9 +474,8 @@ function openBooking(item, ui, isFlight) {
 }
 bookForm.units.addEventListener('change', refreshQuote);
 
-bookForm.addEventListener('submit', async (e) => {
-  if (e.submitter?.value !== 'confirm') return; // cancelar cierra el diálogo
-  e.preventDefault();
+$('#bookCancel').addEventListener('click', () => dialog.close());
+onSend(bookForm, async () => {
   const btn = $('#bookConfirm');
   btn.disabled = true;
   try {
@@ -505,9 +515,8 @@ async function loadMine(email) {
     list.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
   }
 }
-$('#mineForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const email = e.target.email.value.trim();
+onSend($('#mineForm'), () => {
+  const email = $('#mineForm').email.value.trim();
   store.set('dl-email', email);
   loadMine(email);
 });
