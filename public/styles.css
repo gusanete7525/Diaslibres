@@ -225,3 +225,8 @@ body[data-view="hotels"] .flight-only, body[data-view="flights"] .hotel-only { d
 }
 .tag.osm { text-decoration: none; color: var(--brand); }
 .footer a { color: inherit; }
+.thumb.photo { object-fit: cover; padding: 0; }
+.rating { display: inline-block; background: var(--brand); color: var(--brand-ink); border-radius: 6px; padding: 0 6px; font-weight: 700; font-size: 13px; }
+.day.pending { background: var(--surface-2); color: var(--text-3); cursor: progress; }
+@media (prefers-reduced-motion: no-preference) { .day.pending small { animation: pulse 1.2s ease-in-out infinite; } }
+@keyframes pulse { 50% { opacity: 0.3; } }

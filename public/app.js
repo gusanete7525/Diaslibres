@@ -63,6 +63,14 @@ async function api(path, opts = {}) {
   return body;
 }
 
+function setFooter(live) {
+  const el = $('#footerNote');
+  if (!el) return;
+  el.textContent = live
+    ? 'Hoteles, precios y disponibilidad de LiteAPI' + (state.data?.live?.sandbox ? ' (entorno de pruebas: las reservas son de prueba y no se cobran)' : '') + '. Los vuelos son simulados.'
+    : el.dataset.default;
+}
+
 // ---------- Navegación ----------
 function setView(view) {
   state.view = view;
@@ -98,7 +106,9 @@ function filterParams() {
   return p;
 }
 
+let searchToken = 0;
 async function search() {
+  const token = ++searchToken;
   results.classList.add('loading');
   if (state.view === 'hotels' && filters.destination.value.trim()) {
     results.innerHTML = `<p class="count">Buscando hoteles en ${esc(filters.destination.value.trim())}…</p>`;
@@ -112,11 +122,62 @@ async function search() {
     const checkIn = filters.checkIn.value;
     for (const item of data.results) state.ui.set(item.id, initialUi(item, data, checkIn));
     renderResults();
+    if (data.live && data.results.length) loadLivePrices(token);
   } catch (err) {
     results.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
   } finally {
     results.classList.remove('loading');
   }
+}
+
+// ---------- Precios reales (LiteAPI): se cargan por semanas y rellenan el calendario ----------
+async function loadLivePrices(token) {
+  const { start, days, results: list } = state.data;
+  const ids = list.map((h) => h.id).join(',');
+  for (let off = 0; off < days; off += 7) {
+    if (token !== searchToken) return; // hay una búsqueda más nueva
+    let res;
+    try {
+      res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}`);
+    } catch (err) {
+      if (token === searchToken) toast(err.message);
+      return;
+    }
+    if (token !== searchToken) return;
+    for (const [id, nights] of Object.entries(res.prices)) {
+      const item = state.items.get(id);
+      if (!item) continue;
+      for (const n of nights) {
+        const i = diffDays(start, n.date);
+        if (i >= 0 && i < item.calendar.length) item.calendar[i] = n;
+      }
+      refreshSummary(item);
+      rerender(id);
+    }
+    const loaded = Math.min(days, off + 7);
+    const note = $('#livePending');
+    if (note) note.textContent = loaded < days ? `Cargando precios reales… ${loaded}/${days} días` : '';
+  }
+}
+
+function refreshSummary(item) {
+  const free = item.calendar.filter((d) => d.available);
+  const prices = free.map((d) => d.price);
+  item.summary = {
+    freeDays: free.length,
+    minPrice: prices.length ? Math.min(...prices) : null,
+    maxPrice: prices.length ? Math.max(...prices) : null,
+    avgPrice: prices.length ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : null,
+  };
+  const n = state.data.nights;
+  let best = null;
+  for (let i = 0; i + n <= item.calendar.length; i++) {
+    const slice = item.calendar.slice(i, i + n);
+    if (!slice.every((d) => d.available)) continue;
+    const total = slice.reduce((s, d) => s + d.price, 0);
+    if (!best || total < best.total) best = { checkIn: slice[0].date, checkOut: addDays(slice[0].date, n), total };
+  }
+  item.bestStay = best;
 }
 
 function initialUi(item, data, checkIn) {
@@ -203,7 +264,11 @@ function renderResults() {
   const one = list.length === 1;
   const kind = state.view === 'flights' ? (one ? 'vuelo' : 'vuelos') : one ? 'hotel' : 'hoteles';
   const osmNote = (osm?.count ? ` · ${osm.count} de OpenStreetMap` : '') + (ai?.count ? ` · ${ai.count} sugerido${ai.count > 1 ? 's' : ''} por IA` : '');
-  results.innerHTML = `<p class="count">${list.length} ${kind}${osmNote} · disponibilidad de los próximos ${state.data.days} días</p>${warnings}`;
+  const live = state.data.live;
+  const liveNote = live ? ` · precios y disponibilidad reales de LiteAPI${live.sandbox ? ' (entorno de pruebas)' : ''}` : '';
+  const city = live && !filters.destination.value.trim() ? `<p class="count">Mostrando ${esc(live.city)}. Escribe otra ciudad para ver sus hoteles.</p>` : '';
+  results.innerHTML = `<p class="count">${list.length} ${kind}${osmNote}${liveNote} · próximos ${state.data.days} días</p>${city}${live ? '<p class="count" id="livePending">Cargando precios reales…</p>' : ''}${warnings}`;
+  setFooter(!!live);
   for (const item of list) results.append(renderCard(item));
 }
 
@@ -224,9 +289,9 @@ function renderCard(item) {
         <h3>${esc(item.originCity)} → ${esc(item.destinationCity)}</h3>
         <div class="meta">${esc(item.airline)} · ${esc(item.origin)}–${esc(item.destination)} · sale ${esc(item.departure)} · ${Math.floor(item.duration / 60)} h ${item.duration % 60} min</div>
       </div>`
-    : `<div class="thumb">${item.image}</div><div>
+    : `${item.photo ? `<img class="thumb photo" src="${esc(item.photo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb&quot;>🏨</div>'">` : `<div class="thumb">${item.image}</div>`}<div>
         <h3>${esc(item.name)}</h3>
-        <div class="meta">${item.stars ? `<span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}</div>
+        <div class="meta">${item.stars ? `<span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${String(item.rating).replace('.', ',')}</span>${item.reviewCount ? ` <span class="meta">(${item.reviewCount.toLocaleString('es-ES')} opiniones)</span>` : ''}` : ''}</div>
         ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">Web oficial ↗</a>` : ''}</div>` : ''}
         <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="Ficha en OpenStreetMap">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? '<span class="tag osm" title="Datos sugeridos por IA: compruébalos antes de viajar">✨ Sugerido por IA</span>' : ''}${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       </div>`;
@@ -296,12 +361,12 @@ function renderCalendar(item, ui) {
     const iso = new Date(Date.UTC(mDate.getUTCFullYear(), mDate.getUTCMonth(), n)).toISOString().slice(0, 10);
     const d = byDate.get(iso);
     if (!d) { cells += `<div class="day out"><span>${n}</span></div>`; continue; }
-    const cls = ['day', d.available ? 'free' : 'full'];
+    const cls = ['day', d.pending ? 'pending' : d.available ? 'free' : 'full'];
     if (d.available && d.price === cheapest) cls.push('cheap');
     if (ui.start && (iso === ui.start || iso === ui.end)) cls.push('sel');
     else if (ui.start && ui.end && iso > ui.start && iso < ui.end) cls.push('in-range');
-    const label = `${fmtDay.format(toDate(iso))}: ${d.available ? `libre, ${d.price} €` : 'completo'}`;
-    cells += `<button class="${cls.join(' ')}" data-date="${iso}" aria-label="${label}"><span>${n}</span><small>${d.available ? d.price : '—'}</small></button>`;
+    const label = `${fmtDay.format(toDate(iso))}: ${d.pending ? 'cargando precio' : d.available ? `libre, ${d.price} €` : 'completo'}`;
+    cells += `<button class="${cls.join(' ')}" data-date="${iso}" aria-label="${label}"><span>${n}</span><small>${d.pending ? '…' : d.available ? d.price : '—'}</small></button>`;
   }
   return `<div class="cal">
     <div class="cal-head">
@@ -321,8 +386,8 @@ function renderCalendar(item, ui) {
 function renderChart(item, ui, isFlight) {
   const cal = item.calendar;
   const n = cal.length;
-  const prices = cal.map((d) => d.price);
-  const max = Math.ceil(Math.max(...prices) / 20) * 20;
+  const prices = cal.filter((d) => d.price != null).map((d) => d.price);
+  const max = prices.length ? Math.ceil(Math.max(...prices) / 20) * 20 : 100;
   const W = n * 10, H = 100, gap = 2;
   const free = cal.filter((d) => d.available);
   const cheap = free.length ? free.reduce((a, b) => (b.price < a.price ? b : a)) : null;
@@ -330,6 +395,7 @@ function renderChart(item, ui, isFlight) {
   const hasSel = !!ui.start;
   let bars = '';
   cal.forEach((d, i) => {
+    if (d.price == null) return; // aún sin precio, o completo sin tarifa
     const h = Math.max(2, (d.price / max) * H);
     const cls = ['bar'];
     if (!d.available) cls.push('full');
@@ -388,7 +454,7 @@ function bindCard(el, item, isFlight) {
     hovered?.classList.remove('hover');
     hovered = svg.querySelector(`[data-i="${i}"]`);
     hovered.classList.add('hover');
-    showTip(`<b>${fmtDay.format(toDate(d.date))}</b><br>${eur(d.price)} · ${d.available ? `libre (${d.left} ${isFlight ? 'plazas' : 'hab.'})` : 'completo'}`, e.clientX, svg.getBoundingClientRect().top);
+    showTip(`<b>${fmtDay.format(toDate(d.date))}</b><br>${dayText(d, isFlight)}`, e.clientX, svg.getBoundingClientRect().top);
   });
   plot.addEventListener('pointerleave', () => { hovered?.classList.remove('hover'); hideTip(); });
   plot.addEventListener('click', (e) => {
@@ -403,15 +469,24 @@ function bindCard(el, item, isFlight) {
     if (!day) return;
     const d = item.calendar.find((x) => x.date === day.dataset.date);
     const r = day.getBoundingClientRect();
-    showTip(`<b>${fmtDay.format(toDate(d.date))}</b><br>${d.available ? `${eur(d.price)} · quedan ${d.left} ${isFlight ? 'plazas' : 'hab.'}` : 'Completo'}`, r.left + r.width / 2, r.top);
+    showTip(`<b>${fmtDay.format(toDate(d.date))}</b><br>${dayText(d, isFlight)}`, r.left + r.width / 2, r.top);
   });
   el.addEventListener('pointerout', (e) => { if (e.target.closest('.day[data-date]')) hideTip(); });
+}
+
+function dayText(d, isFlight) {
+  if (d.pending) return 'Cargando precio…';
+  if (!d.available) return d.price != null ? `${eur(d.price)} · completo` : 'Completo';
+  return `${eur(d.price)} · ${d.left != null ? `quedan ${d.left} ${isFlight ? 'plazas' : 'hab.'}` : 'disponible'}`;
 }
 
 function pickDay(item, ui, iso, isFlight) {
   const cal = item.calendar;
   const idx = diffDays(state.data.start, iso);
   const d = cal[idx];
+  if (d.pending || (ui.picking === 'end' && ui.start && iso > ui.start && cal.slice(diffDays(state.data.start, ui.start), idx).some((x) => x.pending))) {
+    return toast('Todavía estamos cargando los precios de esos días.');
+  }
   if (isFlight) {
     if (!d.available) return toast('Ese vuelo está completo ese día.');
     ui.start = iso;
@@ -454,6 +529,11 @@ async function refreshQuote() {
   try {
     const q = await api('/api/quote', { method: 'POST', body: JSON.stringify(bookingRequest()) });
     $('#bookTotal').textContent = eur(q.total);
+    const extra = $('#bookExtra');
+    extra.textContent = q.roomName
+      ? `${q.roomName}${q.board ? ' · ' + q.board : ''} · ${q.refundable ? `cancelación gratuita${q.freeCancellationUntil ? ' hasta el ' + fmtDay.format(new Date(q.freeCancellationUntil.replace(' ', 'T') + 'Z')) : ''}` : 'no reembolsable'}`
+      : '';
+    extra.hidden = !q.roomName;
     err.hidden = true;
     btn.disabled = false;
   } catch (e) {
@@ -475,6 +555,7 @@ function openBooking(item, ui, isFlight) {
   bookForm.email.value ||= store.get('dl-email') || '';
   $('#bookError').hidden = true;
   $('#bookTotal').textContent = '…';
+  $('#bookExtra').hidden = true;
   dialog.showModal();
   refreshQuote();
 }
@@ -484,6 +565,7 @@ $('#bookCancel').addEventListener('click', () => dialog.close());
 onSend(bookForm, async () => {
   const btn = $('#bookConfirm');
   btn.disabled = true;
+  btn.textContent = 'Reservando…';
   try {
     const booking = await api('/api/bookings', {
       method: 'POST',
@@ -491,7 +573,7 @@ onSend(bookForm, async () => {
     });
     store.set('dl-email', booking.email);
     dialog.close();
-    toast(`✅ Reserva confirmada · código ${booking.code} · ${eur(booking.total)}`);
+    toast(`✅ ${booking.sandbox ? 'Reserva de prueba confirmada' : 'Reserva confirmada'} · código ${booking.code} · ${eur(booking.total)}`);
     await search();
   } catch (err) {
     const box = $('#bookError');
@@ -499,6 +581,7 @@ onSend(bookForm, async () => {
     box.hidden = false;
   } finally {
     btn.disabled = false;
+    btn.textContent = 'Confirmar reserva';
   }
 });
 
@@ -513,6 +596,7 @@ async function loadMine(email) {
         <div>
           <div><b>${esc(b.itemName)}</b></div>
           <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${b.units} hab.` : `${fmtDay.format(toDate(b.date))} · ${b.units} pasajero${b.units > 1 ? 's' : ''}`} · ${eur(b.total)}</div>
+          ${b.provider === 'liteapi' ? `<div class="meta">LiteAPI${b.sandbox ? ' (prueba)' : ''} · ref. ${esc(b.providerBookingId)}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
           <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : '✖'} ${esc(b.status)}</span></div>
         </div>
         ${b.status === 'confirmada' ? `<button class="btn" data-cancel="${esc(b.code)}">Cancelar</button>` : ''}

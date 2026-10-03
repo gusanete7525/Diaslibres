@@ -25,7 +25,7 @@ function fakeFetch(calls) {
 }
 
 async function withApp(osm, fn) {
-  const server = createApp({ store: new BookingStore(null), osm }).listen(0);
+  const server = createApp({ store: new BookingStore(null), osm, live: null }).listen(0);
   await new Promise((r) => server.once('listening', r));
   try {
     await fn(`http://localhost:${server.address().port}`);
