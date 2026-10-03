@@ -7,7 +7,7 @@ import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { OsmHotels } from './src/osm.js';
-import { LiteApi } from './src/liteapi.js';
+import { LiteApi, PriceChangedError } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -132,8 +132,12 @@ export function createApp({
         return res.status(403).json({ error: 'En esta web de demostración las reservas reales están desactivadas: puedes ver precios y disponibilidad reales, pero no reservar.' });
       }
       try {
+        // El precio que vio el cliente en el presupuesto; nunca se reserva por encima.
+        const seen = Number(body.expectedTotal);
+        if (!Number.isFinite(seen) || seen <= 0) return res.status(400).json({ error: 'Falta el precio del presupuesto. Vuelve a abrir la reserva.' });
         const q = await live.quote(body);
-        const b = await live.book({ offerId: q.offerId, name, email, units: q.units });
+        if (q.total > seen + 0.01) throw new PriceChangedError(q.total);
+        const b = await live.book({ offerId: q.offerId, name, email, units: q.units, maxTotal: seen });
         const booking = store.add({
           code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
           type: 'hotel',
@@ -157,7 +161,7 @@ export function createApp({
         return res.status(201).json(booking);
       } catch (err) {
         console.error('[liteapi]', err.message);
-        return res.status(409).json({ error: err.message });
+        return res.status(409).json({ error: err.message, ...(err instanceof PriceChangedError ? { newTotal: err.total } : {}) });
       }
     }
     try {

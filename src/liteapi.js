@@ -43,6 +43,13 @@ function shortDescription(html) {
 
 export class LiteApiError extends Error {}
 
+export class PriceChangedError extends LiteApiError {
+  constructor(total) {
+    super(`El precio ha cambiado a ${total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}. Revisa el nuevo total y confirma otra vez.`);
+    this.total = total;
+  }
+}
+
 export class LiteApi {
   constructor({ key, fetchImpl = globalThis.fetch } = {}) {
     // Quita espacios, saltos de línea y comillas que suelen colarse al pegar la clave.
@@ -62,9 +69,11 @@ export class LiteApi {
 
   // ---------- Peticiones con límite de concurrencia y reintentos en 429 ----------
 
-  async #slot() {
+  // Las peticiones prioritarias (buscar hoteles, presupuesto, reserva) se cuelan
+  // delante de los precios del calendario, que pueden ser decenas en cola.
+  async #slot(priority) {
     if (this.active < CONCURRENCY) return void this.active++;
-    await new Promise((r) => this.waiting.push(r));
+    await new Promise((r) => (priority ? this.waiting.unshift(r) : this.waiting.push(r)));
     this.active++;
   }
 
@@ -73,8 +82,8 @@ export class LiteApi {
     this.waiting.shift()?.();
   }
 
-  async #request(method, url, body) {
-    await this.#slot();
+  async #request(method, url, body, { priority = true } = {}) {
+    await this.#slot(priority);
     try {
       for (let attempt = 0; ; attempt++) {
         const res = await this.fetch(url, {
@@ -187,7 +196,7 @@ export class LiteApi {
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 6,
-    });
+    }, { priority: false });
     const found = new Map(data.map((r) => [r.hotelId, r.price]));
     for (const h of missing) {
       const p = found.get(h.liteId);
@@ -231,10 +240,24 @@ export class LiteApi {
     };
   }
 
-  async book({ offerId, name, email, units }) {
-    const pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: false });
+  // `maxTotal`: el precio que vio el cliente. Si al bloquear la habitación sale más
+  // caro, no se reserva y se avisa con el precio nuevo.
+  async book({ offerId, name, email, units, maxTotal }) {
+    let pre;
+    try {
+      pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: false });
+    } catch (err) {
+      if (/availability|not available|sold out/i.test(err.message)) {
+        throw new LiteApiError('Esa habitación se acaba de agotar. Elige otras fechas u otro hotel.');
+      }
+      throw err;
+    }
     const prebookId = pre.data?.prebookId;
     if (!prebookId) throw new LiteApiError('No se pudo bloquear la habitación. Inténtalo de nuevo.');
+    const price = Number(pre.data?.price);
+    if (maxTotal != null && Number.isFinite(price) && price > maxTotal + 0.01) {
+      throw new PriceChangedError(price);
+    }
     const [firstName, ...rest] = String(name).trim().split(/\s+/);
     const lastName = rest.join(' ') || firstName;
     const guests = Array.from({ length: Math.max(1, Number(units) || 1) }, (_, i) => ({ occupancyNumber: i + 1, firstName, lastName, email }));
