@@ -94,7 +94,7 @@ export function searchHotels(bookings, f = {}, extra = []) {
   const curated = new Set(HOTELS.map((h) => norm(h.name)));
   const pool = [...HOTELS, ...extra.filter((h) => !curated.has(norm(h.name)))];
   let list = pool.filter((h) => {
-    if (q && h.origin !== 'osm' && !norm(`${h.city} ${h.country} ${h.name}`).includes(q)) return false;
+    if (q && !h.origin && !norm(`${h.city} ${h.country} ${h.name}`).includes(q)) return false;
     if (f.minStars && h.stars < Number(f.minStars)) return false;
     if (tags.length && !tags.some((t) => h.tags.map(norm).includes(t))) return false;
     return true;

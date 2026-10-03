@@ -48,6 +48,11 @@ function getClient() {
   return client;
 }
 
+// Instrucciones del buscador (también las usa la vista previa del navegador).
+export function searchInstructions() {
+  return SYSTEM.replace('{TODAY}', todayISO());
+}
+
 export async function aiSearch(query) {
   const text = String(query || '').slice(0, 500).trim();
   if (!text) throw new Error('Escribe qué buscas.');
@@ -72,7 +77,7 @@ async function claudeParse(c, text) {
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
     output_config: { effort: 'low', format: { type: 'json_schema', schema: FILTER_SCHEMA } },
-    system: SYSTEM.replace('{TODAY}', todayISO()),
+    system: searchInstructions(),
     messages: [{ role: 'user', content: text }],
   });
   if (response.stop_reason === 'refusal') throw new Error('La IA no ha podido procesar la búsqueda.');
@@ -81,7 +86,7 @@ async function claudeParse(c, text) {
   return sanitize(JSON.parse(block.text));
 }
 
-function sanitize(f) {
+export function sanitize(f) {
   const today = todayISO();
   return {
     kind: f.kind === 'flight' ? 'flight' : 'hotel',

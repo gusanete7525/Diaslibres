@@ -71,6 +71,10 @@ function setView(view) {
   $('#mine').hidden = view !== 'mine';
   $('#searchSection').hidden = view === 'mine';
   results.hidden = view === 'mine';
+  // Hoteles: destino libre (cualquier ciudad). Vuelos: solo aeropuertos con rutas.
+  if (view === 'flights') filters.destination.setAttribute('list', 'destList');
+  else filters.destination.removeAttribute('list');
+  filters.destination.placeholder = view === 'flights' ? 'Ciudad o aeropuerto' : 'Escribe cualquier ciudad';
   if (view === 'mine') {
     const email = store.get('dl-email');
     if (email) { $('#mineForm').email.value = email; loadMine(email); }
@@ -97,7 +101,7 @@ function filterParams() {
 async function search() {
   results.classList.add('loading');
   if (state.view === 'hotels' && filters.destination.value.trim()) {
-    results.innerHTML = `<p class="count">Buscando hoteles reales en ${esc(filters.destination.value.trim())} (OpenStreetMap)…</p>`;
+    results.innerHTML = `<p class="count">Buscando hoteles en ${esc(filters.destination.value.trim())}…</p>`;
   }
   try {
     const p = filterParams();
@@ -189,15 +193,17 @@ $('#examples').addEventListener('click', (e) => {
 // ---------- Render ----------
 function renderResults() {
   const { results: list } = state.data;
+  const osm = state.data.osm;
+  const ai = state.data.ai;
+  const warnings = [osm?.error, ai?.error].filter(Boolean).map((w) => `<p class="count">⚠️ ${esc(w)}</p>`).join('');
   if (!list.length) {
-    results.innerHTML = '<p class="empty">No hay resultados con esos filtros. Prueba a quitar alguno.</p>';
+    results.innerHTML = warnings + '<p class="empty">No hay resultados con esos filtros. Prueba con otra ciudad o quita algún filtro.</p>';
     return;
   }
   const one = list.length === 1;
   const kind = state.view === 'flights' ? (one ? 'vuelo' : 'vuelos') : one ? 'hotel' : 'hoteles';
-  const osm = state.data.osm;
-  const osmNote = osm?.count ? ` · ${osm.count} de OpenStreetMap` : '';
-  results.innerHTML = `<p class="count">${list.length} ${kind}${osmNote} · disponibilidad de los próximos ${state.data.days} días</p>${osm?.error ? `<p class="count">⚠️ ${esc(osm.error)}</p>` : ''}`;
+  const osmNote = (osm?.count ? ` · ${osm.count} de OpenStreetMap` : '') + (ai?.count ? ` · ${ai.count} sugerido${ai.count > 1 ? 's' : ''} por IA` : '');
+  results.innerHTML = `<p class="count">${list.length} ${kind}${osmNote} · disponibilidad de los próximos ${state.data.days} días</p>${warnings}`;
   for (const item of list) results.append(renderCard(item));
 }
 
@@ -222,7 +228,7 @@ function renderCard(item) {
         <h3>${esc(item.name)}</h3>
         <div class="meta">${item.stars ? `<span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}</div>
         ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">Web oficial ↗</a>` : ''}</div>` : ''}
-        <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="Ficha en OpenStreetMap">🗺️ OpenStreetMap</a>` : ''}${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="Ficha en OpenStreetMap">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? '<span class="tag osm" title="Datos sugeridos por IA: compruébalos antes de viajar">✨ Sugerido por IA</span>' : ''}${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       </div>`;
   el.innerHTML = `
     <div>
