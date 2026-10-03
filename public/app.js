@@ -529,6 +529,7 @@ async function refreshQuote() {
   try {
     const q = await api('/api/quote', { method: 'POST', body: JSON.stringify(bookingRequest()) });
     $('#bookTotal').textContent = eur(q.total);
+    state.booking.total = q.total;
     const extra = $('#bookExtra');
     extra.textContent = q.roomName
       ? `${q.roomName}${q.board ? ' · ' + q.board : ''} · ${q.refundable ? `cancelación gratuita${q.freeCancellationUntil ? ' hasta el ' + fmtDay.format(new Date(q.freeCancellationUntil.replace(' ', 'T') + 'Z')) : ''}` : 'no reembolsable'}`
@@ -574,13 +575,14 @@ onSend(bookForm, async () => {
   try {
     const booking = await api('/api/bookings', {
       method: 'POST',
-      body: JSON.stringify({ ...bookingRequest(), name: bookForm.name.value, email: bookForm.email.value }),
+      body: JSON.stringify({ ...bookingRequest(), expectedTotal: state.booking.total, name: bookForm.name.value, email: bookForm.email.value }),
     });
     store.set('dl-email', booking.email);
     dialog.close();
     toast(`✅ ${booking.sandbox ? 'Reserva de prueba confirmada' : 'Reserva confirmada'} · código ${booking.code} · ${eur(booking.total)}`);
     await search();
   } catch (err) {
+    if (/precio ha cambiado/.test(err.message)) await refreshQuote(); // muestra el total nuevo
     const box = $('#bookError');
     box.textContent = err.message;
     box.hidden = false;

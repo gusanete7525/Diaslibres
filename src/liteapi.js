@@ -43,6 +43,13 @@ function shortDescription(html) {
 
 export class LiteApiError extends Error {}
 
+export class PriceChangedError extends LiteApiError {
+  constructor(total) {
+    super(`El precio ha cambiado a ${total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}. Revisa el nuevo total y confirma otra vez.`);
+    this.total = total;
+  }
+}
+
 export class LiteApi {
   constructor({ key, fetchImpl = globalThis.fetch } = {}) {
     // Quita espacios, saltos de línea y comillas que suelen colarse al pegar la clave.
@@ -233,10 +240,24 @@ export class LiteApi {
     };
   }
 
-  async book({ offerId, name, email, units }) {
-    const pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: false });
+  // `maxTotal`: el precio que vio el cliente. Si al bloquear la habitación sale más
+  // caro, no se reserva y se avisa con el precio nuevo.
+  async book({ offerId, name, email, units, maxTotal }) {
+    let pre;
+    try {
+      pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: false });
+    } catch (err) {
+      if (/availability|not available|sold out/i.test(err.message)) {
+        throw new LiteApiError('Esa habitación se acaba de agotar. Elige otras fechas u otro hotel.');
+      }
+      throw err;
+    }
     const prebookId = pre.data?.prebookId;
     if (!prebookId) throw new LiteApiError('No se pudo bloquear la habitación. Inténtalo de nuevo.');
+    const price = Number(pre.data?.price);
+    if (maxTotal != null && Number.isFinite(price) && price > maxTotal + 0.01) {
+      throw new PriceChangedError(price);
+    }
     const [firstName, ...rest] = String(name).trim().split(/\s+/);
     const lastName = rest.join(' ') || firstName;
     const guests = Array.from({ length: Math.max(1, Number(units) || 1) }, (_, i) => ({ occupancyNumber: i + 1, firstName, lastName, email }));
