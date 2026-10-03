@@ -1,0 +1,4 @@
+node_modules/
+data/bookings.json
+.env
+data/osm-cache.json

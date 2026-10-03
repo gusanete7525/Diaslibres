@@ -1,0 +1,17 @@
+# Despliegue en Render (https://render.com/docs/blueprint-spec).
+# Las claves no se guardan aquí: Render las pide al crear el servicio (sync: false).
+services:
+  - type: web
+    name: diaslibres
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: LITEAPI_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

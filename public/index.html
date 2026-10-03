@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DíasLibres · Hoteles y vuelos</title>
+  <meta name="description" content="Reserva hoteles y vuelos viendo de un vistazo qué días están libres y cuándo es más barato." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="#" data-view="hotels">Días<span>Libres</span></a>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-view="hotels" aria-selected="true">🏨 Hoteles</button>
+      <button role="tab" data-view="flights" aria-selected="false">✈️ Vuelos</button>
+      <button role="tab" data-view="mine" aria-selected="false">🧾 Mis reservas</button>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema">🌓</button>
+  </header>
+
+  <section class="hero" id="searchSection">
+    <h1>Mira qué días están libres <em>antes</em> de elegir fechas</h1>
+    <p class="sub">Cada hotel y vuelo muestra su calendario: <span class="pill good">verde = libre</span> <span class="pill bad">rojo = completo</span>, y una gráfica con los días más baratos.</p>
+
+    <form id="aiForm" class="ai-box" autocomplete="off">
+      <span class="ai-badge" aria-hidden="true">✨ IA</span>
+      <input id="aiQuery" type="search" placeholder="Ej.: algo de playa barato para una semana en julio" aria-label="Describe tu viaje" />
+      <button type="button" data-send class="btn primary">Buscar</button>
+    </form>
+    <div class="examples" id="examples">
+      <button type="button">Escapada romántica de fin de semana</button>
+      <button type="button">Hotel de montaña menos de 100 €</button>
+      <button type="button">Vuelos de Madrid a Lisboa</button>
+      <button type="button">Playa con niños en Canarias 5 noches</button>
+    </div>
+    <p id="aiExplain" class="ai-explain" hidden></p>
+
+    <form id="filters" class="filters">
+      <label>Destino
+        <input name="destination" placeholder="Escribe cualquier ciudad" autocomplete="off" />
+        <datalist id="destList"></datalist>
+      </label>
+      <label class="flight-only">Origen
+        <input name="origin" list="destList" placeholder="Cualquiera" />
+      </label>
+      <label class="hotel-only">Noches
+        <input name="nights" type="number" min="1" max="30" value="3" />
+      </label>
+      <label>Precio máx.
+        <input name="maxPrice" type="number" min="0" step="10" placeholder="€" />
+      </label>
+      <label class="hotel-only">Ordenar
+        <select name="sort">
+          <option value="stars">Más estrellas</option>
+          <option value="price">Más baratos</option>
+        </select>
+      </label>
+      <input type="hidden" name="tags" />
+      <input type="hidden" name="minStars" />
+      <input type="hidden" name="checkIn" />
+      <button class="btn" type="button" data-send>Aplicar</button>
+      <button class="btn ghost" type="button" id="clearFilters">Limpiar</button>
+    </form>
+  </section>
+
+  <main id="results" class="results" aria-live="polite"></main>
+
+  <section id="mine" class="mine" hidden>
+    <h2>Mis reservas</h2>
+    <form id="mineForm" class="filters">
+      <label>Email <input name="email" type="email" required placeholder="tu@email.com" /></label>
+      <button class="btn primary" type="button" data-send>Ver reservas</button>
+    </form>
+    <div id="mineList"></div>
+  </section>
+
+  <dialog id="bookDialog" class="dialog">
+    <form id="bookForm">
+      <h2 id="bookTitle">Reservar</h2>
+      <div id="bookSummary" class="summary"></div>
+      <label><span id="unitsLabel">Habitaciones</span>
+        <select name="units"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      </label>
+      <label>Nombre completo <input name="name" required minlength="2" autocomplete="name" /></label>
+      <label>Email <input name="email" type="email" required autocomplete="email" /></label>
+      <p class="total">Total: <strong id="bookTotal">—</strong></p>
+      <p id="bookExtra" class="meta" hidden></p>
+      <p class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
+      <p id="bookError" class="error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="bookCancel" class="btn ghost">Cancelar</button>
+        <button type="button" data-send id="bookConfirm" class="btn primary">Confirmar reserva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <footer class="footer">DíasLibres · <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL).</footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
