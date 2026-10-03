@@ -29,7 +29,7 @@ test('los hoteles traen calendario y resumen de precios', async () => {
 
 test('filtra por destino y etiquetas', async () => {
   const data = await get('/api/hotels?destination=malaga');
-  assert.deepEqual(data.results.map((h) => h.city), ['Málaga']);
+  assert.ok(data.results.length > 0 && data.results.every((h) => h.city === 'Málaga'));
   const beach = await get('/api/hotels?tags=montaña');
   assert.ok(beach.results.every((h) => h.tags.includes('montaña')));
 });

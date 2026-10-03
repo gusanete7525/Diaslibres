@@ -34,7 +34,7 @@ Tests: `npm test`
 
 ### API
 
-- `GET /api/hotels?destination=&nights=&maxPrice=&sort=price|rating&tags=&days=`
+- `GET /api/hotels?destination=&nights=&maxPrice=&sort=price|stars&tags=&days=`
 - `GET /api/flights?origin=&destination=&maxPrice=&days=`
 - `POST /api/ai-search` `{ query }`
 - `POST /api/quote` · `POST /api/bookings` `{ type: "hotel"|"flight", itemId, checkIn, checkOut | date, units, name, email }`

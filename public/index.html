@@ -52,7 +52,7 @@
       </label>
       <label class="hotel-only">Ordenar
         <select name="sort">
-          <option value="rating">Mejor valorados</option>
+          <option value="stars">Más estrellas</option>
           <option value="price">Más baratos</option>
         </select>
       </label>
@@ -85,6 +85,7 @@
       <label>Nombre completo <input name="name" required minlength="2" autocomplete="name" /></label>
       <label>Email <input name="email" type="email" required autocomplete="email" /></label>
       <p class="total">Total: <strong id="bookTotal">—</strong></p>
+      <p class="meta">ℹ️ Demo: precio y disponibilidad simulados; la reserva no se envía al hotel ni a la aerolínea.</p>
       <p id="bookError" class="error" role="alert" hidden></p>
       <div class="actions">
         <button value="cancel" formnovalidate class="btn ghost">Cancelar</button>
@@ -96,7 +97,7 @@
   <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
 
-  <footer class="footer">DíasLibres · Demo de agencia de reservas · Precios orientativos en euros por noche (hoteles) o por billete (vuelos).</footer>
+  <footer class="footer">DíasLibres · Demo de agencia de reservas · Precios, disponibilidad y vuelos son simulados para la demo; las reservas no se envían al hotel.</footer>
 
   <script type="module" src="app.js"></script>
 </body>

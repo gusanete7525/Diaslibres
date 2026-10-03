@@ -141,7 +141,7 @@ body[data-view="hotels"] .flight-only, body[data-view="flights"] .hotel-only { d
 .card h3 { margin: 0; font-size: 18px; }
 .meta { color: var(--text-2); font-size: 13px; }
 .stars { color: #c98500; letter-spacing: 1px; }
-.rating { display: inline-block; background: var(--brand); color: var(--brand-ink); border-radius: 6px; padding: 0 6px; font-weight: 700; font-size: 13px; }
+.meta a { color: var(--brand); }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .tag { background: var(--surface-2); color: var(--text-2); border-radius: 6px; padding: 1px 7px; font-size: 12px; }
 .desc { color: var(--text-2); margin: 10px 0; font-size: 14px; }

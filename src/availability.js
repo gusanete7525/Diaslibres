@@ -109,7 +109,7 @@ export function searchHotels(bookings, f = {}) {
   } else if (f.sort === 'price') {
     list.sort((a, b) => (a.summary.minPrice ?? 1e9) - (b.summary.minPrice ?? 1e9));
   } else {
-    list.sort((a, b) => b.rating - a.rating);
+    list.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0) || a.name.localeCompare(b.name, 'es'));
   }
   return { start, days, nights, results: list };
 }

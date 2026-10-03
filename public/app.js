@@ -150,7 +150,7 @@ $('#aiForm').addEventListener('submit', async (e) => {
     filters.origin.value = f.origin || '';
     filters.maxPrice.value = f.maxPrice || '';
     filters.nights.value = f.nights || 3;
-    filters.sort.value = f.sort || 'rating';
+    filters.sort.value = f.sort || 'stars';
     filters.tags.value = (f.tags || []).join(',');
     filters.minStars.value = f.minStars || '';
     filters.checkIn.value = f.checkIn || '';
@@ -204,7 +204,8 @@ function renderCard(item) {
       </div>`
     : `<div class="thumb">${item.image}</div><div>
         <h3>${esc(item.name)}</h3>
-        <div class="meta"><span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ${esc(item.city)}, ${esc(item.country)} · <span class="rating">${item.rating}</span></div>
+        <div class="meta">${item.stars ? `<span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}</div>
+        ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">Web oficial ↗</a>` : ''}</div>` : ''}
         <div class="tags">${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       </div>`;
   el.innerHTML = `

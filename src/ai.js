@@ -25,7 +25,7 @@ const FILTER_SCHEMA = {
     maxPrice: nullable({ type: 'number' }),
     minStars: nullable({ type: 'integer' }),
     tags: { type: 'array', items: { type: 'string', enum: TAGS } },
-    sort: { type: 'string', enum: ['price', 'rating'] },
+    sort: { type: 'string', enum: ['price', 'stars'] },
     explanation: { type: 'string' },
   },
 };
@@ -92,7 +92,7 @@ function sanitize(f) {
     maxPrice: f.maxPrice > 0 ? Math.round(f.maxPrice) : null,
     minStars: f.minStars >= 1 && f.minStars <= 5 ? f.minStars : null,
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => TAGS.includes(t)) : [],
-    sort: f.sort === 'price' ? 'price' : 'rating',
+    sort: f.sort === 'price' ? 'price' : 'stars',
     explanation: String(f.explanation || '').slice(0, 300),
   };
 }
@@ -185,5 +185,5 @@ export function localParse(text) {
   if (maxPrice) parts.push(`por menos de ${maxPrice} €`);
   if (cheap) parts.push('ordenados por precio');
 
-  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, sort: cheap ? 'price' : 'rating', explanation: `Busco ${parts.join(' ')}.` });
+  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, sort: cheap ? 'price' : 'stars', explanation: `Busco ${parts.join(' ')}.` });
 }
