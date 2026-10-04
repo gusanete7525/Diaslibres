@@ -60,12 +60,16 @@ export class Mailer {
     const rows = [
       ['Código', b.code],
       ['Alojamiento', b.itemName],
-      b.checkIn ? ['Entrada', day(b.checkIn)] : b.date ? ['Fecha', day(b.date)] : null,
+      b.checkIn ? ['Entrada', day(b.checkIn)] : b.date ? [b.type === 'flight' ? 'Ida' : 'Fecha', day(b.date) + flightTimes(b.flight?.outbound)] : null,
       b.checkOut ? ['Salida', day(b.checkOut)] : null,
+      b.returnDate ? ['Vuelta', day(b.returnDate) + flightTimes(b.flight?.inbound)] : null,
+      b.passengers?.length ? ['Pasajeros', b.passengers.join(', ')] : null,
+      b.pnr ? ['Localizador de la aerolínea', b.pnr] : null,
       b.roomName ? ['Habitación', b.roomName] : null,
       ['Total pagado', money(b.total)],
       ...(b.payAtHotel || []).map((t) => [`A pagar en el hotel: ${t.description}`, money(t.amount, t.currency)]),
-      b.provider === 'liteapi' ? ['Cancelación', b.refundable ? `Gratuita${b.freeCancellationUntil ? ' hasta ' + b.freeCancellationUntil + ' (GMT)' : ''}` : 'No reembolsable'] : null,
+      b.provider === 'liteapi' && b.type === 'flight' ? ['Tarifa', b.refundable ? 'Reembolsable (con las condiciones de la aerolínea)' : 'No reembolsable'] : null,
+      b.provider === 'liteapi' && b.type !== 'flight' ? ['Cancelación', b.refundable ? `Gratuita${b.freeCancellationUntil ? ' hasta ' + b.freeCancellationUntil + ' (GMT)' : ''}` : 'No reembolsable'] : null,
       b.providerBookingId ? ['Referencia del proveedor', b.providerBookingId] : null,
     ].filter(Boolean);
     const test = b.sandbox || b.provider !== 'liteapi';
@@ -75,7 +79,7 @@ export class Mailer {
       layout(
         `Hola ${esc(b.name)}, tu reserva está confirmada.`,
         table(rows) +
-          (test ? '<p style="color:#8c1f1f">Es una reserva de prueba: no se ha cobrado nada y no es válida en el hotel.</p>' : '') +
+          (test ? '<p style="color:#8c1f1f">Es una reserva de prueba: no se ha cobrado nada y no es válida para viajar ni en el hotel.</p>' : '') +
           '<p>Puedes consultarla o cancelarla en «Mis reservas» con este email.</p>',
       ),
     );
@@ -112,7 +116,7 @@ export class Mailer {
           ['Código', b.code],
           ['Cliente', `${b.name} <${b.email}>`],
           ['Alojamiento', b.itemName],
-          ['Fechas', `${b.checkIn} → ${b.checkOut}`],
+          ['Fechas', b.checkIn ? `${b.checkIn} → ${b.checkOut}` : `${b.date}${b.returnDate ? ' → ' + b.returnDate : ''}`],
           ['Importe', money(b.total)],
           ['Transacción', b.transactionId || '—'],
           ['Prebook', b.prebookId || '—'],
@@ -121,6 +125,13 @@ export class Mailer {
       ),
     );
   }
+}
+
+// « · 08:15 MAD → 10:30 LIS» con las horas locales del vuelo.
+function flightTimes(leg) {
+  if (!leg?.departure) return '';
+  const t = (iso) => String(iso).slice(11, 16);
+  return ` · ${t(leg.departure)} ${leg.from} → ${t(leg.arrival)} ${leg.to}`;
 }
 
 function table(rows) {

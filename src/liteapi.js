@@ -8,6 +8,8 @@ const DAY = 86400000;
 const PRICE_TTL = 3 * 3600 * 1000; // los precios caducan a las 3 h
 const HOTELS_TTL = 24 * 3600 * 1000;
 const MAX_HOTELS = 15;
+const MAX_FLIGHTS = 20;
+const OFFER_TTL = 30 * 60 * 1000; // las ofertas de vuelo caducan pronto
 const CONCURRENCY = 3; // el entorno de pruebas responde 429 con más peticiones a la vez
 
 const norm = (s) =>
@@ -100,6 +102,7 @@ export class LiteApi {
     this.hotelLists = new Map();
     this.hotelsById = new Map(); // id interno -> hotel
     this.prices = new Map(); // `${liteId}|${fecha}` -> { at, price }
+    this.offers = new Map(); // offerId de vuelo -> { at, trip }
   }
 
   // ---------- Peticiones con límite de concurrencia y reintentos en 429 ----------
@@ -134,7 +137,10 @@ export class LiteApi {
         if (!res.ok || data.error) {
           const msg = data.error?.description || data.error?.message || `LiteAPI respondió ${res.status}`;
           this.lastError = { at: new Date().toISOString(), status: res.status, message: String(msg).slice(0, 200) };
-          throw new LiteApiError(msg);
+          const err = new LiteApiError(msg);
+          err.status = res.status;
+          err.code = data.error?.code ?? null;
+          throw err;
         }
         return data;
       }
@@ -335,5 +341,185 @@ export class LiteApi {
     const res = await this.#request('PUT', `${BOOK}/bookings/${encodeURIComponent(bookingId)}`);
     const d = res.data || {};
     return { status: d.status, refund: d.refund_amount ?? null, fee: d.cancellation_fee ?? null };
+  }
+
+  // ---------- Vuelos ----------
+  // Búsqueda → verificación del precio → prebook (crea el pago con Stripe) → el
+  // cliente paga → booking. Nuitée cobra al cliente como comerciante (Merchant of Record).
+
+  async airports(q) {
+    const { data = [] } = await this.#request('GET', `${API}/data/flights/airports?q=${encodeURIComponent(q)}`);
+    return data.flatMap((set) => set.airports || []).filter((a) => a.iata).map((a) => ({ code: a.iata, name: a.name, city: a.city, country: a.country }));
+  }
+
+  async flightSearch({ origin, destination, date, returnDate, adults = 1 }) {
+    const legs = [{ origin, destination, date, direction: 'OUTBOUND' }];
+    if (returnDate) legs.push({ origin: destination, destination: origin, date: returnDate, direction: 'INBOUND' });
+    const { data = [] } = await this.#request('POST', `${API}/flights/rates`, {
+      legs,
+      adults: Math.max(1, Math.min(6, Number(adults) || 1)),
+      currency: 'EUR',
+      country: 'ES',
+      sort: { sortBy: 'price', sortOrder: 'asc' },
+    });
+    const best = new Map(); // journeyKey -> viaje con su oferta más barata
+    for (const set of data) {
+      for (const j of set.journeys || []) {
+        const trip = this.#toJourney(j);
+        if (!trip) continue;
+        const prev = best.get(trip.journeyKey);
+        if (!prev || trip.total < prev.total) best.set(trip.journeyKey, trip);
+      }
+    }
+    const trips = [...best.values()].sort((a, b) => a.total - b.total).slice(0, MAX_FLIGHTS);
+    const now = Date.now();
+    for (const [id, o] of this.offers) if (now - o.at > OFFER_TTL) this.offers.delete(id);
+    for (const t of trips) this.offers.set(t.offerId, { at: now, trip: t });
+    return trips;
+  }
+
+  #toJourney(j) {
+    const offer = [...(j.offers || [])].filter((o) => typeof o.pricing?.display?.total === 'number').sort((a, b) => a.pricing.display.total - b.pricing.display.total)[0];
+    if (!offer || !j.segments?.length) return null;
+    const segments = j.segments.map((s) => ({
+      direction: s.direction === 'INBOUND' ? 'INBOUND' : 'OUTBOUND',
+      from: s.originCode,
+      fromName: s.originName || s.originCode,
+      to: s.destinationCode,
+      toName: s.destinationName || s.destinationCode,
+      departure: s.departureTime,
+      arrival: s.arrivalTime,
+      airline: s.carrier?.marketingName || s.carrier?.marketingCode || '',
+      airlineCode: s.carrier?.marketingCode || '',
+      logo: /^https:\/\//.test(s.carrier?.marketingLogo || '') ? s.carrier.marketingLogo : null,
+      flight: `${s.carrier?.marketingCode || ''}${s.flight?.marketingNumber || ''}`,
+      minutes: s.duration?.minutes ?? null,
+    }));
+    const leg = (dir) => {
+      const segs = segments.filter((s) => s.direction === dir);
+      if (!segs.length) return null;
+      const dur = (j.legDurations || []).find((d) => d.direction === dir);
+      return {
+        from: segs[0].from,
+        to: segs.at(-1).to,
+        departure: segs[0].departure,
+        arrival: segs.at(-1).arrival,
+        stops: segs.length - 1,
+        minutes: dur?.duration?.minutes ?? segs.reduce((n, s) => n + (s.minutes || 0), 0),
+        dayChange: dur?.dayChange || 0,
+        airlines: [...new Set(segs.map((s) => s.airline).filter(Boolean))],
+      };
+    };
+    const p = offer.pricing.display;
+    return {
+      journeyKey: j.journeyKey || offer.offerId,
+      offerId: offer.offerId,
+      expiration: offer.expiration || null,
+      total: Math.round(p.total * 100) / 100,
+      currency: p.currency || 'EUR',
+      outbound: leg('OUTBOUND'),
+      inbound: leg('INBOUND'),
+      segments,
+      fare: offer.fare?.family || '',
+      seatsRemaining: offer.fare?.seatsRemaining ?? null,
+      refundable: !!offer.terms?.refundable,
+      changeable: !!offer.terms?.changeable,
+      carryOn: !!offer.baggage?.hasCarryOnBag,
+      checkedBag: !!offer.baggage?.hasCheckedBag,
+      baggage: (offer.baggage?.included || []).map((b) => b.description).filter(Boolean).slice(0, 3),
+      adults: j.parameters?.adults ?? null,
+    };
+  }
+
+  // Datos del viaje guardados en la búsqueda (para el resumen y la reserva).
+  flightOffer(offerId) {
+    const hit = this.offers.get(offerId);
+    return hit && Date.now() - hit.at < OFFER_TTL ? hit.trip : null;
+  }
+
+  // Comprueba que la oferta sigue disponible y su precio actual.
+  async flightVerify(offerId) {
+    let res;
+    try {
+      res = await this.#request('POST', `${API}/flights/verify`, { offerId });
+    } catch (err) {
+      if (err.status === 404) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
+      throw err;
+    }
+    const d = (Array.isArray(res.data) ? res.data[0] : res.data) || {};
+    const total = Number(d.journey?.pricing?.display?.total);
+    if (!Number.isFinite(total)) throw new LiteApiError('No se pudo comprobar el precio del vuelo. Inténtalo de nuevo.');
+    return { total: Math.round(total * 100) / 100, changed: !!d.changes?.priceChanged, messages: d.changes?.messages || [] };
+  }
+
+  // Reserva la tarifa con la aerolínea y crea el pago (Stripe) que hará el cliente.
+  async flightPrebook({ offerId, contact, passengers }) {
+    let res;
+    try {
+      res = await this.#request('POST', `${API}/flights/prebooks`, { offerId, usePaymentSdk: true, contact, passengers });
+    } catch (err) {
+      if (err.status === 404 || [45029, 45063].includes(err.code)) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
+      throw err;
+    }
+    const d = (Array.isArray(res.data) ? res.data[0] : res.data) || {};
+    if (!d.prebookId || !d.secretKey || !d.transactionId) throw new LiteApiError('No se pudo preparar el pago del vuelo. Inténtalo de nuevo.');
+    return {
+      prebookId: d.prebookId,
+      price: Number.isFinite(Number(d.price)) ? Math.round(Number(d.price) * 100) / 100 : null,
+      currency: d.currency || 'EUR',
+      transactionId: d.transactionId,
+      secretKey: d.secretKey,
+      publishableKey: d.publishableKey || null,
+    };
+  }
+
+  // Confirma la reserva con el pago ya hecho. Es idempotente para el mismo prebook,
+  // así que se reintenta si el proveedor falla (502/503).
+  async flightBook({ prebookId, transactionId }) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await this.#request('POST', `${API}/flights/bookings`, { prebookId, payment: { method: 'TRANSACTION_ID', transactionId } });
+        const b = ((Array.isArray(res.data) ? res.data[0] : res.data) || {}).booking || {};
+        if (!b.bookingId || !['CONFIRMED', 'PENDING_CONFIRMATION', 'CREATED'].includes(b.status)) {
+          throw new LiteApiError('La aerolínea no ha confirmado la reserva.');
+        }
+        return {
+          bookingId: b.bookingId,
+          bookingRef: b.bookingRef || null,
+          status: b.status,
+          pnr: (b.airlineLocators || []).map((l) => `${l.airlineCode} ${l.airlinePnr}`).join(', ') || null,
+          total: Number.isFinite(Number(b.pricing?.totalAmount)) ? Number(b.pricing.totalAmount) : null,
+        };
+      } catch (err) {
+        if (/payment/i.test(err.message) && /not|pending|incomplete|requires|unpaid/i.test(err.message)) throw new PaymentPendingError();
+        if (err.code === 45035) throw new LiteApiError('Estamos confirmando tu reserva. Espera unos segundos.');
+        if ([502, 503].includes(err.status) && attempt < 2) {
+          await sleep(1500 * (attempt + 1));
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  // Lo que se devolvería al cancelar (estimación máxima, no garantizada).
+  async flightCancelQuote(bookingId) {
+    const res = await this.#request('GET', `${API}/flights/bookings/${encodeURIComponent(bookingId)}/cancellations`);
+    const d = (Array.isArray(res.data) ? res.data[0] : res.data) || {};
+    return {
+      refundable: !!d.isRefundable || !!d.isVoidable,
+      voidable: !!d.isVoidable,
+      refund: d.refund?.display?.amount ?? 0,
+      penalty: d.penalty?.display?.amount ?? 0,
+      currency: d.refund?.display?.currency || 'EUR',
+      destination: d.destination || null,
+    };
+  }
+
+  async flightCancel(bookingId) {
+    const res = await this.#request('POST', `${API}/flights/bookings/${encodeURIComponent(bookingId)}/cancellations`);
+    const d = res.data || {};
+    // CONFIRMED = la aerolínea aún no ha confirmado la cancelación (pendiente).
+    return { status: d.status, pending: !/^CANCELLED/.test(d.status || ''), refund: d.refund_amount ?? null, fee: d.cancellation_fee ?? null };
   }
 }

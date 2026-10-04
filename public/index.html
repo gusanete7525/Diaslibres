@@ -37,12 +37,21 @@
     <p id="aiExplain" class="ai-explain" hidden></p>
 
     <form id="filters" class="filters">
+      <label class="flight-only">Origen
+        <input name="origin" list="destList" placeholder="Cualquiera" />
+      </label>
       <label>Destino
         <input name="destination" placeholder="Escribe cualquier ciudad" autocomplete="off" />
         <datalist id="destList"></datalist>
       </label>
-      <label class="flight-only">Origen
-        <input name="origin" list="destList" placeholder="Cualquiera" />
+      <label class="flight-only live-only">Ida
+        <input name="date" type="date" />
+      </label>
+      <label class="flight-only live-only">Vuelta <span class="meta">(opcional)</span>
+        <input name="returnDate" type="date" />
+      </label>
+      <label class="flight-only live-only">Pasajeros
+        <select name="passengers"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
       </label>
       <label class="hotel-only">Noches
         <input name="nights" type="number" min="1" max="30" value="3" />
@@ -103,6 +112,37 @@
       <div class="actions">
         <button type="button" id="bookCancel" class="btn ghost">Cancelar</button>
         <button type="button" data-send id="bookConfirm" class="btn primary">Confirmar reserva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="flightDialog" class="dialog wide">
+    <form id="flightForm" autocomplete="on">
+      <h2>Reservar vuelo</h2>
+      <div id="flightSummary" class="summary"></div>
+      <p class="total">Total: <strong id="flightTotal">—</strong></p>
+      <p id="flightExtra" class="meta" hidden></p>
+      <div id="flightFields" class="flight-fields">
+        <fieldset>
+          <legend>Contacto</legend>
+          <label>Email <input name="email" type="email" required autocomplete="email" /></label>
+          <div class="row">
+            <label class="code">Prefijo <input name="phoneCountryCode" inputmode="numeric" value="34" required pattern="\+?[0-9]{1,4}" /></label>
+            <label>Teléfono <input name="phoneNumber" type="tel" required minlength="6" autocomplete="tel-national" /></label>
+          </div>
+        </fieldset>
+        <div id="paxList"></div>
+        <p class="meta">Escribe los datos tal y como aparecen en el pasaporte o DNI. La aerolínea los necesita para emitir el billete.</p>
+        <label class="check"><input name="terms" type="checkbox" required /> <span>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a>, las condiciones de la tarifa de la aerolínea y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+      </div>
+      <div id="flightPayBox" class="paybox" hidden>
+        <p class="meta" id="flightPayHint"></p>
+        <div id="flightPayment"></div>
+      </div>
+      <p id="flightError" class="error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="flightCancel" class="btn ghost">Cancelar</button>
+        <button type="button" data-send id="flightConfirm" class="btn primary">Continuar al pago</button>
       </div>
     </form>
   </dialog>
