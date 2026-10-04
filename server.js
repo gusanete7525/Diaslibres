@@ -7,6 +7,7 @@ import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { readFileSync } from 'node:fs';
+import { minify } from 'terser';
 import { renderPage, sitemap, cityFromSlug, routeFromSlug } from './src/seo.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
@@ -100,6 +101,20 @@ export function createApp({
       relation: ['delegate_permission/common.handle_all_urls'],
       target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: prints },
     }] : []);
+  });
+  // El código del navegador se sirve compacto y sin comentarios (más ligero y menos legible).
+  let appJs = null;
+  app.get('/app.js', async (_req, res, next) => {
+    try {
+      appJs ??= minify(readFileSync(join(root, 'public', 'app.js'), 'utf8'), {
+        module: true, compress: { passes: 2 }, mangle: { toplevel: true }, format: { comments: false },
+      }).then((r) => r.code);
+      res.type('application/javascript').set('Cache-Control', 'public, max-age=300').send(await appJs);
+    } catch (err) {
+      console.error('[app.js]', err.message);
+      appJs = null;
+      next(); // si falla, el archivo original
+    }
   });
   app.use(express.static(join(root, 'public'), { index: false }));
 

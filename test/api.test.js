@@ -136,3 +136,9 @@ test('con SITE_URL, las otras direcciones redirigen al dominio propio', async ()
     delete process.env.SITE_URL;
   }
 });
+
+test('app.js se sirve minificado', async () => {
+  const js = await fetch(base + '/app.js').then((r) => r.text());
+  assert.ok(js.length > 1000);
+  assert.doesNotMatch(js, /\/\/ ---------- /);
+});
