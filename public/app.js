@@ -314,7 +314,8 @@ function renderResults() {
 
 function rerender(id) {
   const old = document.getElementById('card-' + id);
-  if (old) old.replaceWith(renderCard(state.items.get(id)));
+  const item = state.items.get(id);
+  if (old) old.replaceWith(item.liveFlight ? liveFlightCard(item) : renderCard(item));
 }
 
 function renderCard(item) {
@@ -405,7 +406,7 @@ function renderCalendar(item, ui) {
     if (d.available && d.price === cheapest) cls.push('cheap');
     if (ui.start && (iso === ui.start || iso === ui.end)) cls.push('sel');
     else if (ui.start && ui.end && iso > ui.start && iso < ui.end) cls.push('in-range');
-    const label = `${fmtDay.format(toDate(iso))}: ${d.pending ? 'cargando precio' : d.available ? `libre, ${d.price} €` : 'completo'}`;
+    const label = `${fmtDay.format(toDate(iso))}: ${d.pending ? 'cargando precio' : d.available ? `libre, ${d.price} €` : item.liveFlight ? 'sin vuelo' : 'completo'}`;
     cells += `<button class="${cls.join(' ')}" data-date="${iso}" aria-label="${label}"><span>${n}</span><small>${d.pending ? '…' : d.available ? d.price : '—'}</small></button>`;
   }
   return `<div class="cal">
@@ -417,13 +418,13 @@ function renderCalendar(item, ui) {
     <div class="cal-grid">${cells}</div>
     <div class="cal-legend">
       <span><i style="background:var(--good-bg);outline:1px solid var(--good)"></i>Libre (precio €)</span>
-      <span><i style="background:var(--bad-bg);outline:1px solid var(--bad)"></i>Completo</span>
+      <span><i style="background:var(--bad-bg);outline:1px solid var(--bad)"></i>${item.liveFlight ? 'Sin plazas o no vuela' : 'Completo'}</span>
       <span>★ Más barato</span>
     </div>
   </div>`;
 }
 
-function renderChart(item, ui, isFlight) {
+function renderChart(item, ui, isFlight, title) {
   const cal = item.calendar;
   const n = cal.length;
   const prices = cal.filter((d) => d.price != null).map((d) => d.price);
@@ -450,7 +451,7 @@ function renderChart(item, ui, isFlight) {
     : '';
   return `<div class="chart-wrap">
     <div class="chart-title">
-      <span><strong>Precio por ${isFlight ? 'billete' : 'noche'}</strong> · próximos ${n} días</span>
+      <span><strong>${title || `Precio por ${isFlight ? 'billete' : 'noche'}`}</strong> · ${n} días</span>
       <span class="legend"><span><i style="background:var(--series-1)"></i>Libre</span><span><i style="background:var(--muted-bar)"></i>Completo</span></span>
     </div>
     <div class="chart">
@@ -480,27 +481,8 @@ function bindCard(el, item, isFlight) {
     if (day) pickDay(item, ui, day.dataset.date, isFlight);
   });
 
-  const plot = $('.plot', el);
-  const svg = $('svg', el);
-  const locate = (e) => {
-    const r = svg.getBoundingClientRect();
-    const i = Math.floor(((e.clientX - r.left) / r.width) * item.calendar.length);
-    return Math.min(item.calendar.length - 1, Math.max(0, i));
-  };
-  let hovered = null;
-  plot.addEventListener('pointermove', (e) => {
-    const i = locate(e);
-    const d = item.calendar[i];
-    hovered?.classList.remove('hover');
-    hovered = svg.querySelector(`[data-i="${i}"]`);
-    hovered.classList.add('hover');
-    showTip(`<b>${fmtDay.format(toDate(d.date))}</b><br>${dayText(d, isFlight)}`, e.clientX, svg.getBoundingClientRect().top);
-  });
-  plot.addEventListener('pointerleave', () => { hovered?.classList.remove('hover'); hideTip(); });
-  plot.addEventListener('click', (e) => {
-    const d = item.calendar[locate(e)];
+  bindChart(el, item, isFlight, (d) => {
     ui.month = monthIndex(state.data.start, d.date);
-    hideTip();
     pickDay(item, ui, d.date, isFlight);
   });
 
@@ -514,8 +496,36 @@ function bindCard(el, item, isFlight) {
   el.addEventListener('pointerout', (e) => { if (e.target.closest('.day[data-date]')) hideTip(); });
 }
 
+// Gráfica: el precio de cada día al pasar el ratón; al pulsar, onPick(día).
+function bindChart(el, item, isFlight, onPick) {
+  const plot = $('.plot', el);
+  const svg = $('svg', el);
+  const locate = (e) => {
+    const r = svg.getBoundingClientRect();
+    const i = Math.floor(((e.clientX - r.left) / r.width) * item.calendar.length);
+    return Math.min(item.calendar.length - 1, Math.max(0, i));
+  };
+  let hovered = null;
+  plot.addEventListener('pointermove', (e) => {
+    const i = locate(e);
+    const d = item.calendar[i];
+    hovered?.classList.remove('hover');
+    hovered = svg.querySelector(`[data-i="${i}"]`);
+    hovered?.classList.add('hover');
+    showTip(`<b>${fmtDay.format(toDate(d.date))}</b><br>${dayText(d, isFlight)}`, e.clientX, svg.getBoundingClientRect().top);
+  });
+  plot.addEventListener('pointerleave', () => { hovered?.classList.remove('hover'); hideTip(); });
+  plot.addEventListener('click', (e) => {
+    const d = item.calendar[locate(e)];
+    hideTip();
+    onPick(d);
+  });
+}
+
 function dayText(d, isFlight) {
   if (d.pending) return 'Cargando precio…';
+  if (d.error) return 'No se pudo consultar ese día';
+  if (d.noFlight) return 'Sin plazas o no vuela ese día';
   if (!d.available) return d.price != null ? `${eur(d.price)} · completo` : 'Completo';
   return `${eur(d.price)} · ${d.left != null ? `quedan ${d.left} ${isFlight ? 'plazas' : 'hab.'}` : 'disponible'}`;
 }
@@ -528,7 +538,7 @@ function pickDay(item, ui, iso, isFlight) {
     return toast('Todavía estamos cargando los precios de esos días.');
   }
   if (isFlight) {
-    if (!d.available) return toast('Ese vuelo está completo ese día.');
+    if (!d.available) return toast(d.error ? 'No se pudo consultar ese día. Búscalo con la fecha de ida.' : 'Ese día este vuelo no tiene plazas o no vuela.');
     ui.start = iso;
     return rerender(item.id);
   }
@@ -748,8 +758,8 @@ async function searchLiveFlights(token) {
     const data = await api(`/api/flights?${p}`);
     if (token !== searchToken) return;
     state.data = data;
-    if (!filters.date.value) filters.date.value = data.date;
-    renderFlightResults(data);
+    if (!filters.date.value && !data.needRoute) filters.date.value = data.date;
+    renderFlightResults(data, token);
   } catch (err) {
     if (token === searchToken) results.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
   } finally {
@@ -757,12 +767,9 @@ async function searchLiveFlights(token) {
   }
 }
 
-function renderFlightResults(data) {
+function renderFlightResults(data, token) {
   setFooter(true);
-  if (data.needRoute) {
-    results.innerHTML = '<p class="empty">Escribe el origen y el destino (ciudad o código de aeropuerto, por ejemplo MAD) y la fecha de ida para ver vuelos reales.</p>';
-    return;
-  }
+  if (data.needRoute) return loadDeals(token);
   const route = `${esc(data.origin.name)} (${esc(data.origin.code)}) → ${esc(data.destination.name)} (${esc(data.destination.code)})`;
   const when = `${fmtDay.format(toDate(data.date))}${data.returnDate ? ' → ' + fmtDay.format(toDate(data.returnDate)) : ' · solo ida'}`;
   const note = data.live.sandbox ? ' · entorno de pruebas de LiteAPI (precios no reales)' : '';
@@ -770,8 +777,203 @@ function renderFlightResults(data) {
     results.innerHTML = `<p class="count">${route} · ${when}</p><p class="empty">No hay vuelos para esas fechas. Prueba otro día u otro aeropuerto.</p>`;
     return;
   }
-  results.innerHTML = `<p class="count">${data.results.length} vuelo${data.results.length > 1 ? 's' : ''} · ${route} · ${when} · ${data.adults} pasajero${data.adults > 1 ? 's' : ''}${note}</p>`;
-  for (const trip of data.results) results.append(flightCard(trip, data));
+  // Calendario de cada vuelo: unos días antes y después de la fecha elegida.
+  const tomorrow = addDays(new Date().toISOString().slice(0, 10), 1);
+  const back = addDays(data.date, -3);
+  data.start = back > tomorrow ? back : tomorrow;
+  data.days = FLIGHT_CAL_DAYS;
+  data.loaded = new Map([[data.date, data.results]]); // fecha -> vuelos (null si falló)
+  state.items = new Map();
+  state.ui = new Map();
+  for (const trip of data.results) {
+    const id = 'fl-' + (trip.flightKey || trip.journeyKey).replace(/[^\w-]/g, '');
+    if (state.items.has(id)) continue;
+    const item = {
+      id, liveFlight: true, flightKey: trip.flightKey, base: trip,
+      calendar: Array.from({ length: data.days }, (_, i) => ({ date: addDays(data.start, i), price: null, available: null, pending: true })),
+    };
+    fillFlightDay(item, data.date, data.results);
+    state.items.set(id, item);
+    state.ui.set(id, { month: monthIndex(data.start, data.date), start: data.date });
+  }
+  results.innerHTML = `<p class="count">${state.items.size} vuelo${state.items.size > 1 ? 's' : ''} · ${route} · ${when} · ${data.adults} pasajero${data.adults > 1 ? 's' : ''}${note}</p><div id="routeChart"></div><p class="count" id="livePending"></p>`;
+  renderRouteChart();
+  for (const item of state.items.values()) results.append(liveFlightCard(item));
+  loadFlightDays(token);
+}
+
+const FLIGHT_CAL_DAYS = 14;
+
+// El día `date` de un vuelo: su tarifa ese día, o sin plazas / no vuela.
+function fillFlightDay(item, date, trips) {
+  const i = diffDays(state.data.start, date);
+  if (i < 0 || i >= item.calendar.length) return;
+  if (!trips) { item.calendar[i] = { date, price: null, available: false, error: true }; return; }
+  const t = trips.find((x) => (x.flightKey || x.journeyKey) === (item.flightKey || item.base.journeyKey));
+  item.calendar[i] = t
+    ? { date, price: Math.round(t.total), available: true, left: t.seatsRemaining || null, trip: t }
+    : { date, price: null, available: false, noFlight: true };
+}
+
+// Gráfica de la ruta: el vuelo más barato de cada día. Al pulsar un día, se busca esa fecha.
+function routeCalendar() {
+  const data = state.data;
+  return Array.from({ length: data.days }, (_, i) => {
+    const date = addDays(data.start, i);
+    if (!data.loaded.has(date)) return { date, price: null, available: null, pending: true };
+    const trips = data.loaded.get(date);
+    if (!trips) return { date, price: null, available: false, error: true };
+    if (!trips.length) return { date, price: null, available: false, noFlight: true };
+    const min = Math.min(...trips.map((t) => t.total));
+    return { date, price: Math.round(min), available: true, left: null };
+  });
+}
+
+function renderRouteChart() {
+  const box = $('#routeChart');
+  if (!box) return;
+  const item = { id: 'route', liveFlight: true, calendar: routeCalendar() };
+  box.className = 'card route-chart';
+  box.innerHTML = renderChart(item, { start: state.data.date }, true, 'Vuelo más barato de cada día') +
+    '<p class="meta">Pulsa un día de la gráfica para ver los vuelos de esa fecha.</p>';
+  bindChart(box, item, true, (d) => {
+    if (!d.available) return toast(d.pending ? 'Todavía estamos cargando ese día.' : 'Ese día no hay vuelos en esta ruta.');
+    const data = state.data;
+    if (data.returnDate) filters.returnDate.value = addDays(d.date, diffDays(data.date, data.returnDate));
+    filters.date.value = d.date;
+    search();
+  });
+}
+
+// Carga el resto de días del calendario (de 3 en 3, los más cercanos a la fecha elegida primero).
+async function loadFlightDays(token) {
+  const data = state.data;
+  const dates = Array.from({ length: data.days }, (_, i) => addDays(data.start, i)).filter((d) => !data.loaded.has(d));
+  dates.sort((a, b) => Math.abs(diffDays(data.date, a)) - Math.abs(diffDays(data.date, b)) || (a < b ? -1 : 1));
+  const stay = data.returnDate ? diffDays(data.date, data.returnDate) : '';
+  const note = () => {
+    const el = $('#livePending');
+    if (el) el.textContent = data.loaded.size < data.days ? `Cargando precios de otros días… ${data.loaded.size}/${data.days}` : '';
+  };
+  note();
+  for (let k = 0; k < dates.length; k += 3) {
+    const chunk = dates.slice(k, k + 3);
+    let res;
+    try {
+      res = await api(`/api/flights/days?origin=${data.origin.code}&destination=${data.destination.code}&dates=${chunk.join(',')}&stay=${stay}&adults=${data.adults}`);
+    } catch {
+      res = { days: chunk.map((date) => ({ date, error: true })) };
+    }
+    if (token !== searchToken || state.data !== data) return; // hay una búsqueda más nueva
+    for (const d of res.days) {
+      data.loaded.set(d.date, d.error ? null : d.trips);
+      for (const item of state.items.values()) fillFlightDay(item, d.date, data.loaded.get(d.date));
+    }
+    renderRouteChart();
+    for (const id of state.items.keys()) rerender(id);
+    note();
+  }
+}
+
+// Ofertas: el vuelo más barato de rutas populares, al abrir «Vuelos» sin ruta.
+async function loadDeals(token) {
+  results.innerHTML = '<p class="count">Buscando las ofertas de vuelos más baratas…</p>';
+  for (let tries = 0; tries < 40; tries++) {
+    let d;
+    try {
+      d = await api('/api/flights/deals');
+    } catch (err) {
+      if (token === searchToken) results.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+      return;
+    }
+    if (token !== searchToken) return;
+    renderDeals(d);
+    if (!d.pending) return;
+    await new Promise((r) => setTimeout(r, 5000));
+    if (token !== searchToken) return;
+  }
+}
+
+function renderDeals(d) {
+  const plain = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const from = plain(filters.origin.value.trim());
+  const mine = from ? d.deals.filter((x) => plain(x.origin.code) === from || plain(x.origin.name).startsWith(from)) : [];
+  const list = mine.length ? mine : d.deals;
+  const sandbox = state.config.sandbox ? ' · entorno de pruebas de LiteAPI (precios no reales)' : '';
+  const head = `<p class="count">Ofertas de vuelos${d.date ? ` para el ${fmtDay.format(toDate(d.date))}` : ''} · solo ida · 1 pasajero${sandbox}</p>
+    <p class="count">Pulsa una oferta para ver todos sus vuelos con el calendario de precios, o escribe tu origen y destino arriba.</p>`;
+  if (!list.length) {
+    results.innerHTML = head + `<p class="empty">${d.pending ? 'Buscando las ofertas más baratas…' : 'Ahora mismo no hay ofertas. Escribe el origen y el destino para buscar vuelos.'}</p>`;
+    return;
+  }
+  results.innerHTML = head + `<div class="deals">${list.map((x) => `
+    <button type="button" class="deal" data-o="${esc(x.origin.name)}" data-d="${esc(x.destination.name)}" data-date="${esc(x.date)}">
+      <span class="deal-route">${esc(x.origin.name)} → ${esc(x.destination.name)}</span>
+      <span class="meta">${esc(x.airlines.join(', '))} · ${stopsText(x.stops)} · sale ${hhmm(x.departure)}</span>
+      <span class="deal-price">desde <b>${eur2(x.total)}</b></span>
+    </button>`).join('')}</div>${d.pending ? '<p class="count">Cargando más ofertas…</p>' : ''}`;
+  for (const b of results.querySelectorAll('.deal')) {
+    b.addEventListener('click', () => {
+      filters.origin.value = b.dataset.o;
+      filters.destination.value = b.dataset.d;
+      filters.date.value = b.dataset.date;
+      filters.returnDate.value = '';
+      search();
+    });
+  }
+}
+
+// Tarjeta de un vuelo real con su calendario: muestra la tarifa del día elegido.
+function liveFlightCard(item) {
+  const data = state.data;
+  const ui = state.ui.get(item.id);
+  const day = item.calendar.find((d) => d.date === ui.start);
+  const trip = day?.trip || item.base;
+  const el = document.createElement('article');
+  el.className = 'card flight-card live';
+  el.id = 'card-' + item.id;
+  const tags = [
+    trip.checkedBag ? '🧳 maleta facturada' : trip.carryOn ? '🎒 equipaje de mano' : 'sin maleta incluida',
+    trip.refundable ? 'reembolsable' : 'no reembolsable',
+    trip.fare,
+    trip.seatsRemaining > 0 && trip.seatsRemaining <= 5 ? `quedan ${trip.seatsRemaining} plazas` : '',
+  ].filter(Boolean);
+  el.innerHTML = `
+    <div>
+      <div class="fl-top">
+        <div>${flightLegHtml(trip.outbound, trip.segments, 'OUTBOUND')}${flightLegHtml(trip.inbound, trip.segments, 'INBOUND')}</div>
+        <div class="fl-side">
+          <div><div class="price">${eur2(trip.total)}</div><div class="meta">${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))}${data.adults > 1 ? ` · ${data.adults} pasajeros` : ''}</div></div>
+          <div class="tags">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+          <button class="btn primary" type="button" data-live-book>Reservar</button>
+        </div>
+      </div>
+      ${renderChart(item, ui, true, 'Precio de este vuelo')}
+    </div>
+    <div>${renderCalendar(item, ui)}</div>`;
+  bindCard(el, item, true);
+  $('[data-live-book]', el).addEventListener('click', () => bookLiveFlight(item, trip));
+  return el;
+}
+
+// Las tarifas de LiteAPI caducan a los pocos minutos: si falta poco, se vuelve a buscar ese día.
+async function bookLiveFlight(item, trip) {
+  const data = state.data;
+  if (trip.expiration && Date.parse(trip.expiration) - Date.now() < 60_000) {
+    const date = trip.outbound.departure.slice(0, 10);
+    toast('Actualizando el precio de ese día…');
+    try {
+      const p = new URLSearchParams({ origin: data.origin.code, destination: data.destination.code, date, adults: data.adults });
+      if (data.returnDate) p.set('returnDate', addDays(date, diffDays(data.date, data.returnDate)));
+      const fresh = await api(`/api/flights?${p}`);
+      const t = fresh.results.find((x) => (x.flightKey || x.journeyKey) === (item.flightKey || item.base.journeyKey));
+      if (!t) return toast('Ese vuelo ya no tiene plazas ese día. Elige otro.');
+      trip = t;
+    } catch (err) {
+      return toast(err.message);
+    }
+  }
+  openFlightBooking(trip, data);
 }
 
 function flightLegHtml(leg, segments, dir) {
@@ -783,26 +985,6 @@ function flightLegHtml(leg, segments, dir) {
       <div class="fl-time">${hhmm(leg.arrival)}<small>${esc(leg.to)}${leg.dayChange ? ` +${leg.dayChange}` : ''}</small></div>
     </div>
     <div class="fl-air">${seg?.logo ? `<img src="${esc(seg.logo)}" alt="" loading="lazy" onerror="this.remove()">` : '✈️'} ${dir === 'INBOUND' ? 'Vuelta · ' : ''}${esc(leg.airlines.join(', '))}${seg ? ' · ' + esc(seg.flight) : ''}</div>`;
-}
-
-function flightCard(trip, data) {
-  const el = document.createElement('article');
-  el.className = 'card flight-card';
-  const tags = [
-    trip.checkedBag ? '🧳 maleta facturada' : trip.carryOn ? '🎒 equipaje de mano' : 'sin maleta incluida',
-    trip.refundable ? 'reembolsable' : 'no reembolsable',
-    trip.fare,
-    trip.seatsRemaining != null && trip.seatsRemaining <= 5 ? `quedan ${trip.seatsRemaining} plazas` : '',
-  ].filter(Boolean);
-  el.innerHTML = `
-    <div>${flightLegHtml(trip.outbound, trip.segments, 'OUTBOUND')}${flightLegHtml(trip.inbound, trip.segments, 'INBOUND')}</div>
-    <div class="fl-side">
-      <div><div class="price">${eur2(trip.total)}</div><div class="meta">total${data.adults > 1 ? ` · ${data.adults} pasajeros` : ''}</div></div>
-      <div class="tags">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-      <button class="btn primary" type="button">Reservar</button>
-    </div>`;
-  $('button', el).addEventListener('click', () => openFlightBooking(trip, data));
-  return el;
 }
 
 // Nacionalidades más habituales; el resto se escribe con su código (FR, US…).

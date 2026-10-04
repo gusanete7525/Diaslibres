@@ -240,6 +240,16 @@ body:not([data-live-flights]) .live-only { display: none; }
 
 /* ---------- Vuelos reales ---------- */
 .flight-card { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
+.flight-card.live { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.fl-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; }
+.route-chart { display: block; }
+.route-chart .meta { margin: 6px 0 0; }
+.deals { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.deal { display: grid; gap: 4px; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px 16px; }
+.deal:hover, .deal:focus-visible { border-color: var(--brand); }
+.deal-route { font-weight: 700; font-size: 16px; }
+.deal-price { font-size: 14px; color: var(--text-2); }
+.deal-price b { font-size: 20px; color: var(--text); }
 .fl-leg { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 6px 0; }
 .fl-leg + .fl-leg { border-top: 1px dashed var(--border); }
 .fl-time { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -251,7 +261,7 @@ body:not([data-live-flights]) .live-only { display: none; }
 .fl-air { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-2); }
 .fl-air img { width: 20px; height: 20px; object-fit: contain; border-radius: 4px; background: #fff; }
 @media (max-width: 640px) {
-  .flight-card { grid-template-columns: 1fr; }
+  .flight-card, .flight-card.live, .fl-top { grid-template-columns: 1fr; }
   .fl-side { justify-items: stretch; text-align: left; grid-template-columns: 1fr auto; align-items: center; }
   .fl-side .tags { grid-column: 1 / -1; }
 }

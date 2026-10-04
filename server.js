@@ -149,6 +149,60 @@ export function createApp({
   }
 
   // Precio actual de una oferta antes de pedir los datos de los pasajeros.
+  // ---------- Calendario de vuelos: una búsqueda por día, en segundo plano ----------
+  const iata = (x) => (/^[A-Z]{3}$/.test(String(x || '').toUpperCase()) ? String(x).toUpperCase() : null);
+  app.get('/api/flights/days', async (req, res) => {
+    if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
+    const q = req.query;
+    const origin = iata(q.origin);
+    const destination = iata(q.destination);
+    if (!origin || !destination || origin === destination) return res.status(400).json({ error: 'Ruta no válida.' });
+    const tomorrow = addDays(todayISO(), 1);
+    const dates = [...new Set(list(q.dates))].filter((d) => isISODate(d) && d >= tomorrow).slice(0, 7);
+    if (!dates.length) return res.status(400).json({ error: 'Fechas no válidas.' });
+    const stay = q.stay != null && q.stay !== '' ? Math.max(0, Math.min(30, Number(q.stay) || 0)) : null; // null = solo ida
+    const adults = Math.max(1, Math.min(6, Number(q.adults) || 1));
+    const out = await Promise.all(dates.map(async (date) => {
+      try {
+        const trips = await live.flightSearch({ origin, destination, date, returnDate: stay == null ? null : addDays(date, stay), adults }, { priority: false });
+        return { date, trips };
+      } catch (err) {
+        console.error('[liteapi vuelos]', date, err.message);
+        return { date, error: true };
+      }
+    }));
+    res.json({ days: out });
+  });
+
+  // ---------- Ofertas: el vuelo más barato de rutas populares (se renuevan cada 2 h) ----------
+  const DEAL_ROUTES = [['MAD', 'BCN'], ['MAD', 'LIS'], ['MAD', 'CDG'], ['MAD', 'FCO'], ['MAD', 'TFN'], ['BCN', 'AGP'], ['BCN', 'LHR'], ['VLC', 'PMI'], ['VLC', 'AMS']];
+  const DEALS_TTL = 2 * 60 * 60 * 1000;
+  const deals = { at: 0, date: null, list: [], running: null };
+  function refreshDeals() {
+    if (!liveFlights || deals.running) return deals.running;
+    const date = addDays(todayISO(), 14);
+    const fresh = [];
+    const place = (code) => ({ code, name: AIRPORTS[code] || code });
+    deals.running = Promise.all(DEAL_ROUTES.map(async ([o, d]) => {
+      try {
+        const [t] = await live.flightSearch({ origin: o, destination: d, date, adults: 1 }, { priority: false });
+        if (t) fresh.push({ origin: place(o), destination: place(d), date, total: t.total, currency: t.currency, airlines: t.outbound.airlines, departure: t.outbound.departure, stops: t.outbound.stops, minutes: t.outbound.minutes });
+      } catch (err) {
+        console.error('[liteapi ofertas]', o, d, err.message);
+      }
+      if (!deals.at) { deals.list = [...fresh]; deals.date = date; } // la primera vez se van enseñando según llegan
+    })).then(() => {
+      if (fresh.length) Object.assign(deals, { list: fresh, date, at: Date.now() });
+    }).finally(() => { deals.running = null; });
+    return deals.running;
+  }
+  app.locals.refreshDeals = refreshDeals;
+  app.get('/api/flights/deals', (_req, res) => {
+    if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
+    if (Date.now() - deals.at > DEALS_TTL) refreshDeals();
+    res.json({ date: deals.date, deals: [...deals.list].sort((a, b) => a.total - b.total), pending: !deals.at && !!deals.running });
+  });
+
   app.post('/api/flights/quote', async (req, res) => {
     if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
     try {
@@ -511,11 +565,13 @@ export function createApp({
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 3000;
   const store = await createStore({ file: join(root, 'data', 'bookings.json') });
-  createApp({ store }).listen(port, () => {
+  const app = createApp({ store });
+  app.listen(port, () => {
     console.log(process.env.DATABASE_URL ? 'Reservas en PostgreSQL.' : 'Reservas en data/bookings.json (se pierden si el disco no es permanente).');
     console.log(`DíasLibres en http://localhost:${port}`);
     if (!process.env.ANTHROPIC_API_KEY) console.log('Sin ANTHROPIC_API_KEY: la búsqueda con IA usa el intérprete local.');
     if (process.env.LITEAPI_KEY?.trim()) console.log(`Hoteles con datos reales de LiteAPI${process.env.LITEAPI_KEY.trim().replace(/^["']/, '').startsWith('sand_') ? ' (entorno de pruebas)' : ''}.`);
     else console.log('Sin LITEAPI_KEY: hoteles con precios y disponibilidad simulados.');
+    app.locals.refreshDeals(); // las ofertas de vuelos ya preparadas para la primera visita
   });
 }

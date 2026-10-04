@@ -190,3 +190,33 @@ test('vuelos: con LITEAPI_FLIGHTS=off se usan los vuelos simulados', async () =>
     delete process.env.LITEAPI_FLIGHTS;
   }
 });
+
+test('vuelos reales: calendario por días (con caché) y ofertas de rutas populares', async () => {
+  const state = { log: [] };
+  const { server, base } = await setup(state);
+  try {
+    const get = (path) => fetch(base + path).then(async (r) => ({ status: r.status, body: await r.json() }));
+    assert.equal((await get('/api/flights/days?origin=MAD&destination=MAD&dates=2030-03-10')).status, 400);
+    assert.equal((await get('/api/flights/days?origin=MAD&destination=LIS&dates=2001-01-01')).status, 400, 'sin fechas futuras');
+
+    const r = await get('/api/flights/days?origin=mad&destination=LIS&dates=2030-03-10,2030-03-11&stay=3');
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.days.map((d) => d.date), ['2030-03-10', '2030-03-11']);
+    assert.equal(r.body.days[0].trips[0].flightKey, 'TP1-TP1', 'el mismo vuelo se reconoce en otros días por sus números');
+    assert.deepEqual(state.search.legs.map((l) => l.date), ['2030-03-11', '2030-03-14'], 'ida y vuelta con la misma estancia');
+    const calls = state.log.filter((l) => l.endsWith('/flights/rates')).length;
+    await get('/api/flights/days?origin=MAD&destination=LIS&dates=2030-03-10&stay=3');
+    assert.equal(state.log.filter((l) => l.endsWith('/flights/rates')).length, calls, 'el mismo día se reutiliza unos minutos');
+
+    let deals = await get('/api/flights/deals');
+    for (let i = 0; deals.body.pending && i < 50; i++) {
+      await new Promise((ok) => setTimeout(ok, 20));
+      deals = await get('/api/flights/deals');
+    }
+    assert.ok(deals.body.deals.length > 0);
+    assert.equal(deals.body.deals[0].total, 99, 'la oferta es el vuelo más barato de la ruta');
+    assert.ok(deals.body.deals[0].origin.name && deals.body.deals[0].destination.code);
+  } finally {
+    server.close();
+  }
+});
