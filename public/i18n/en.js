@@ -535,5 +535,14 @@ export default {
  "El acceso con Apple no está activado.": "Sign-in with Apple is not enabled.",
  "No se pudo comprobar tu cuenta de Apple.": "Your Apple account could not be verified.",
  "Entrar como invitado": "Continue as guest",
- "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "As a guest you can search and book, but we don’t save your searches or suggest destinations."
+ "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "As a guest you can search and book, but we don’t save your searches or suggest destinations.",
+ "Continuar con Microsoft": "Continue with Microsoft",
+ "Continuar con Facebook": "Continue with Facebook",
+ "El acceso con Microsoft no está activado.": "Sign-in with Microsoft is not enabled.",
+ "No se pudo comprobar tu cuenta de Microsoft.": "Your Microsoft account could not be verified.",
+ "El acceso con Facebook no está activado.": "Sign-in with Facebook is not enabled.",
+ "No se pudo comprobar tu cuenta de Facebook.": "Your Facebook account could not be verified.",
+ "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Your Facebook account has no confirmed email. Sign in with your email instead.",
+ "Permite las ventanas emergentes para entrar con Microsoft.": "Allow pop-ups to sign in with Microsoft.",
+ "Cargando Facebook… vuelve a pulsar en un momento.": "Loading Facebook… tap again in a moment."
 };

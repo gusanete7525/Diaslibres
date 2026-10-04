@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>DíasLibres</title>
+</head>
+<body style="font-family:system-ui,sans-serif;text-align:center;padding:40px">
+<p>…</p>
+<script>
+  // Vuelta del inicio de sesión de Microsoft: pasa el resultado a la ventana de DíasLibres y se cierra.
+  if (window.opener && !window.opener.closed) {
+    window.opener.postMessage({ authHash: location.hash }, location.origin);
+    window.close();
+  } else {
+    location.replace('/');
+  }
+</script>
+</body>
+</html>
