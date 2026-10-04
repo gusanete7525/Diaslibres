@@ -443,5 +443,8 @@ body:not([data-live-flights]) .live-only { display: none; }
 .apple-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; border-radius: 999px; border: 0; background: #000; color: #fff; font-weight: 600; font-size: 15px; cursor: pointer; }
 .apple-btn svg { width: 18px; height: 18px; }
 :root[data-theme="dark"] .apple-btn { background: #fff; color: #000; }
+.social-btn { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; border-radius: 999px; border: 1px solid #8c8c8c; background: #fff; color: #1f1f1f; font-weight: 600; font-size: 15px; cursor: pointer; }
+.social-btn svg { width: 18px; height: 18px; }
+.social-btn.facebook { background: #1877f2; border-color: #1877f2; color: #fff; }
 .guest-btn { width: 100%; height: 42px; border: 1px solid var(--border); }
 .guest-note { text-align: center; font-size: 12px; }

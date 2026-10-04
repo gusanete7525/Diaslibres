@@ -1756,6 +1756,53 @@ async function appleSignIn() {
   }
 }
 
+// «Continuar con Microsoft»: ventana emergente de Microsoft que vuelve a /auth-callback.html
+// con un id_token; el servidor lo comprueba (firma, cuenta personal y nonce).
+function microsoftSignIn() {
+  const id = state.config.microsoftClientId;
+  if (!id) return;
+  const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const q = new URLSearchParams({
+    client_id: id, response_type: 'id_token', response_mode: 'fragment', scope: 'openid email profile',
+    redirect_uri: location.origin + '/auth-callback.html', nonce, prompt: 'select_account', ui_locales: LANG,
+  });
+  const popup = window.open('https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + q, 'ms-login', 'width=480,height=640');
+  if (!popup) return toast(t('Permite las ventanas emergentes para entrar con Microsoft.'));
+  const onMessage = async (e) => {
+    if (e.origin !== location.origin || typeof e.data?.authHash !== 'string') return;
+    window.removeEventListener('message', onMessage);
+    const r = new URLSearchParams(e.data.authHash.replace(/^#/, ''));
+    if (!r.get('id_token')) return r.get('error') === 'access_denied' ? null : toast(t('No se pudo comprobar tu cuenta de Microsoft.'));
+    try { signedIn((await api('/api/auth/microsoft', { method: 'POST', body: JSON.stringify({ idToken: r.get('id_token'), nonce }) })).user); } catch (err) { toast(err.message); }
+  };
+  window.addEventListener('message', onMessage);
+}
+
+// «Continuar con Facebook» (SDK de Meta; se carga al abrir el diálogo para que la
+// ventana emergente salga directamente del clic y el navegador no la bloquee).
+let facebookScript = null;
+function loadFacebook() {
+  const id = state.config.facebookAppId;
+  if (!id) return null;
+  facebookScript ??= new Promise((resolve, reject) => {
+    window.fbAsyncInit = () => { FB.init({ appId: id, version: 'v21.0', cookie: false, xfbml: false }); resolve(); };
+    const s = document.createElement('script');
+    s.src = 'https://connect.facebook.net/' + ({ es: 'es_ES', en: 'en_GB', fr: 'fr_FR', de: 'de_DE', it: 'it_IT', pt: 'pt_PT', nl: 'nl_NL' }[LANG] || 'es_ES') + '/sdk.js';
+    s.async = true;
+    s.onerror = reject;
+    document.head.append(s);
+  });
+  return facebookScript;
+}
+function facebookSignIn() {
+  if (!window.FB) return toast(t('Cargando Facebook… vuelve a pulsar en un momento.'));
+  FB.login(async (r) => {
+    const accessToken = r?.authResponse?.accessToken;
+    if (!accessToken) return;
+    try { signedIn((await api('/api/auth/facebook', { method: 'POST', body: JSON.stringify({ accessToken }) })).user); } catch (err) { toast(err.message); }
+  }, { scope: 'email' });
+}
+
 function openAccount() {
   const body = $('#accountBody');
   const u = state.user;
@@ -1771,7 +1818,9 @@ function openAccount() {
       <p class="meta">${t('Guarda tus búsquedas en todos tus dispositivos y recibe propuestas que te puedan gustar. Sin contraseñas.')}</p>
       ${state.config.googleClientId ? `<div class="google-box" id="googleBtn"></div>` : ''}
       ${state.config.appleClientId ? `<button type="button" class="apple-btn" data-act="apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.5-1-2.5-3.9zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z" fill="currentColor"/></svg> ${t('Continuar con Apple')}</button>` : ''}
-      ${state.config.googleClientId || state.config.appleClientId ? `<p class="or"><span>${t('o con tu email')}</span></p>` : ''}
+      ${state.config.microsoftClientId ? `<button type="button" class="social-btn" data-act="microsoft"><svg viewBox="0 0 21 21" aria-hidden="true"><path fill="#f25022" d="M1 1h9v9H1z"/><path fill="#7fba00" d="M11 1h9v9h-9z"/><path fill="#00a4ef" d="M1 11h9v9H1z"/><path fill="#ffb900" d="M11 11h9v9h-9z"/></svg> ${t('Continuar con Microsoft')}</button>` : ''}
+      ${state.config.facebookAppId ? `<button type="button" class="social-btn facebook" data-act="facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z"/></svg> ${t('Continuar con Facebook')}</button>` : ''}
+      ${state.config.googleClientId || state.config.appleClientId || state.config.microsoftClientId || state.config.facebookAppId ? `<p class="or"><span>${t('o con tu email')}</span></p>` : ''}
       <form id="loginForm">
         <label>${t('Email')}<input name="email" type="email" required autocomplete="email" value="${esc(store.get('dl-email') || '')}" /></label>
         <button class="btn primary" type="submit">${t('Recibir enlace para entrar')}</button>
@@ -1780,6 +1829,7 @@ function openAccount() {
       <button type="button" class="btn ghost guest-btn" data-act="guest">${t('Entrar como invitado')}</button>
       <p class="meta guest-note">${t('Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.')}</p>`;
     googleButton($('#googleBtn'));
+    loadFacebook()?.catch(() => { const b = $('[data-act="facebook"]'); if (b) b.hidden = true; });
     $('#loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = e.target.email.value.trim();
@@ -1811,6 +1861,8 @@ $('#accountDialog').addEventListener('click', async (e) => {
     return dlg.close();
   }
   if (act === 'apple') return appleSignIn();
+  if (act === 'microsoft') return microsoftSignIn();
+  if (act === 'facebook') return facebookSignIn();
   if (act === 'mine') { dlg.close(); setView('mine'); }
   if (act === 'logout') {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {});

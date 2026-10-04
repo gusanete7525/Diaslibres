@@ -539,6 +539,8 @@ export function createApp({
   app.get('/api/config', (_req, res) => res.json({
     googleClientId: accounts?.googleClientId || null,
     appleClientId: accounts?.appleClientId || null,
+    microsoftClientId: accounts?.microsoftClientId || null,
+    facebookAppId: accounts?.facebookAppId || null,
     liveFlights, flights: liveFlights || !live, sandbox: live?.sandbox ?? null,
     facilities: Object.fromEntries(Object.entries(FACILITIES).map(([k, f]) => [k, { label: f.label, icon: f.icon }])),
     boards: BOARDS,
@@ -762,6 +764,21 @@ export function createApp({
       authError(res, err);
     }
   });
+  for (const [path, login] of [
+    ['microsoft', (b) => accounts.loginWithMicrosoft(b?.idToken, String(b?.nonce || ''))],
+    ['facebook', (b) => accounts.loginWithFacebook(b?.accessToken)],
+  ]) {
+    app.post('/api/auth/' + path, async (req, res) => {
+      try {
+        const { user, session } = await login(req.body);
+        setSession(req, res, session);
+        res.json({ user: publicUser(user) });
+      } catch (err) {
+        if (!err.status) console.error('[cuentas]', err.message);
+        authError(res, err);
+      }
+    });
+  }
   app.post('/api/auth/apple', async (req, res) => {
     try {
       const { user, session } = await accounts.loginWithApple(req.body?.idToken, String(req.body?.name || '').slice(0, 80));

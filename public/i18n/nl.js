@@ -535,5 +535,14 @@ export default {
  "El acceso con Apple no está activado.": "Inloggen met Apple is niet ingeschakeld.",
  "No se pudo comprobar tu cuenta de Apple.": "Je Apple-account kon niet worden gecontroleerd.",
  "Entrar como invitado": "Doorgaan als gast",
- "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "Als gast kun je zoeken en boeken, maar we bewaren je zoekopdrachten niet en stellen geen bestemmingen voor."
+ "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "Als gast kun je zoeken en boeken, maar we bewaren je zoekopdrachten niet en stellen geen bestemmingen voor.",
+ "Continuar con Microsoft": "Doorgaan met Microsoft",
+ "Continuar con Facebook": "Doorgaan met Facebook",
+ "El acceso con Microsoft no está activado.": "Inloggen met Microsoft is niet ingeschakeld.",
+ "No se pudo comprobar tu cuenta de Microsoft.": "Je Microsoft-account kon niet worden gecontroleerd.",
+ "El acceso con Facebook no está activado.": "Inloggen met Facebook is niet ingeschakeld.",
+ "No se pudo comprobar tu cuenta de Facebook.": "Je Facebook-account kon niet worden gecontroleerd.",
+ "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Je Facebook-account heeft geen bevestigd e-mailadres. Log in met je e-mail.",
+ "Permite las ventanas emergentes para entrar con Microsoft.": "Sta pop-ups toe om in te loggen met Microsoft.",
+ "Cargando Facebook… vuelve a pulsar en un momento.": "Facebook wordt geladen… tik zo nog een keer."
 };

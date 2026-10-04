@@ -145,3 +145,57 @@ test('Apple: token firmado por Apple para esta web', async () => {
     server.close();
   }
 });
+
+test('Microsoft: solo cuentas personales, para esta web y con el mismo nonce', async () => {
+  const { generateKeyPairSync, sign } = await import('node:crypto');
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'm1', use: 'sig', x5t: 'm1', issuer: 'https://login.microsoftonline.com/{tenantid}/v2.0' };
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const jwt = (claims) => {
+    const head = b64({ alg: 'RS256', kid: 'm1', typ: 'JWT' }) + '.' + b64(claims);
+    return head + '.' + sign('RSA-SHA256', Buffer.from(head), privateKey).toString('base64url');
+  };
+  const tid = '9188040d-6c67-4c5b-b112-36a304b66dad';
+  const claims = { iss: `https://login.microsoftonline.com/${tid}/v2.0`, tid, aud: 'ms-app', nonce: 'n1', exp: Math.floor(Date.now() / 1000) + 600, email: 'Luis@Outlook.com', name: 'Luis Pérez' };
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ keys: [jwk] }) });
+  const off = await start();
+  const { server, call } = await start({ microsoftClientId: 'ms-app', fetchImpl });
+  try {
+    assert.equal((await off.call('POST', '/api/auth/microsoft', { idToken: jwt(claims), nonce: 'n1' })).status, 404);
+    assert.equal((await call('POST', '/api/auth/microsoft', { idToken: jwt(claims), nonce: 'otro' })).status, 401);
+    const work = 'aaaaaaaa-0000-0000-0000-000000000000';
+    assert.equal((await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...claims, tid: work, iss: `https://login.microsoftonline.com/${work}/v2.0` }), nonce: 'n1' })).status, 401);
+    assert.equal((await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...claims, aud: 'otra' }), nonce: 'n1' })).status, 401);
+    const r = await call('POST', '/api/auth/microsoft', { idToken: jwt(claims), nonce: 'n1' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.user.email, 'luis@outlook.com');
+    assert.equal(r.body.user.name, 'Luis');
+    assert.equal((await call('GET', '/api/me')).body.user.email, 'luis@outlook.com');
+  } finally {
+    server.close();
+    off.server.close();
+  }
+});
+
+test('Facebook: el token tiene que ser de esta app y traer email', async () => {
+  const users = { bueno: { id: '1', first_name: 'Eva', email: 'eva@example.com' }, sinmail: { id: '2', first_name: 'Ana' } };
+  const fetchImpl = async (url) => {
+    const u = new URL(url);
+    const tok = u.searchParams.get('access_token');
+    if (u.pathname.endsWith('/app')) return { ok: true, json: async () => ({ id: tok === 'otraapp' ? '999' : '123' }) };
+    return users[tok] ? { ok: true, json: async () => users[tok] } : { ok: false, json: async () => ({}) };
+  };
+  const { server, call } = await start({ facebookAppId: '123', fetchImpl });
+  try {
+    assert.equal((await call('POST', '/api/auth/facebook', { accessToken: 'otraapp' })).status, 401);
+    const nomail = await call('POST', '/api/auth/facebook', { accessToken: 'sinmail' });
+    assert.equal(nomail.status, 401);
+    assert.match(nomail.body.error, /email/);
+    const r = await call('POST', '/api/auth/facebook', { accessToken: 'bueno' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.user.email, 'eva@example.com');
+    assert.equal(r.body.user.name, 'Eva');
+  } finally {
+    server.close();
+  }
+});

@@ -535,5 +535,14 @@ export default {
  "El acceso con Apple no está activado.": "La connexion avec Apple n’est pas activée.",
  "No se pudo comprobar tu cuenta de Apple.": "Impossible de vérifier votre compte Apple.",
  "Entrar como invitado": "Continuer en tant qu’invité",
- "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "En tant qu’invité, vous pouvez chercher et réserver, mais nous n’enregistrons pas vos recherches et ne vous proposons pas de destinations."
+ "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "En tant qu’invité, vous pouvez chercher et réserver, mais nous n’enregistrons pas vos recherches et ne vous proposons pas de destinations.",
+ "Continuar con Microsoft": "Continuer avec Microsoft",
+ "Continuar con Facebook": "Continuer avec Facebook",
+ "El acceso con Microsoft no está activado.": "La connexion avec Microsoft n’est pas activée.",
+ "No se pudo comprobar tu cuenta de Microsoft.": "Impossible de vérifier votre compte Microsoft.",
+ "El acceso con Facebook no está activado.": "La connexion avec Facebook n’est pas activée.",
+ "No se pudo comprobar tu cuenta de Facebook.": "Impossible de vérifier votre compte Facebook.",
+ "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Votre compte Facebook n’a pas d’e-mail confirmé. Connectez-vous avec votre e-mail.",
+ "Permite las ventanas emergentes para entrar con Microsoft.": "Autorisez les fenêtres pop-up pour vous connecter avec Microsoft.",
+ "Cargando Facebook… vuelve a pulsar en un momento.": "Chargement de Facebook… réessayez dans un instant."
 };

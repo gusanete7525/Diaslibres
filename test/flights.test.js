@@ -72,7 +72,7 @@ test('vuelos reales: búsqueda, precio, datos de pasajeros, pago y confirmación
   const { server, base, post } = await setup(state, { bookingConfirmed: async (b) => sent.push(b) });
   try {
     const { facilities, boards, ...config } = await fetch(`${base}/api/config`).then((r) => r.json());
-    assert.deepEqual(config, { googleClientId: null, appleClientId: null, liveFlights: true, flights: true, sandbox: true });
+    assert.deepEqual(config, { googleClientId: null, appleClientId: null, microsoftClientId: null, facebookAppId: null, liveFlights: true, flights: true, sandbox: true });
     assert.equal(facilities.mascotas.label, 'Admite mascotas');
     assert.equal(boards.HB, 'Media pensión');
     assert.equal((await fetch(`${base}/api/flights?origin=Madrid`).then((r) => r.json())).needRoute, true, 'sin destino no se busca');
