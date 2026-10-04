@@ -22,7 +22,7 @@ export function createApp({
   mailer = new Mailer(),
 } = {}) {
   // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
-  const notify = (fn, b) => { if (b && mailer?.enabled) Promise.resolve(mailer[fn](b)).catch(() => {}); };
+  const notify = (fn, b) => { if (b && mailer) Promise.resolve(mailer[fn](b)).catch(() => {}); };
   const app = express();
   app.set('trust proxy', true); // https correcto detrás del proxy de Render
   app.use(express.json({ limit: '20kb' }));
@@ -113,7 +113,7 @@ export function createApp({
   });
 
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
-  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, lastLiteApiError: live?.lastError ?? null }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {
     try {
