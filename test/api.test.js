@@ -129,6 +129,7 @@ test('con SITE_URL, las otras direcciones redirigen al dominio propio', async ()
     assert.equal(r.statusCode, 301);
     assert.equal(r.headers.location, 'https://diaslibre.com/hoteles/gandia?x=1');
     assert.equal((await hit('/api/config')).statusCode, 200);
+    assert.equal((await hit('/google93b9b90670433b82.html')).statusCode, 200);
     const html = await fetch(base + '/').then((x) => x.text());
     assert.match(html, /<link rel="canonical" href="https:\/\/diaslibre\.com\/"/);
   } finally {

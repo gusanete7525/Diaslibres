@@ -32,9 +32,10 @@ export function createApp({
   const indexHtml = readFileSync(join(root, 'public', 'index.html'), 'utf8');
   const siteUrl = (req) => (process.env.SITE_URL?.trim() || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   // Con dominio propio (SITE_URL), las demás direcciones (onrender.com, www.) redirigen a él.
+  // El archivo de verificación de Google no: la propiedad antigua debe seguir verificada.
   app.use((req, res, next) => {
     const site = process.env.SITE_URL?.trim();
-    if (!site || !['GET', 'HEAD'].includes(req.method) || req.path.startsWith('/api/') || req.path.startsWith('/.well-known/')) return next();
+    if (!site || !['GET', 'HEAD'].includes(req.method) || req.path.startsWith('/api/') || req.path.startsWith('/.well-known/') || /^\/google[0-9a-f]+\.html$/.test(req.path)) return next();
     let host;
     try { host = new URL(site).host; } catch { return next(); }
     if (req.get('host') === host || /^localhost(:|$)|^127\./.test(req.get('host') || '')) return next();
