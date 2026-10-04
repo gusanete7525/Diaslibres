@@ -7,7 +7,7 @@ import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { OsmHotels } from './src/osm.js';
-import { LiteApi, PriceChangedError, PaymentPendingError } from './src/liteapi.js';
+import { LiteApi, PriceChangedError, PaymentPendingError, occupancy } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -75,7 +75,7 @@ export function createApp({
         summary: { freeDays: 0, minPrice: null, maxPrice: null, avgPrice: null },
         bestStay: null,
       }));
-      res.json({ start, days: LIVE_DAYS, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment } });
+      res.json({ start, days: LIVE_DAYS, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudo consultar LiteAPI ahora mismo. Inténtalo de nuevo en unos segundos.' });
@@ -88,7 +88,7 @@ export function createApp({
     const start = isISODate(req.query.start) && req.query.start >= todayISO() ? req.query.start : todayISO();
     const days = Math.max(1, Math.min(7, Number(req.query.days) || 7));
     try {
-      res.json({ start, days, prices: await live.nightlyPrices(ids, start, days) });
+      res.json({ start, days, prices: await live.nightlyPrices(ids, start, days, { adults: req.query.adults, children: req.query.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'LiteAPI no ha devuelto precios. Inténtalo de nuevo.' });
@@ -165,6 +165,7 @@ export function createApp({
         total: pre.price ?? q.total,
         name: who.name,
         email: who.email,
+        guests: occupancy(body),
         status: 'pendiente_pago',
         provider: 'liteapi',
         sandbox: live.sandbox,
@@ -242,6 +243,7 @@ export function createApp({
           total: b.total ?? q.total,
           name,
           email,
+          guests: occupancy(body),
           status: 'confirmada',
           provider: 'liteapi',
           providerBookingId: b.bookingId,

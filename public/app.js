@@ -103,7 +103,13 @@ function filterParams() {
   const fd = new FormData(filters);
   const p = new URLSearchParams();
   for (const [k, v] of fd) if (v) p.set(k, v);
-  if (state.view === 'flights') { p.delete('nights'); p.delete('sort'); p.delete('tags'); p.delete('minStars'); }
+  p.delete('kids');
+  for (const k of [...p.keys()]) if (k.startsWith('age')) p.delete(k);
+  if (state.view === 'hotels') {
+    const ages = [...filters.querySelectorAll('[name^="age"]')].map((s) => s.value);
+    if (ages.length) p.set('children', ages.join(','));
+  }
+  if (state.view === 'flights') { p.delete('nights'); p.delete('sort'); p.delete('tags'); p.delete('minStars'); p.delete('adults'); }
   else p.delete('origin');
   return p;
 }
@@ -132,6 +138,21 @@ async function search() {
   }
 }
 
+// Edad de cada niño (LiteAPI la necesita para el precio).
+function renderKidAges() {
+  const box = $('#kidAges');
+  const n = Number(filters.kids.value) || 0;
+  const prev = [...box.querySelectorAll('select')].map((s) => s.value);
+  box.innerHTML = Array.from({ length: n }, (_, i) => `<label>Edad niño ${i + 1}<select name="age${i}">${Array.from({ length: 18 }, (_, a) => `<option ${String(a) === (prev[i] ?? '8') ? 'selected' : ''}>${a}</option>`).join('')}</select></label>`).join('');
+}
+filters.kids.addEventListener('change', renderKidAges);
+
+function guestsText(g) {
+  if (!g) return '';
+  const kids = g.children?.length || 0;
+  return `${g.adults} adulto${g.adults > 1 ? 's' : ''}${kids ? ` y ${kids} niño${kids > 1 ? 's' : ''} (${g.children.join(', ')} años)` : ''}`;
+}
+
 // ---------- Precios reales (LiteAPI): se cargan por semanas y rellenan el calendario ----------
 async function loadLivePrices(token) {
   const { start, days, results: list } = state.data;
@@ -140,7 +161,9 @@ async function loadLivePrices(token) {
     if (token !== searchToken) return; // hay una búsqueda más nueva
     let res;
     try {
-      res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}`);
+      const g = state.data.guests || {};
+      const occ = `&adults=${g.adults || 2}${g.children?.length ? '&children=' + g.children.join(',') : ''}`;
+      res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}${occ}`);
     } catch (err) {
       if (token === searchToken) toast(err.message);
       return;
@@ -212,6 +235,7 @@ function onSend(form, handler) {
 onSend(filters, search);
 $('#clearFilters').addEventListener('click', () => {
   filters.reset();
+  renderKidAges();
   filters.tags.value = filters.minStars.value = filters.checkIn.value = '';
   $('#aiExplain').hidden = true;
   search();
@@ -226,6 +250,7 @@ async function aiSearchSubmit() {
   try {
     const f = await api('/api/ai-search', { method: 'POST', body: JSON.stringify({ query }) });
     filters.reset();
+    renderKidAges();
     filters.destination.value = f.destination || '';
     filters.origin.value = f.origin || '';
     filters.maxPrice.value = f.maxPrice || '';
@@ -521,7 +546,8 @@ const bookForm = $('#bookForm');
 
 function bookingRequest() {
   const b = state.booking;
-  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value };
+  const g = state.data.guests || {};
+  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value, adults: g.adults, children: g.children };
   return b.isFlight ? { ...base, date: b.start } : { ...base, checkIn: b.start, checkOut: b.end };
 }
 
@@ -553,7 +579,7 @@ function openBooking(item, ui, isFlight) {
   $('#unitsLabel').textContent = isFlight ? 'Pasajeros' : 'Habitaciones';
   $('#bookSummary').innerHTML = isFlight
     ? `<b>${esc(item.airline)}</b> ${esc(item.originCity)} → ${esc(item.destinationCity)}<br>${fmtDay.format(toDate(ui.start))} · sale ${esc(item.departure)}`
-    : `<b>${esc(item.name)}</b> · ${esc(item.city)}<br>${fmtDay.format(toDate(ui.start))} → ${fmtDay.format(toDate(ui.end))} (${diffDays(ui.start, ui.end)} noches)`;
+    : `<b>${esc(item.name)}</b> · ${esc(item.city)}<br>${fmtDay.format(toDate(ui.start))} → ${fmtDay.format(toDate(ui.end))} (${diffDays(ui.start, ui.end)} noches)${item.origin === 'liteapi' && state.data.guests ? `<br>${guestsText(state.data.guests)} por habitación` : ''}`;
   bookForm.units.value = '1';
   bookForm.email.value ||= store.get('dl-email') || '';
   $('#bookError').hidden = true;
@@ -689,6 +715,7 @@ async function loadMine(email) {
         <div>
           <div><b>${esc(b.itemName)}</b></div>
           <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${b.units} hab.` : `${fmtDay.format(toDate(b.date))} · ${b.units} pasajero${b.units > 1 ? 's' : ''}`} · ${eur(b.total)}</div>
+          ${b.guests ? `<div class="meta">${guestsText(b.guests)} por habitación</div>` : ''}
           ${b.provider === 'liteapi' ? `<div class="meta">LiteAPI${b.sandbox ? ' (prueba)' : ''} · ref. ${esc(b.providerBookingId)}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
           <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : '✖'} ${esc(b.status)}</span></div>
         </div>

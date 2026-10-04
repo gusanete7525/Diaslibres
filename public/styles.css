@@ -232,3 +232,4 @@ body[data-view="hotels"] .flight-only, body[data-view="flights"] .hotel-only { d
 @keyframes pulse { 50% { opacity: 0.3; } }
 .paybox { display: grid; gap: 8px; }
 #paymentElement { min-height: 120px; }
+.kid-ages { display: contents; }

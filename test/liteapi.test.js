@@ -252,3 +252,29 @@ test('pago del cliente: checkout, pago pendiente, confirmación y datos internos
     server.close();
   }
 });
+
+test('los huéspedes (adultos y edades de niños) llegan a LiteAPI y cada grupo tiene su precio', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.includes('/data/places')) return Response.json({ data: [{ placeId: 'P', types: ['locality'] }] });
+    if (u.includes('/data/hotels')) return Response.json({ data: [{ id: 'lpK', name: 'K', city: 'Roma', country: 'it' }] });
+    const body = JSON.parse(opts.body);
+    bodies.push(body);
+    const people = body.occupancies[0].adults + (body.occupancies[0].children?.length || 0);
+    if (u.endsWith('/hotels/min-rates')) return Response.json({ data: [{ hotelId: 'lpK', price: 50 * people }] });
+    return Response.json({ data: [{ hotelId: 'lpK', roomTypes: [{ offerId: 'o', offerRetailRate: { amount: 99 }, rates: [{ name: 'Familiar' }] }] }] });
+  };
+  const live = new LiteApi({ key: 'sand_t', fetchImpl });
+  const [h] = await live.hotels('Roma');
+  const two = await live.nightlyPrices([h.id], '2030-03-01', 1, { adults: 2 });
+  const family = await live.nightlyPrices([h.id], '2030-03-01', 1, { adults: '2', children: '5,9' });
+  assert.equal(two[h.id][0].price, 100);
+  assert.equal(family[h.id][0].price, 200, 'otro grupo, otro precio (no sale de la caché del primero)');
+  assert.deepEqual(bodies[1].occupancies, [{ adults: 2, children: [5, 9] }]);
+  await live.quote({ itemId: h.id, checkIn: '2030-03-01', checkOut: '2030-03-03', units: 2, adults: 1, children: [3] });
+  assert.deepEqual(bodies.at(-1).occupancies, [{ adults: 1, children: [3] }, { adults: 1, children: [3] }]);
+  // Valores fuera de rango se acotan.
+  await live.nightlyPrices([h.id], '2030-03-02', 1, { adults: 40, children: '30,-1,4,5,6,7' });
+  assert.deepEqual(bodies.at(-1).occupancies, [{ adults: 6, children: [17, 0, 4, 5] }]);
+});

@@ -41,6 +41,18 @@ function shortDescription(html) {
   return first.length > 220 ? first.slice(0, 217).replace(/\s+\S*$/, '') + '…' : first;
 }
 
+// Ocupación de una habitación: adultos (1-6) y edades de los niños (0-17, máx. 4).
+export function occupancy({ adults, children } = {}) {
+  const a = Math.max(1, Math.min(6, Math.round(Number(adults) || 2)));
+  const list = (Array.isArray(children) ? children : String(children ?? '').split(','))
+    .filter((x) => String(x).trim() !== '')
+    .map((x) => Math.max(0, Math.min(17, Math.round(Number(x)))))
+    .filter((x) => Number.isFinite(x))
+    .slice(0, 4);
+  return list.length ? { adults: a, children: list } : { adults: a };
+}
+const occKey = (o) => `${o.adults}a${(o.children || []).join('-')}`;
+
 export class LiteApiError extends Error {}
 
 export class PaymentPendingError extends LiteApiError {
@@ -173,24 +185,27 @@ export class LiteApi {
   // ---------- Precio de cada noche (estancia de 1 noche, 2 adultos) ----------
 
   // Devuelve { [idInterno]: [{ date, price|null, available }] } para `days` noches desde `start`.
-  async nightlyPrices(ids, start, days) {
+  async nightlyPrices(ids, start, days, guests = {}) {
     const hotels = ids.map((id) => this.hotelsById.get(id)).filter(Boolean);
     const dates = Array.from({ length: days }, (_, i) => addDays(start, i));
-    await Promise.all(dates.map((d) => this.#pricesForNight(hotels, d)));
+    const occ = occupancy(guests);
+    const k = occKey(occ);
+    await Promise.all(dates.map((d) => this.#pricesForNight(hotels, d, occ)));
     const out = {};
     for (const h of hotels) {
       out[h.id] = dates.map((date) => {
-        const price = this.prices.get(`${h.liteId}|${date}`)?.price ?? null;
+        const price = this.prices.get(`${h.liteId}|${date}|${k}`)?.price ?? null;
         return { date, price, available: price !== null, left: null };
       });
     }
     return out;
   }
 
-  async #pricesForNight(hotels, date) {
+  async #pricesForNight(hotels, date, occ) {
+    const k = occKey(occ);
     const now = Date.now();
     const missing = hotels.filter((h) => {
-      const hit = this.prices.get(`${h.liteId}|${date}`);
+      const hit = this.prices.get(`${h.liteId}|${date}|${k}`);
       return !hit || now - hit.at > PRICE_TTL;
     });
     if (!missing.length) return;
@@ -198,7 +213,7 @@ export class LiteApi {
       hotelIds: missing.map((h) => h.liteId),
       checkin: date,
       checkout: addDays(date, 1),
-      occupancies: [{ adults: 2 }],
+      occupancies: [occ],
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 6,
@@ -207,13 +222,13 @@ export class LiteApi {
     for (const h of missing) {
       const p = found.get(h.liteId);
       // Sin tarifa esa noche = no hay disponibilidad (día en rojo).
-      this.prices.set(`${h.liteId}|${date}`, { at: now, price: typeof p === 'number' ? Math.round(p) : null });
+      this.prices.set(`${h.liteId}|${date}|${k}`, { at: now, price: typeof p === 'number' ? Math.round(p) : null });
     }
   }
 
   // ---------- Presupuesto, reserva y cancelación ----------
 
-  async quote({ itemId, checkIn, checkOut, units = 1 }) {
+  async quote({ itemId, checkIn, checkOut, units = 1, adults, children }) {
     const hotel = this.hotelsById.get(itemId);
     if (!hotel) throw new LiteApiError('Hotel no encontrado. Vuelve a buscar la ciudad.');
     const rooms = Math.max(1, Math.min(4, Number(units) || 1));
@@ -221,7 +236,7 @@ export class LiteApi {
       hotelIds: [hotel.liteId],
       checkin: checkIn,
       checkout: checkOut,
-      occupancies: Array.from({ length: rooms }, () => ({ adults: 2 })),
+      occupancies: Array.from({ length: rooms }, () => occupancy({ adults, children })),
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 8,
