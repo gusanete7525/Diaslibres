@@ -120,6 +120,8 @@ function filterParams() {
 let searchToken = 0;
 async function search() {
   const token = ++searchToken;
+  if (state.view === 'flights') await configReady;
+  if (token !== searchToken) return;
   if (state.view === 'flights' && state.config.liveFlights) return searchLiveFlights(token);
   results.classList.add('loading');
   if (state.view === 'hotels' && filters.destination.value.trim()) {
@@ -128,6 +130,13 @@ async function search() {
   try {
     const p = filterParams();
     const data = await api(`/api/${state.view === 'flights' ? 'flights' : 'hotels'}?${p}`);
+    if (token !== searchToken) return;
+    // El servidor ya da vuelos reales aunque no se pudiera leer /api/config: se repite con su buscador.
+    if (data.live?.flights) {
+      state.config = { ...state.config, liveFlights: true };
+      document.body.dataset.liveFlights = '1';
+      return searchLiveFlights(token);
+    }
     state.data = data;
     state.items = new Map(data.results.map((x) => [x.id, x]));
     state.ui = new Map();
@@ -815,7 +824,7 @@ function paxFieldset(i) {
     </div>
     <div class="row">
       <label>Nacionalidad <select name="nationality" required>${countryOptions}</select></label>
-      <label>Documento <select name="documentType" required><option value="passport">Pasaporte</option><option value="id_card">DNI / documento de identidad</option></select></label>
+      <label>Documento <select name="documentType" required><option value="passport">Pasaporte</option><option value="id">DNI / documento de identidad</option></select></label>
     </div>
     <div class="row">
       <label>Número de documento <input name="documentNumber" required minlength="5" autocomplete="off" /></label>
@@ -834,6 +843,25 @@ function showFlightPay(on) {
   $('#flightFields').hidden = on;
   $('#flightPayBox').hidden = !on;
   if (!on) $('#flightPayment').innerHTML = '';
+}
+
+// Sin clave de Stripe en el prebook: la pasarela de LiteAPI (la de los hoteles) muestra la tarjeta y su propio botón de pagar.
+async function payFlightWithWrapper(co) {
+  state.flight.checkout = co;
+  await loadPaymentSdk().catch(() => { throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'); });
+  showFlightPay(true);
+  $('#flightConfirm').hidden = true;
+  $('#flightTotal').textContent = eur2(co.total);
+  $('#flightPayHint').innerHTML = `Total a pagar: <b>${eur2(co.total)}</b>${Math.abs(co.total - co.searchTotal) > 0.01 ? ` (incluye ${eur2(co.total - co.searchTotal)} de gastos de emisión del billete)` : ''} · código ${esc(co.code)}<br>El cargo lo hace Nuitée, el proveedor de los billetes, y aparecerá a su nombre en tu tarjeta.` +
+    (co.publicKey === 'sandbox' ? '<br>Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.' : '');
+  new window.LiteAPIPayment({
+    publicKey: co.publicKey,
+    appearance: { theme: 'flat' },
+    options: { business: { name: 'DíasLibres' } },
+    targetElement: '#flightPayment',
+    secretKey: co.secretKey,
+    returnUrl: co.returnUrl,
+  }).handlePayment();
 }
 
 async function openFlightBooking(trip, data) {
@@ -912,7 +940,7 @@ onSend(flightForm, async () => {
   try {
     const co = await api('/api/flights/checkout', { method: 'POST', body: JSON.stringify({ offerId: f.trip.offerId, adults: f.adults, ...flightCustomer() }) });
     store.set('dl-email', flightForm.email.value.trim());
-    if (!co.publishableKey) throw new Error('El pago con tarjeta no está disponible ahora mismo. Inténtalo más tarde.');
+    if (!co.publishableKey) return await payFlightWithWrapper(co);
     await loadStripe().catch(() => { throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'); });
     f.checkout = co;
     f.stripe = window.Stripe(co.publishableKey);
@@ -1016,20 +1044,22 @@ $('#mineList').addEventListener('click', async (e) => {
 });
 
 // ---------- Inicio ----------
+// Se pide antes que nada: si alguien pulsa «Vuelos» mientras carga, la búsqueda espera a saber si los vuelos son reales.
+const configReady = api('/api/config').then((config) => {
+  state.config = config;
+  if (config.liveFlights) document.body.dataset.liveFlights = '1';
+  filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
+}).catch(() => { /* sin vuelos reales */ });
 (async () => {
   try {
     const airports = await api('/api/airports');
     const cities = new Set([...Object.values(airports), 'Benasque']);
     $('#destList').innerHTML = [...cities].sort().map((c) => `<option value="${esc(c)}">`).join('');
   } catch { /* datalist opcional */ }
-  try {
-    state.config = await api('/api/config');
-    if (state.config.liveFlights) document.body.dataset.liveFlights = '1';
-    filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
-  } catch { /* sin vuelos reales */ }
+  await configReady;
   const params = new URLSearchParams(location.search);
   if (params.get('pago')) return finishPayment(params.get('pago'));
   if (params.get('vuelo')) return finishFlightPayment(params.get('vuelo'), params.get('redirect_status'));
-  setView('hotels');
-  search();
+  // Si ya se pulsó una pestaña mientras cargaba, no se le cambia.
+  if (state.view === 'hotels') { setView('hotels'); search(); }
 })();

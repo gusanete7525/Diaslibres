@@ -160,7 +160,7 @@ export function createApp({
     }
   });
 
-  const DOC_TYPES = ['passport', 'id_card'];
+  const DOC_TYPES = ['passport', 'id']; // LiteAPI: pasaporte o DNI
   function validFlightCustomer(body, adults, flightDate) {
     const email = String(body.email || '').trim().slice(0, 120);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Email no válido.' };
@@ -181,6 +181,7 @@ export function createApp({
       if (!['M', 'F'].includes(p.gender)) return { error: `${who}: indica el sexo que figura en el documento.` };
       const nationality = String(p.nationality || '').toUpperCase();
       if (!/^[A-Z]{2}$/.test(nationality)) return { error: `${who}: indica la nacionalidad.` };
+      if (p.documentType === 'id_card') p.documentType = 'id'; // páginas antiguas
       if (!DOC_TYPES.includes(p.documentType)) return { error: `${who}: elige el tipo de documento.` };
       const documentNumber = String(p.documentNumber || '').replace(/\s/g, '').toUpperCase().slice(0, 20);
       if (documentNumber.length < 5) return { error: `${who}: número de documento no válido.` };
@@ -237,6 +238,7 @@ export function createApp({
         searchTotal: trip.total,
         secretKey: pre.secretKey,
         publishableKey: pre.publishableKey,
+        publicKey: live.sandbox ? 'sandbox' : 'live',
         returnUrl: `${base}/?vuelo=${checkoutId}`,
       });
     } catch (err) {

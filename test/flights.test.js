@@ -89,7 +89,7 @@ test('vuelos reales: búsqueda, precio, datos de pasajeros, pago y confirmación
     const q = await post('/api/flights/quote', { offerId: 'O1' }).then((r) => r.json());
     assert.deepEqual(q, { total: 125, changed: true, messages: [] });
 
-    const customer = { offerId: 'O1', email: 'ana@test.com', phoneCountryCode: '+34', phoneNumber: '600 111 222', passengers: [pax(), pax({ firstName: 'Luis', gender: 'M' })] };
+    const customer = { offerId: 'O1', email: 'ana@test.com', phoneCountryCode: '+34', phoneNumber: '600 111 222', passengers: [pax(), pax({ firstName: 'Luis', gender: 'M', documentType: 'id_card' })] };
     const bad = async (over, re) => {
       const r = await post('/api/flights/checkout', { ...customer, ...over });
       assert.equal(r.status, 400);
@@ -114,6 +114,8 @@ test('vuelos reales: búsqueda, precio, datos de pasajeros, pago y confirmación
     assert.equal(state.prebook.passengers[0].documentNumber, 'PAE123456');
     assert.equal(state.prebook.passengers[0].documentIssueCountry, 'ES');
     assert.equal(state.prebook.passengers[1].passengerType, 0);
+    assert.equal(state.prebook.passengers[1].documentType, 'id', 'LiteAPI llama «id» al DNI');
+    assert.ok(['sandbox', 'live'].includes(co.publicKey), 'clave de la pasarela de LiteAPI si no hay de Stripe');
 
     // Sin pagar: 402 y no aparece en «Mis reservas».
     state.book = 'unpaid';

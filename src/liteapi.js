@@ -355,12 +355,18 @@ export class LiteApi {
   async flightSearch({ origin, destination, date, returnDate, adults = 1 }) {
     const legs = [{ origin, destination, date, direction: 'OUTBOUND' }];
     if (returnDate) legs.push({ origin: destination, destination: origin, date: returnDate, direction: 'INBOUND' });
-    const { data = [] } = await this.#request('POST', `${API}/flights/rates`, {
+    const body = {
       legs,
       adults: Math.max(1, Math.min(6, Number(adults) || 1)),
       currency: 'EUR',
       country: 'ES',
       sort: { sortBy: 'price', sortOrder: 'asc' },
+    };
+    // El buscador del proveedor falla a veces con 5xx («failed to search flights»): un reintento.
+    const { data = [] } = await this.#request('POST', `${API}/flights/rates`, body).catch(async (err) => {
+      if (!(err.status >= 500)) throw err;
+      await sleep(1500);
+      return this.#request('POST', `${API}/flights/rates`, body);
     });
     const best = new Map(); // journeyKey -> viaje con su oferta más barata
     for (const set of data) {
@@ -440,11 +446,18 @@ export class LiteApi {
   // Comprueba que la oferta sigue disponible y su precio actual.
   async flightVerify(offerId) {
     let res;
-    try {
-      res = await this.#request('POST', `${API}/flights/verify`, { offerId });
-    } catch (err) {
-      if (err.status === 404) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
-      throw err;
+    for (let attempt = 0; !res; attempt++) {
+      try {
+        res = await this.#request('POST', `${API}/flights/verify`, { offerId });
+      } catch (err) {
+        if (err.status === 404) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
+        if (err.status >= 500 && attempt < 1) { await sleep(1500); continue; }
+        // Si el proveedor sigue fallando se deja seguir con el precio de la búsqueda:
+        // el prebook vuelve a comprobarlo y el cliente ve el total final antes de pagar.
+        const trip = err.status >= 500 && this.flightOffer(offerId);
+        if (trip) return { total: trip.total, changed: false, messages: [], unverified: true };
+        throw err;
+      }
     }
     const d = (Array.isArray(res.data) ? res.data[0] : res.data) || {};
     const total = Number(d.journey?.pricing?.display?.total);
@@ -455,11 +468,16 @@ export class LiteApi {
   // Reserva la tarifa con la aerolínea y crea el pago (Stripe) que hará el cliente.
   async flightPrebook({ offerId, contact, passengers }) {
     let res;
-    try {
-      res = await this.#request('POST', `${API}/flights/prebooks`, { offerId, usePaymentSdk: true, contact, passengers });
-    } catch (err) {
-      if (err.status === 404 || [45029, 45063].includes(err.code)) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
-      throw err;
+    for (let attempt = 0; !res; attempt++) {
+      try {
+        res = await this.#request('POST', `${API}/flights/prebooks`, { offerId, usePaymentSdk: true, contact, passengers });
+      } catch (err) {
+        if (err.status === 404 || [45029, 45063].includes(err.code)) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
+        // Fallos internos del proveedor (p. ej. «failed to create prebook»): se reintenta una vez.
+        if (err.status >= 500 && attempt < 1) { await sleep(1500); continue; }
+        if (err.status >= 500) throw new LiteApiError('La aerolínea no ha podido reservar esta tarifa ahora mismo. Inténtalo de nuevo o elige otro vuelo.');
+        throw err;
+      }
     }
     const d = (Array.isArray(res.data) ? res.data[0] : res.data) || {};
     if (!d.prebookId || !d.secretKey || !d.transactionId) throw new LiteApiError('No se pudo preparar el pago del vuelo. Inténtalo de nuevo.');
