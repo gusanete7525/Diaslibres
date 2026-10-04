@@ -71,3 +71,14 @@ El repositorio incluye `render.yaml` para desplegar en [Render](https://render.c
 Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la primera visita tarda ~1 min en despertar). Las reservas se guardan en la base de datos PostgreSQL que crea `render.yaml`; consulta en Render los límites de su plan gratuito de bases de datos.
 
 **Clave real de LiteAPI:** con una clave que no empieza por `sand_` los precios, la disponibilidad y los cobros son reales: el cliente paga con su tarjeta en la pasarela de LiteAPI y la reserva se hace en el hotel.
+
+## Dominio propio y plan
+
+1. En Render, cambia el servicio al plan **Starter** (de pago) para que la web no se duerma. En `render.yaml` sería `plan: starter`.
+2. Compra el dominio (por ejemplo `diaslibres.es`) en un registrador.
+3. En Render → servicio → **Settings → Custom Domains**, añade el dominio y crea en tu registrador los registros DNS que te indique. Render pone el certificado HTTPS solo.
+4. Define `PUBLIC_URL=https://tudominio.es` para que la vuelta del pago use el dominio.
+
+## Información legal
+
+`public/legal.html` es una **plantilla** de aviso legal, condiciones de reserva, privacidad y cookies. Complétala con los datos marcados entre corchetes y revísala con un asesor antes de vender. Al reservar, el cliente debe aceptar las condiciones y la política de privacidad.

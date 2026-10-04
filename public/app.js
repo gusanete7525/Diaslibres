@@ -581,6 +581,7 @@ function openBooking(item, ui, isFlight) {
     ? `<b>${esc(item.airline)}</b> ${esc(item.originCity)} → ${esc(item.destinationCity)}<br>${fmtDay.format(toDate(ui.start))} · sale ${esc(item.departure)}`
     : `<b>${esc(item.name)}</b> · ${esc(item.city)}<br>${fmtDay.format(toDate(ui.start))} → ${fmtDay.format(toDate(ui.end))} (${diffDays(ui.start, ui.end)} noches)${item.origin === 'liteapi' && state.data.guests ? `<br>${guestsText(state.data.guests)} por habitación` : ''}`;
   bookForm.units.value = '1';
+  bookForm.terms.checked = false;
   bookForm.email.value ||= store.get('dl-email') || '';
   $('#bookError').hidden = true;
   $('#bookTotal').textContent = '…';

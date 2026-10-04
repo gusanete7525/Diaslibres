@@ -233,3 +233,6 @@ body[data-view="hotels"] .flight-only, body[data-view="flights"] .hotel-only { d
 .paybox { display: grid; gap: 8px; }
 #paymentElement { min-height: 120px; }
 .kid-ages { display: contents; }
+.dialog label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
+.dialog label.check input { margin-top: 3px; }
+.dialog label.check a { color: var(--brand); }
