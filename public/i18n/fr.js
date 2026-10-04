@@ -530,5 +530,10 @@ export default {
  "Pulsa el botón para entrar en tu cuenta. El enlace caduca en 30 minutos y solo sirve una vez.": "Cliquez sur le bouton pour vous connecter à votre compte. Le lien expire dans 30 minutes et ne fonctionne qu’une fois.",
  "Entrar en DíasLibres": "Se connecter à DíasLibres",
  "Si no lo has pedido tú, ignora este email: nadie podrá entrar sin él.": "Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail : personne ne pourra se connecter sans lui.",
- "Este email se ha enviado porque alguien pidió entrar en DíasLibres con esta dirección.": "Cet e-mail a été envoyé parce que quelqu’un a demandé à se connecter à DíasLibres avec cette adresse."
+ "Este email se ha enviado porque alguien pidió entrar en DíasLibres con esta dirección.": "Cet e-mail a été envoyé parce que quelqu’un a demandé à se connecter à DíasLibres avec cette adresse.",
+ "Continuar con Apple": "Continuer avec Apple",
+ "El acceso con Apple no está activado.": "La connexion avec Apple n’est pas activée.",
+ "No se pudo comprobar tu cuenta de Apple.": "Impossible de vérifier votre compte Apple.",
+ "Entrar como invitado": "Continuer en tant qu’invité",
+ "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "En tant qu’invité, vous pouvez chercher et réserver, mais nous n’enregistrons pas vos recherches et ne vous proposons pas de destinations."
 };

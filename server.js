@@ -538,6 +538,7 @@ export function createApp({
   // flights: false con datos reales de hoteles y los vuelos apagados (no se enseñan vuelos simulados).
   app.get('/api/config', (_req, res) => res.json({
     googleClientId: accounts?.googleClientId || null,
+    appleClientId: accounts?.appleClientId || null,
     liveFlights, flights: liveFlights || !live, sandbox: live?.sandbox ?? null,
     facilities: Object.fromEntries(Object.entries(FACILITIES).map(([k, f]) => [k, { label: f.label, icon: f.icon }])),
     boards: BOARDS,
@@ -754,6 +755,16 @@ export function createApp({
   app.post('/api/auth/google', async (req, res) => {
     try {
       const { user, session } = await accounts.loginWithGoogle(req.body?.credential);
+      setSession(req, res, session);
+      res.json({ user: publicUser(user) });
+    } catch (err) {
+      if (!err.status) console.error('[cuentas]', err.message);
+      authError(res, err);
+    }
+  });
+  app.post('/api/auth/apple', async (req, res) => {
+    try {
+      const { user, session } = await accounts.loginWithApple(req.body?.idToken, String(req.body?.name || '').slice(0, 80));
       setSession(req, res, session);
       res.json({ user: publicUser(user) });
     } catch (err) {

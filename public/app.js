@@ -1623,8 +1623,10 @@ filters.checkIn.max = addDays(filters.checkIn.min, 330);
 // Las últimas búsquedas se guardan en el dispositivo; con cuenta, también en el servidor,
 // y de ahí salen las propuestas de «Para ti».
 const HISTORY_KEY = 'dl-history';
+const isGuest = () => !state.user && store.get('dl-guest') === '1';
 const readHistory = () => { try { const h = JSON.parse(store.get(HISTORY_KEY) || '[]'); return Array.isArray(h) ? h : []; } catch { return []; } };
 function recordSearch() {
+  if (isGuest()) return;
   const kind = state.view === 'flights' ? 'flight' : 'hotel';
   const city = filters.destination.value.trim();
   if (!city || state.view === 'mine') return;
@@ -1645,6 +1647,7 @@ function recordSearch() {
 const TYPE_IMG = { beach: 'playa', island: 'playa', mountain: 'montana', city: 'romantica' };
 const STAY_PLURAL = { hotel: 'Hoteles', apartment: 'Apartamentos', house: 'Casas y villas', hostel: 'Hostales y pensiones' };
 async function loadForYou() {
+  if (isGuest()) { $('#forYou').hidden = true; return; }
   const history = readHistory();
   if (!history.length && !state.user?.historyCount) { $('#forYou').hidden = true; return; }
   try {
@@ -1698,6 +1701,7 @@ function paintAccount() {
   if (u) store.set('dl-email', u.email);
 }
 function signedIn(user) {
+  store.set('dl-guest', '');
   state.user = user;
   paintAccount();
   $('#accountDialog').close();
@@ -1728,6 +1732,30 @@ function googleButton(box) {
   }).catch(() => { box.hidden = true; });
 }
 
+// «Continuar con Apple» (ventana emergente de Apple; el servidor comprueba el token).
+let appleScript = null;
+async function appleSignIn() {
+  const id = state.config.appleClientId;
+  if (!id) return;
+  try {
+    appleScript ??= new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.append(s);
+    });
+    await appleScript;
+    AppleID.auth.init({ clientId: id, scope: 'name email', redirectURI: location.origin + '/', usePopup: true });
+    const r = await AppleID.auth.signIn();
+    const name = r.user?.name?.firstName || '';
+    signedIn((await api('/api/auth/apple', { method: 'POST', body: JSON.stringify({ idToken: r.authorization?.id_token, name }) })).user);
+  } catch (err) {
+    if (err?.error === 'popup_closed_by_user') return;
+    toast(err?.message || t('No se pudo comprobar tu cuenta de Apple.'));
+  }
+}
+
 function openAccount() {
   const body = $('#accountBody');
   const u = state.user;
@@ -1741,13 +1769,16 @@ function openAccount() {
   } else {
     body.innerHTML = `<h2>${t('Entrar o crear cuenta')}</h2>
       <p class="meta">${t('Guarda tus búsquedas en todos tus dispositivos y recibe propuestas que te puedan gustar. Sin contraseñas.')}</p>
-      ${state.config.googleClientId ? `<div class="google-box" id="googleBtn"></div><p class="or"><span>${t('o con tu email')}</span></p>` : ''}
+      ${state.config.googleClientId ? `<div class="google-box" id="googleBtn"></div>` : ''}
+      ${state.config.appleClientId ? `<button type="button" class="apple-btn" data-act="apple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8-.1 0-2.5-1-2.5-3.9zM14 5.4c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z" fill="currentColor"/></svg> ${t('Continuar con Apple')}</button>` : ''}
+      ${state.config.googleClientId || state.config.appleClientId ? `<p class="or"><span>${t('o con tu email')}</span></p>` : ''}
       <form id="loginForm">
         <label>${t('Email')}<input name="email" type="email" required autocomplete="email" value="${esc(store.get('dl-email') || '')}" /></label>
         <button class="btn primary" type="submit">${t('Recibir enlace para entrar')}</button>
       </form>
       <p class="meta">${t('Te enviamos un enlace al correo y entras al pulsarlo.')} <a href="/legal.html#privacidad" target="_blank" rel="noopener">${t('Privacidad')}</a></p>
-      <div class="actions"><button type="button" class="btn ghost" data-close>${t('Cerrar')}</button></div>`;
+      <button type="button" class="btn ghost guest-btn" data-act="guest">${t('Entrar como invitado')}</button>
+      <p class="meta guest-note">${t('Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.')}</p>`;
     googleButton($('#googleBtn'));
     $('#loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1771,6 +1802,15 @@ $('#accountDialog').addEventListener('click', async (e) => {
   const dlg = $('#accountDialog');
   if (e.target === dlg || e.target.closest('[data-close]')) return dlg.close();
   const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'guest') {
+    // Invitado: no se guarda nada de lo que busca y no hay «Para ti».
+    store.set('dl-guest', '1');
+    store.set(HISTORY_KEY, '[]');
+    state.forYou = [];
+    renderForYou();
+    return dlg.close();
+  }
+  if (act === 'apple') return appleSignIn();
   if (act === 'mine') { dlg.close(); setView('mine'); }
   if (act === 'logout') {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
@@ -1811,6 +1851,12 @@ $('#accountDialog').addEventListener('click', async (e) => {
   await loadMe();
   await configReady.catch(() => {});
   loadForYou();
+  // Primera visita: pantalla de acceso (cuenta o invitado). No se repite una vez elegido,
+  // ni al volver de un pago.
+  if (!state.user && !store.get('dl-guest') && !store.get('dl-welcomed') && !params.get('pago') && !params.get('vuelo')) {
+    store.set('dl-welcomed', '1');
+    openAccount();
+  }
 })();
 
 // App instalable (Android, escritorio): funciona sin conexión con la última versión vista.

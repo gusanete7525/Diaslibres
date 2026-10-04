@@ -5,8 +5,9 @@
 //   sess:<hash>    → { email, exp }   sesión (cookie dl_s, 180 días)
 // De los tokens solo se guarda su SHA-256: quien lea la base de datos no puede entrar.
 // Google se activa con GOOGLE_CLIENT_ID (ID de cliente OAuth «Aplicación web»).
+// Apple se activa con APPLE_CLIENT_ID (el «Services ID» de Apple Developer, p. ej. com.diaslibre.web).
 
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, createPublicKey, verify as verifySignature } from 'node:crypto';
 
 const LOGIN_TTL = 30 * 60 * 1000;
 const SESSION_TTL = 180 * 24 * 60 * 60 * 1000;
@@ -60,10 +61,12 @@ export function readCookie(req, name = COOKIE) {
 }
 
 export class Accounts {
-  constructor({ store, mailer, googleClientId = process.env.GOOGLE_CLIENT_ID, fetchImpl = globalThis.fetch, now = () => Date.now() } = {}) {
+  constructor({ store, mailer, googleClientId = process.env.GOOGLE_CLIENT_ID, appleClientId = process.env.APPLE_CLIENT_ID, fetchImpl = globalThis.fetch, now = () => Date.now() } = {}) {
     this.store = store;
     this.mailer = mailer;
     this.googleClientId = String(googleClientId || '').trim() || null;
+    this.appleClientId = String(appleClientId || '').trim() || null;
+    this.appleKeys = { at: 0, keys: [] };
     this.fetch = fetchImpl;
     this.now = now;
     this.ipHits = new Map(); // ip → [marcas de tiempo] (límite de emails por hora)
@@ -134,6 +137,40 @@ export class Accounts {
     if (!valid || !isEmail(normEmail(info.email))) throw Object.assign(new Error('No se pudo comprobar tu cuenta de Google.'), { status: 401 });
     const user = await this.#upsertUser(info.email, { provider: 'google', name: info.given_name || info.name });
     return { user, session: await this.#newSession(user.email) };
+  }
+
+  // «Iniciar sesión con Apple»: el token es un JWT firmado con las claves públicas de Apple.
+  // Apple puede dar un email de reenvío (…@privaterelay.appleid.com); funciona igual para entrar.
+  async loginWithApple(idToken, name = '') {
+    if (!this.appleClientId) throw Object.assign(new Error('El acceso con Apple no está activado.'), { status: 404 });
+    const fail = () => Object.assign(new Error('No se pudo comprobar tu cuenta de Apple.'), { status: 401 });
+    const parts = String(idToken || '').split('.');
+    if (parts.length !== 3) throw fail();
+    let header, claims;
+    try {
+      header = JSON.parse(Buffer.from(parts[0], 'base64url'));
+      claims = JSON.parse(Buffer.from(parts[1], 'base64url'));
+    } catch {
+      throw fail();
+    }
+    const jwk = header.alg === 'RS256' && (await this.#appleKey(header.kid));
+    if (!jwk) throw fail();
+    const ok = verifySignature('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), createPublicKey({ key: jwk, format: 'jwk' }), Buffer.from(parts[2], 'base64url'));
+    const email = normEmail(claims.email);
+    const valid = ok && claims.iss === 'https://appleid.apple.com' && claims.aud === this.appleClientId && Number(claims.exp) * 1000 > this.now() && String(claims.email_verified) !== 'false' && isEmail(email);
+    if (!valid) throw fail();
+    const user = await this.#upsertUser(email, { provider: 'apple', name });
+    return { user, session: await this.#newSession(user.email) };
+  }
+
+  // Claves públicas de Apple (se guardan 1 hora; si llega una clave nueva, se vuelven a pedir).
+  async #appleKey(kid) {
+    const find = () => this.appleKeys.keys.find((k) => k.kid === kid);
+    if (!find() || this.now() - this.appleKeys.at > 60 * 60 * 1000) {
+      const res = await this.fetch('https://appleid.apple.com/auth/keys');
+      if (res.ok) this.appleKeys = { at: this.now(), keys: (await res.json()).keys || [] };
+    }
+    return find() || null;
   }
 
   async #newSession(email) {

@@ -530,5 +530,10 @@ export default {
  "Pulsa el botón para entrar en tu cuenta. El enlace caduca en 30 minutos y solo sirve una vez.": "Tik op de knop om in te loggen. De link verloopt over 30 minuten en werkt maar één keer.",
  "Entrar en DíasLibres": "Inloggen bij DíasLibres",
  "Si no lo has pedido tú, ignora este email: nadie podrá entrar sin él.": "Heb je dit niet aangevraagd? Negeer deze e-mail dan: zonder deze link kan niemand inloggen.",
- "Este email se ha enviado porque alguien pidió entrar en DíasLibres con esta dirección.": "Deze e-mail is verstuurd omdat iemand met dit adres wilde inloggen bij DíasLibres."
+ "Este email se ha enviado porque alguien pidió entrar en DíasLibres con esta dirección.": "Deze e-mail is verstuurd omdat iemand met dit adres wilde inloggen bij DíasLibres.",
+ "Continuar con Apple": "Doorgaan met Apple",
+ "El acceso con Apple no está activado.": "Inloggen met Apple is niet ingeschakeld.",
+ "No se pudo comprobar tu cuenta de Apple.": "Je Apple-account kon niet worden gecontroleerd.",
+ "Entrar como invitado": "Doorgaan als gast",
+ "Como invitado puedes buscar y reservar, pero no guardamos tus búsquedas ni te proponemos destinos.": "Als gast kun je zoeken en boeken, maar we bewaren je zoekopdrachten niet en stellen geen bestemmingen voor."
 };

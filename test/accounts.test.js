@@ -120,3 +120,28 @@ test('«Para ti» propone volver y destinos parecidos que aún no ha buscado', (
   assert.ok(recommend([{ kind: 'hotel', city: 'Sevilla', at: '2026-10-01T00:00:00Z' }], { lang: 'en' }).some((r) => r.city === 'Seville'));
   assert.deepEqual(recommend([], {}), []);
 });
+
+test('Apple: token firmado por Apple para esta web', async () => {
+  const { generateKeyPairSync, sign } = await import('node:crypto');
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'k1', alg: 'RS256', use: 'sig' };
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const jwt = (claims, key = privateKey) => {
+    const head = b64({ alg: 'RS256', kid: 'k1' }) + '.' + b64(claims);
+    return head + '.' + sign('RSA-SHA256', Buffer.from(head), key).toString('base64url');
+  };
+  const claims = { iss: 'https://appleid.apple.com', aud: 'com.diaslibre.web', exp: Math.floor(Date.now() / 1000) + 600, email: 'abc@privaterelay.appleid.com', email_verified: 'true' };
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ keys: [jwk] }) });
+  const { server, call } = await start({ appleClientId: 'com.diaslibre.web', fetchImpl });
+  try {
+    assert.equal((await call('POST', '/api/auth/apple', { idToken: jwt({ ...claims, aud: 'otra.web' }) })).status, 401);
+    const other = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
+    assert.equal((await call('POST', '/api/auth/apple', { idToken: jwt(claims, other) })).status, 401);
+    const r = await call('POST', '/api/auth/apple', { idToken: jwt(claims), name: 'Marta' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.user.email, 'abc@privaterelay.appleid.com');
+    assert.equal(r.body.user.name, 'Marta');
+  } finally {
+    server.close();
+  }
+});
