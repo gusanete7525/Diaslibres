@@ -115,3 +115,23 @@ test('páginas para buscadores: ciudad, ruta, sitemap y robots', async () => {
   assert.doesNotMatch(home, /noindex/);
   assert.match(await fetch(base + '/?pago=X').then((r) => r.text()), /noindex/);
 });
+
+test('con SITE_URL, las otras direcciones redirigen al dominio propio', async () => {
+  // fetch no deja cambiar la cabecera Host: se usa http.request.
+  const { request } = await import('node:http');
+  const hit = (path) => new Promise((resolve, reject) => {
+    const { port } = new URL(base);
+    request({ port, path, headers: { host: 'diaslibres.onrender.com' } }, (r) => { r.resume(); resolve(r); }).on('error', reject).end();
+  });
+  process.env.SITE_URL = 'https://diaslibre.com';
+  try {
+    const r = await hit('/hoteles/gandia?x=1');
+    assert.equal(r.statusCode, 301);
+    assert.equal(r.headers.location, 'https://diaslibre.com/hoteles/gandia?x=1');
+    assert.equal((await hit('/api/config')).statusCode, 200);
+    const html = await fetch(base + '/').then((x) => x.text());
+    assert.match(html, /<link rel="canonical" href="https:\/\/diaslibre\.com\/"/);
+  } finally {
+    delete process.env.SITE_URL;
+  }
+});
