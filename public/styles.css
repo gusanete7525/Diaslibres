@@ -371,3 +371,34 @@ body:not([data-live-flights]) .live-only { display: none; }
 .seo-intro p { margin: 6px 0; }
 .seo-links { display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 0; list-style: none; columns: auto !important; }
 .seo-links a { color: var(--brand); }
+
+/* Ficha del hotel y elección de habitación */
+.open-hotel { padding: 0; border: 0; background: none; cursor: pointer; border-radius: 12px; }
+.link-title { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.link-title:hover { color: var(--brand); text-decoration: underline; }
+.link-title.small { font-size: 13px; color: var(--brand); }
+.dialog.sheet { width: min(760px, calc(100% - 24px)); max-height: calc(100dvh - 24px); }
+.dialog.sheet[open] { display: flex; flex-direction: column; }
+.sheet-body { padding: 20px; overflow-y: auto; display: grid; gap: 10px; }
+.sheet-body h2 { margin: 0; }
+.sheet-body h3 { margin: 8px 0 0; font-size: 16px; }
+.sheet-body p { margin: 0; line-height: 1.5; }
+.sheet-actions { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+.gallery { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+.gallery img { flex: none; height: 220px; max-width: 85%; object-fit: cover; border-radius: 10px; scroll-snap-align: start; background: var(--bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 13px; color: var(--text-2); }
+.room-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+.room-card .gallery img { height: 150px; }
+.rooms { display: grid; gap: 8px; max-height: 46vh; overflow-y: auto; }
+.room-title { margin: 0; font-weight: 600; font-size: 14px; }
+.dialog label.room-opt { display: grid; grid-template-columns: auto 64px 1fr auto; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; font-weight: 400; color: var(--text); cursor: pointer; }
+.dialog label.room-opt:has(input:checked) { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
+.room-opt img, .room-ph { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; display: grid; place-items: center; background: var(--bg); }
+.room-info { display: grid; gap: 2px; min-width: 0; }
+.room-price { font-weight: 700; white-space: nowrap; }
+@media (max-width: 760px) {
+  .dialog label.room-opt { grid-template-columns: auto 56px 1fr; }
+  .room-price { grid-column: 3; }
+  .gallery img { height: 180px; }
+}

@@ -269,6 +269,17 @@ export function createApp({
     }
   });
 
+  // Ficha del hotel: fotos, descripción, servicios y habitaciones.
+  app.get('/api/live/hotel/:id', async (req, res) => {
+    if (!isLive(req.params.id)) return res.status(404).json({ error: 'Hotel no encontrado. Vuelve a buscar la ciudad.' });
+    try {
+      res.json(await live.hotelDetails(req.params.id, langOf(req)));
+    } catch (err) {
+      console.error('[liteapi]', err.message);
+      res.status(502).json({ error: 'No se pudo cargar la ficha del hotel. Inténtalo de nuevo.' });
+    }
+  });
+
   app.get('/api/hotels', async (req, res) => {
     const q = req.query;
     if (live) return liveHotels({ ...q, lang: langOf(req) }, res);

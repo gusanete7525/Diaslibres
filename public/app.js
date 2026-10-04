@@ -481,8 +481,8 @@ function renderCard(item) {
         <h3>${esc(item.originCity)} → ${esc(item.destinationCity)}</h3>
         <div class="meta">${esc(item.airline)} · ${esc(item.origin)}–${esc(item.destination)} · ${t('sale {time}', { time: esc(item.departure) })} · ${Math.floor(item.duration / 60)} h ${item.duration % 60} min</div>
       </div>`
-    : `${item.photo ? `<img class="thumb photo" src="${esc(item.photo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb&quot;>🏨</div>'">` : `<div class="thumb">${item.image}</div>`}<div>
-        <h3>${esc(item.name)}</h3>
+    : `${item.origin === 'liteapi' ? '<button type="button" class="open-hotel" data-act="info" aria-label="' + esc(t('Ver fotos y detalles')) + '">' : ''}${item.photo ? `<img class="thumb photo" src="${esc(item.photo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb&quot;>🏨</div>'">` : `<div class="thumb">${item.image}</div>`}${item.origin === 'liteapi' ? '</button>' : ''}<div>
+        <h3>${item.origin === 'liteapi' ? `<button type="button" class="link-title" data-act="info">${esc(item.name)}</button>` : esc(item.name)}</h3>
         <div class="meta">${STAY_LABEL[item.stay] ? `<span class="stay-type">${t(STAY_LABEL[item.stay])}</span> · ` : ''}${item.stars ? `<span class="stars" aria-label="${t('{n} estrellas', { n: item.stars })}">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${item.rating.toLocaleString(LOCALE)}</span>${item.reviewCount ? ` <span class="meta">(${tn(item.reviewCount, '{n} opinión', '{n} opiniones', { n: item.reviewCount.toLocaleString(LOCALE) })})</span>` : ''}` : ''}</div>
         ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${t('Web oficial')} ↗</a>` : ''}</div>` : ''}
         <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="${t('Ficha en OpenStreetMap')}">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? `<span class="tag osm" title="${t('Datos sugeridos por IA: compruébalos antes de viajar')}">✨ ${t('Sugerido por IA')}</span>` : ''}${item.tags.map((x) => `<span class="tag">${esc(t(x))}</span>`).join('')}${(item.facilities || []).map((k) => facilityInfo()[k]).filter(Boolean).map((f) => `<span class="tag fac" title="${esc(t(f.label))}">${f.icon} ${esc(t(f.label))}</span>`).join('')}</div>
@@ -628,6 +628,7 @@ function bindCard(el, item, isFlight) {
       return rerender(item.id);
     }
     if (act === 'book') return openBooking(item, ui, isFlight);
+    if (act === 'info') return openHotel(item);
     const day = e.target.closest('.day[data-date]');
     if (day) pickDay(item, ui, day.dataset.date, isFlight);
   });
@@ -714,6 +715,50 @@ function pickDay(item, ui, iso, isFlight) {
   rerender(item.id);
 }
 
+// ---------- Ficha del hotel y de cada habitación ----------
+const gallery = (photos) => (photos?.length ? `<div class="gallery">${photos.map((u) => `<img src="${esc(u)}" alt="" loading="lazy" />`).join('')}</div>` : '');
+const paragraphs = (text) => String(text || '').split(/\n+/).filter((x) => x.trim()).map((x) => `<p>${esc(x)}</p>`).join('');
+const chips = (list) => (list?.length ? `<div class="chips">${list.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : '');
+
+function roomHtml(r) {
+  const facts = [r.size, r.maxOccupancy ? tn(r.maxOccupancy, 'hasta {n} persona', 'hasta {n} personas') : '', r.beds].filter(Boolean).join(' · ');
+  return `${gallery(r.photos)}<h3>${esc(r.name)}</h3>${facts ? `<p class="meta">${esc(facts)}</p>` : ''}${paragraphs(r.description)}${chips(r.amenities)}`;
+}
+
+async function openHotel(item) {
+  const dlg = $('#hotelDialog');
+  const body = $('#hotelBody');
+  body.innerHTML = `<h2>${esc(item.name)}</h2><p class="meta">${t('Cargando…')}</p>`;
+  $('#hotelDates').onclick = () => {
+    dlg.close();
+    document.getElementById('card-' + item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  dlg.showModal();
+  try {
+    const d = await hotelDetails(item.id);
+    const times = [d.checkin ? t('Entrada desde las {time}', { time: d.checkin }) : '', d.checkout ? t('Salida hasta las {time}', { time: d.checkout }) : ''].filter(Boolean).join(' · ');
+    body.innerHTML = `<h2>${esc(d.name)}</h2>
+      <p class="meta">${STAY_LABEL[item.stay] ? esc(t(STAY_LABEL[item.stay])) + ' · ' : ''}${item.stars ? '★'.repeat(item.stars) + ' · ' : ''}${esc(d.address || item.city)}${item.rating ? ` · ${item.rating.toLocaleString(LOCALE)}/10` : ''}</p>
+      ${gallery(d.photos)}
+      ${times ? `<p class="meta">🕑 ${esc(times)}</p>` : ''}
+      ${paragraphs(d.description)}
+      ${d.facilities?.length ? `<h3>${t('Servicios')}</h3>${chips(d.facilities)}` : ''}
+      ${d.rooms?.length ? `<h3>${t('Habitaciones')}</h3>${d.rooms.map((r) => `<div class="room-card">${roomHtml(r)}</div>`).join('')}` : ''}
+      ${d.important ? `<details><summary>${t('Información importante')}</summary>${paragraphs(d.important)}</details>` : ''}
+      ${d.location ? `<p><a href="https://www.openstreetmap.org/?mlat=${d.location.lat}&mlon=${d.location.lng}#map=17/${d.location.lat}/${d.location.lng}" target="_blank" rel="noopener">📍 ${t('Ver en el mapa')}</a></p>` : ''}`;
+  } catch (e) {
+    body.innerHTML = `<h2>${esc(item.name)}</h2><p class="error">${esc(e.message)}</p>`;
+  }
+}
+
+function openRoom(r) {
+  $('#roomBody').innerHTML = roomHtml(r);
+  $('#roomDialog').showModal();
+}
+for (const dlg of [$('#hotelDialog'), $('#roomDialog')]) {
+  dlg.addEventListener('click', (e) => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+}
+
 // ---------- Reserva ----------
 const dialog = $('#bookDialog');
 const bookForm = $('#bookForm');
@@ -721,7 +766,7 @@ const bookForm = $('#bookForm');
 function bookingRequest() {
   const b = state.booking;
   const g = state.data.guests || {};
-  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value, adults: g.adults, children: g.children, board: state.data.board || undefined };
+  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value, adults: g.adults, children: g.children, board: state.data.board || undefined, room: b.room || undefined };
   return b.isFlight ? { ...base, date: b.start } : { ...base, checkIn: b.start, checkOut: b.end };
 }
 
@@ -729,28 +774,94 @@ async function refreshQuote() {
   const err = $('#bookError');
   const btn = $('#bookConfirm');
   try {
-    const q = await api('/api/quote', { method: 'POST', body: JSON.stringify(bookingRequest()) });
-    $('#bookTotal').textContent = eur2(q.total);
-    state.booking.total = q.total;
-    const extra = $('#bookExtra');
-    extra.textContent = q.roomName
-      ? `${q.roomName}${q.board ? ' · ' + t(q.board) : ''} · ${q.refundable ? (q.freeCancellationUntil ? t('cancelación gratuita hasta el {day}', { day: fmtDay.format(new Date(q.freeCancellationUntil.replace(' ', 'T') + 'Z')) }) : t('cancelación gratuita')) : t('no reembolsable')}`
-      : '';
-    // Tasas que no van en el total y se pagan en el hotel (p. ej. tasa turística).
-    if (q.payAtHotel?.length) extra.textContent += ' · ' + t('además, a pagar en el hotel: {list}', { list: payAtHotelText(q.payAtHotel) });
-    extra.hidden = !q.roomName;
+    let q;
+    try {
+      q = await api('/api/quote', { method: 'POST', body: JSON.stringify(bookingRequest()) });
+    } catch (e) {
+      // La habitación elegida ya no está (o no hay para tantas habitaciones): se vuelve a la más barata.
+      if (!state.booking.room) throw e;
+      state.booking.room = null;
+      q = await api('/api/quote', { method: 'POST', body: JSON.stringify(bookingRequest()) });
+    }
+    state.booking.quote = q;
+    state.booking.room = q.room || null;
+    showOffer(q);
+    renderRooms(q);
     err.hidden = true;
     btn.disabled = !!state.bookingBlocked;
   } catch (e) {
     $('#bookTotal').textContent = '—';
+    $('#roomBox').hidden = true;
     err.textContent = e.message;
     err.hidden = false;
     btn.disabled = true;
   }
 }
 
+// Precio y condiciones de la habitación elegida.
+function showOffer(q) {
+  $('#bookTotal').textContent = eur2(q.total);
+  state.booking.total = q.total;
+  const extra = $('#bookExtra');
+  extra.textContent = q.roomName
+    ? `${q.roomName}${q.board ? ' · ' + t(q.board) : ''} · ${cancelText(q)}`
+    : '';
+  // Tasas que no van en el total y se pagan en el hotel (p. ej. tasa turística).
+  if (q.payAtHotel?.length) extra.textContent += ' · ' + t('además, a pagar en el hotel: {list}', { list: payAtHotelText(q.payAtHotel) });
+  extra.hidden = !q.roomName;
+}
+const cancelText = (o) => (o.refundable ? (o.freeCancellationUntil ? t('cancelación gratuita hasta el {day}', { day: fmtDay.format(new Date(o.freeCancellationUntil.replace(' ', 'T') + 'Z')) }) : t('cancelación gratuita')) : t('no reembolsable'));
+
+// Ficha del hotel (se pide una vez por hotel).
+const detailCache = new Map();
+function hotelDetails(id) {
+  if (!detailCache.has(id)) detailCache.set(id, api(`/api/live/hotel/${encodeURIComponent(id)}`).catch((e) => { detailCache.delete(id); throw e; }));
+  return detailCache.get(id);
+}
+
+// Habitaciones disponibles para elegir, con su foto y sus datos.
+async function renderRooms(q) {
+  const box = $('#roomBox');
+  const offers = q.offers || [];
+  if (offers.length < 2 && !offers[0]?.roomId) { box.hidden = true; return; }
+  const item = state.booking.item;
+  const details = await hotelDetails(item.id).catch(() => null);
+  if (state.booking?.quote !== q) return;
+  const roomById = new Map((details?.rooms || []).map((r) => [r.id, r]));
+  box.innerHTML = `<p class="room-title">${t('Elige la habitación')}</p>` + offers.map((o, i) => {
+    const r = roomById.get(o.roomId);
+    const photo = r?.photos?.[0];
+    const facts = r ? [r.size, r.maxOccupancy ? tn(r.maxOccupancy, 'hasta {n} persona', 'hasta {n} personas') : '', r.beds].filter(Boolean).join(' · ') : '';
+    return `<label class="room-opt">
+      <input type="radio" name="room" value="${esc(o.key)}" ${o.key === q.room ? 'checked' : ''} />
+      ${photo ? `<img src="${esc(photo)}" alt="" loading="lazy" />` : '<span class="room-ph">🛏️</span>'}
+      <span class="room-info"><b>${esc(o.roomName || t('Habitación'))}</b>
+        <span class="meta">${[o.board ? t(o.board) : '', cancelText(o)].filter(Boolean).map(esc).join(' · ')}</span>
+        ${facts ? `<span class="meta">${esc(facts)}</span>` : ''}
+        ${r ? `<button type="button" class="link-title small" data-room="${i}">${t('Ver fotos y detalles')}</button>` : ''}
+      </span>
+      <span class="room-price">${eur2(o.total)}</span>
+    </label>`;
+  }).join('');
+  box.hidden = false;
+  box.onchange = (e) => {
+    const o = offers.find((x) => x.key === e.target.value);
+    if (!o) return;
+    state.booking.room = o.key;
+    showOffer({ ...o, room: o.key });
+  };
+  box.onclick = (e) => {
+    const b = e.target.closest('[data-room]');
+    if (!b) return;
+    e.preventDefault();
+    const r = roomById.get(offers[Number(b.dataset.room)].roomId);
+    if (r) openRoom(r);
+  };
+}
+
 function openBooking(item, ui, isFlight) {
-  state.booking = { item, isFlight, start: ui.start, end: ui.end };
+  state.booking = { item, isFlight, start: ui.start, end: ui.end, room: null };
+  $('#roomBox').hidden = true;
   $('#bookTitle').textContent = isFlight ? t('Reservar vuelo') : t('Reservar hotel');
   $('#unitsLabel').textContent = isFlight ? t('Pasajeros') : t('Habitaciones');
   $('#bookSummary').innerHTML = isFlight
@@ -798,6 +909,7 @@ function loadPaymentSdk() {
 // Oculta los datos del cliente y muestra el formulario de tarjeta (o al revés).
 function showPayForm(on) {
   for (const el of bookForm.querySelectorAll('label, #bookNote')) el.hidden = on;
+  if (on) $('#roomBox').hidden = true;
   $('#payBox').hidden = !on;
   $('#bookConfirm').hidden = on || state.bookingBlocked;
   if (!on) $('#paymentElement').innerHTML = '';
