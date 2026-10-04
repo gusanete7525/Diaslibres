@@ -231,3 +231,17 @@ test('apartamentos y casas: IA, filtro y páginas', async () => {
   assert.match(page, /data-start-filters="[^"]*apartment/);
   assert.match(await fetch(base + '/en/hotels/benidorm/apartments').then((r) => r.text()), /<title>Apartments in Benidorm/);
 });
+
+test('la IA entiende días concretos, intervalos y personas', () => {
+  const r = localParse('3 noches en gandia para 2 por menos de 100 euros del 10 al 12 enseñame solo los libres');
+  assert.equal(r.destination, 'Gandía');
+  assert.equal(r.nights, 3);
+  assert.equal(r.adults, 2);
+  assert.equal(r.maxPrice, 100);
+  assert.match(r.checkIn, /-10$/);
+  const s = localParse('somos 3 en Sevilla del 5 al 8 de noviembre');
+  assert.match(s.checkIn, /-11-05$/);
+  assert.equal(s.nights, 3);
+  assert.equal(s.adults, 3);
+  assert.equal(localParse('hotel de 4 estrellas en Valencia').checkIn, null);
+});

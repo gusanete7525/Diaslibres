@@ -234,7 +234,10 @@ export function createApp({
       // «Más baratos» se ordena en el navegador cuando llegan los precios; aquí, por puntuación.
       hotels = [...hotels].sort({ rating: byRating, price: byRating, reviews: byReviews }[q.sort] || byStars);
       const board = q.board in BOARDS ? q.board : null;
-      const start = todayISO();
+      // El calendario empieza hoy; si la fecha de entrada pedida queda más allá, empieza ese día.
+      const nights = Math.max(1, Math.min(30, Number(q.nights) || 3));
+      const today = todayISO();
+      const start = isISODate(q.checkIn) && q.checkIn > addDays(today, LIVE_DAYS - nights) && q.checkIn <= addDays(today, 330) ? q.checkIn : today;
       // Se envían por páginas: la ciudad puede tener cientos de hoteles.
       const page = Math.max(0, Math.floor(Number(q.page) || 0));
       const total = hotels.length;
@@ -246,7 +249,7 @@ export function createApp({
         summary: { freeDays: 0, minPrice: null, maxPrice: null, avgPrice: null },
         bestStay: null,
       }));
-      res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, board, boardName: board ? BOARDS[board] : null, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
+      res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, board, boardName: board ? BOARDS[board] : null, nights, results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudieron consultar los hoteles ahora mismo. Inténtalo de nuevo en unos segundos.' });

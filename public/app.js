@@ -153,6 +153,7 @@ async function search() {
       return searchLiveFlights(token);
     }
     state.data = data;
+    state.autoMore = 0;
     state.items = new Map(data.results.map((x) => [x.id, x]));
     state.ui = new Map();
     const checkIn = filters.checkIn.value;
@@ -206,11 +207,19 @@ async function loadLivePrices(token, list = state.data.results) {
         if (i >= 0 && i < item.calendar.length) item.calendar[i] = n;
       }
       refreshSummary(item);
+      // Con fecha de entrada pedida, se marca la estancia en cuanto se sabe que está libre.
+      const checkIn = filters.checkIn.value;
+      if (checkIn && !state.ui.get(id)?.start) state.ui.set(id, initialUi(item, state.data, checkIn));
       rerender(id);
     }
+    updateHiddenNote();
     const loaded = Math.min(days, off + 7);
     const note = $('#livePending');
     if (note) note.textContent = loaded < days ? t('Cargando precios reales… {loaded}/{days} días', { loaded, days }) : '';
+  }
+  // Si con las fechas o el precio pedidos no queda ninguno, se buscan solos unos cuantos más.
+  if (token === searchToken && state.view === 'hotels' && state.data.hasMore && !state.data.results.some(passesStay) && (state.autoMore = (state.autoMore || 0) + 1) <= 3) {
+    $('#results .btn.more')?.click();
   }
   // «Más baratos»: con todos los precios ya cargados se reordenan las tarjetas.
   if (token === searchToken && filters.sort.value === 'price' && state.view === 'hotels') {
@@ -220,6 +229,37 @@ async function loadLivePrices(token, list = state.data.results) {
     const note = $('#livePending');
     if (note) note.textContent = '';
   }
+}
+
+// Con fechas o precio máximo, se ocultan los alojamientos que no están libres esas noches
+// o que cuestan más (precio medio por noche). Mientras llegan los precios, se enseñan.
+function passesStay(item) {
+  if (state.view !== 'hotels' || !state.data?.live) return true;
+  const max = Number(filters.maxPrice.value) || 0;
+  const checkIn = filters.checkIn.value;
+  const n = state.data.nights;
+  const cal = item.calendar;
+  if (checkIn) {
+    const i = diffDays(state.data.start, checkIn);
+    const slice = i >= 0 ? cal.slice(i, i + n) : [];
+    if (slice.length < n || slice.some((d) => d.pending)) return true;
+    if (!slice.every((d) => d.available)) return false;
+    return !max || slice.reduce((sum, d) => sum + d.price, 0) / n <= max;
+  }
+  if (!max || cal.some((d) => d.pending)) return true;
+  return item.summary.minPrice != null && item.summary.minPrice <= max;
+}
+function updateHiddenNote() {
+  const note = $('#hiddenNote');
+  if (!note || state.view !== 'hotels') return;
+  const hidden = state.data.results.filter((h) => !passesStay(h)).length;
+  const max = Number(filters.maxPrice.value) || 0;
+  const why = filters.checkIn.value
+    ? (max ? t('sin plazas libres esas noches o más de {price} por noche', { price: eur(max) }) : t('sin plazas libres esas noches'))
+    : t('más de {price} por noche', { price: eur(max) });
+  note.hidden = !hidden;
+  note.textContent = hidden ? tn(hidden, '{n} oculto ({why}).', '{n} ocultos ({why}).', { why })
+    + (hidden === state.data.results.length && state.data.hasMore ? ' ' + t('Pulsa «Ver más hoteles» para buscar entre los demás.') : '') : '';
 }
 
 function refreshSummary(item) {
@@ -325,7 +365,9 @@ async function aiSearchSubmit() {
     filters.sort.value = f.sort || 'stars';
     filters.tags.value = (f.tags || []).join(',');
     filters.minStars.value = f.minStars || '';
-    filters.checkIn.value = f.checkIn || '';
+    filters.checkIn.value = f.kind === 'flight' ? '' : f.checkIn || '';
+    if (f.kind === 'flight' && f.checkIn) filters.date.value = f.checkIn;
+    if (f.adults) filters[f.kind === 'flight' ? 'passengers' : 'adults'].value = String(f.adults);
     filters.board.value = f.board || '';
     filters.stay.value = f.stay || '';
     filters.stops.value = f.stops || '';
@@ -375,10 +417,11 @@ function renderResults() {
   const boardNote = state.data.boardName ? ' · ' + t('precios con {board}', { board: lower(t(state.data.boardName)) }) : '';
   const city = live && !filters.destination.value.trim() ? `<p class="count">${t('Mostrando {city}. Escribe otra ciudad para ver sus hoteles.', { city: esc(live.city) })}</p>` : '';
   const total = state.data.total > list.length ? t('{shown} de {total}', { shown: `<span id="shownCount">${list.length}</span>`, total: state.data.total.toLocaleString(LOCALE) }) : list.length;
-  results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote}${boardNote} · ${t('próximos {n} días', { n: state.data.days })}</p>${city}${live ? `<p class="count" id="livePending">${t('Cargando precios reales…')}</p>` : ''}${warnings}`;
+  results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote}${boardNote} · ${state.data.start > new Date().toISOString().slice(0, 10) ? t('{n} días desde el {date}', { n: state.data.days, date: fmtDay.format(toDate(state.data.start)) }) : t('próximos {n} días', { n: state.data.days })}</p>${city}${live ? `<p class="count" id="livePending">${t('Cargando precios reales…')}</p><p class="count" id="hiddenNote" hidden></p>` : ''}${warnings}`;
   setFooter(!!live);
   for (const item of list) results.append(renderCard(item));
   if (state.data.hasMore) results.append(moreHotelsButton());
+  updateHiddenNote();
 }
 
 // La ciudad puede tener cientos de hoteles: se piden de 15 en 15.
@@ -431,6 +474,7 @@ function renderCard(item) {
   const el = document.createElement('article');
   el.className = 'card';
   el.id = 'card-' + item.id;
+  el.hidden = !passesStay(item);
   const s = item.summary;
   const head = isFlight
     ? `<div class="thumb">✈️</div><div>
