@@ -419,10 +419,19 @@ async function aiSearchSubmit() {
 }
 onSend($('#aiForm'), aiSearchSubmit);
 $('#examples').addEventListener('click', (e) => {
-  if (e.target.tagName !== 'BUTTON') return;
-  $('#aiQuery').value = e.target.textContent;
+  const card = e.target.closest('button');
+  if (!card) return;
+  $('#aiQuery').value = card.textContent.trim();
   aiSearchSubmit();
 });
+
+// En el móvil la búsqueda manual va plegada tras un botón; la IA queda a la vista.
+function setManual(open) {
+  document.body.classList.toggle('manual-open', open);
+  $('#manualToggle').setAttribute('aria-expanded', String(open));
+  $('#manualToggle span').textContent = open ? t('Ocultar búsqueda manual') : t('Búsqueda manual');
+}
+$('#manualToggle').addEventListener('click', () => setManual(!document.body.classList.contains('manual-open')));
 
 // ---------- Render ----------
 function renderResults() {

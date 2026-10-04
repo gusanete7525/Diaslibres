@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f7fe0"/><stop offset="1" stop-color="#9fd0ff"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#s)"/>
+  <g fill="#fff" opacity=".9"><ellipse cx="60" cy="50" rx="34" ry="10"/><ellipse cx="80" cy="44" rx="20" ry="10"/><ellipse cx="250" cy="80" rx="30" ry="8"/></g>
+  <path d="M20 112C90 92 150 60 214 46" stroke="#fff" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round" fill="none" opacity=".9"/>
+  <g transform="translate(232 40) rotate(-18)" fill="#fff">
+    <path d="M-34 0c0-4 4-6 10-6h44c8 0 14 3 16 6-2 3-8 6-16 6h-44c-6 0-10-2-10-6z"/>
+    <path d="M-2-4 10-30h8L12-4z"/><path d="M-2 4 10 30h8L12 4z"/><path d="M-30-4-34-16h6l8 12z"/>
+  </g>
+  <rect y="150" width="320" height="50" fill="#1f5fa8"/>
+  <g stroke="#c8402f" stroke-width="4" fill="none"><path d="M0 128h320"/><path d="M90 150V80M230 150V80"/><path d="M0 128Q45 88 90 80Q160 128 230 80Q275 88 320 128" stroke-width="2.5"/></g>
+  <g stroke="#c8402f" stroke-width="1.2" opacity=".8"><path d="M30 128v-24M60 128v-38M120 128v-26M140 128v-14M180 128v-14M200 128v-26M260 128v-38M290 128v-24"/></g>
+  <g fill="#f5c24a"><path d="M24 150h40v-14h-40z"/></g>
+</svg>

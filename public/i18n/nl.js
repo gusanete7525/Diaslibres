@@ -487,5 +487,7 @@ export default {
  "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "De hotelgegevens konden niet worden geladen. Probeer het opnieuw.",
  "Solo alojamiento": "Alleen logies",
  "Comprobando disponibilidad…": "Beschikbaarheid controleren…",
- "Comprobando disponibilidad de {n} más…": "Beschikbaarheid van nog {n} controleren…"
+ "Comprobando disponibilidad de {n} más…": "Beschikbaarheid van nog {n} controleren…",
+ "Búsqueda manual": "Handmatig zoeken",
+ "Ocultar búsqueda manual": "Handmatig zoeken verbergen"
 };

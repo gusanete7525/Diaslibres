@@ -487,5 +487,7 @@ export default {
  "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "Could not load the hotel details. Please try again.",
  "Solo alojamiento": "Room only",
  "Comprobando disponibilidad…": "Checking availability…",
- "Comprobando disponibilidad de {n} más…": "Checking availability of {n} more…"
+ "Comprobando disponibilidad de {n} más…": "Checking availability of {n} more…",
+ "Búsqueda manual": "Manual search",
+ "Ocultar búsqueda manual": "Hide manual search"
 };
