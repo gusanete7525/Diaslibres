@@ -447,5 +447,20 @@ export default {
  "Respuesta vacía de la IA.": "Réponse vide de l’IA.",
  "Pasajero {v1}": "Passager {v1}",
  "confirmada": "confirmée",
- "cancelada": "annulée"
+ "cancelada": "annulée",
+ "Todos": "Tous",
+ "Apartamentos": "Appartements",
+ "Casas y villas": "Villas et maisons",
+ "Hostales y pensiones": "Auberges et pensions",
+ "Apartamento": "Appartement",
+ "Casa o villa": "Maison ou villa",
+ "Hostal": "Auberge",
+ "apartamentos": "appartements",
+ "casas y villas": "villas et maisons de vacances",
+ "hostales y pensiones": "auberges et pensions",
+ "Apartamentos en {city}": "Appartements à {city}",
+ "Casas y villas en {city}": "Villas et maisons de vacances à {city}",
+ "Hemos encontrado {n} apartamentos en {city}.": "Nous avons trouvé {n} appartements à {city}.",
+ "Hemos encontrado {n} casas y villas en {city}.": "Nous avons trouvé {n} villas et maisons de vacances à {city}.",
+ "{n} son apartamentos.": "{n} sont des appartements."
 };

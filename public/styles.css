@@ -181,6 +181,7 @@ body:not([data-live-flights]) .live-only { display: none; }
 .thumb { font-size: 34px; width: 60px; height: 60px; border-radius: 12px; background: var(--surface-2); display: grid; place-items: center; flex: none; }
 .card h3 { margin: 0; font-size: 18px; }
 .meta { color: var(--text-2); font-size: 13px; }
+.stay-type { font-weight: 600; color: var(--brand); }
 .stars { color: #c98500; letter-spacing: 1px; }
 .meta a { color: var(--brand); }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

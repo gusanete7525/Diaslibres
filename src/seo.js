@@ -53,11 +53,13 @@ export const FILTERS = [
   { id: '5-estrellas', minStars: 5, title: 'Hoteles de 5 estrellas en {city}', slug: { es: '5-estrellas', en: '5-star', fr: '5-etoiles', de: '5-sterne', it: '5-stelle', pt: '5-estrelas', nl: '5-sterren' } },
   { id: 'desayuno', board: 'BI', title: 'Hoteles con desayuno incluido en {city}', slug: { es: 'con-desayuno', en: 'with-breakfast', fr: 'petit-dejeuner-inclus', de: 'mit-fruehstueck', it: 'con-colazione', pt: 'com-pequeno-almoco', nl: 'met-ontbijt' } },
   { id: 'parking', fac: ['parking'], title: 'Hoteles con parking en {city}', slug: { es: 'con-parking', en: 'with-parking', fr: 'avec-parking', de: 'mit-parkplatz', it: 'con-parcheggio', pt: 'com-estacionamento', nl: 'met-parkeren' } },
+  { id: 'apartamentos', stay: 'apartment', title: 'Apartamentos en {city}', found: 'Hemos encontrado {n} apartamentos en {city}.', slug: { es: 'apartamentos', en: 'apartments', fr: 'appartements', de: 'ferienwohnungen', it: 'appartamenti', pt: 'apartamentos', nl: 'appartementen' } },
+  { id: 'casas', stay: 'house', title: 'Casas y villas en {city}', found: 'Hemos encontrado {n} casas y villas en {city}.', slug: { es: 'casas-y-villas', en: 'villas-and-holiday-homes', fr: 'villas-et-maisons', de: 'ferienhaeuser', it: 'ville-e-case-vacanza', pt: 'casas-e-moradias', nl: 'vakantiehuizen' } },
   { id: 'baratos', sort: 'price', title: 'Hoteles baratos en {city}', slug: { es: 'baratos', en: 'cheap', fr: 'pas-chers', de: 'guenstig', it: 'economici', pt: 'baratos', nl: 'goedkoop' } },
 ];
 const FILTER_BY_SLUG = Object.fromEntries(LANG_CODES.map((l) => [l, new Map(FILTERS.map((f) => [f.slug[l], f]))]));
 export const filterFromSlug = (lang, s) => FILTER_BY_SLUG[lang]?.get(s) || null;
-const matches = (f, h) => (f.fac || []).every((k) => h.facilities?.includes(k)) && (!f.minStars || (h.stars || 0) >= f.minStars);
+const matches = (f, h) => (f.fac || []).every((k) => h.facilities?.includes(k)) && (!f.minStars || (h.stars || 0) >= f.minStars) && (!f.stay || (h.stay || 'hotel') === f.stay);
 // Filtros que se pueden comprobar con los datos del hotel (las comidas dependen de cada tarifa).
 const checkable = (f) => !f.board && !f.sort;
 
@@ -110,6 +112,7 @@ export function cityStats(hotels) {
     stars: [1, 2, 3, 4, 5].map((n) => hotels.filter((h) => h.stars === n).length),
     rating: rated.length ? Math.round((rated.reduce((s, h) => s + h.rating, 0) / rated.length) * 10) / 10 : null,
     fac,
+    stay: hotels.reduce((o, h) => ({ ...o, [h.stay || 'hotel']: (o[h.stay || 'hotel'] || 0) + 1 }), {}),
     top: best(trusted.length >= 5 ? trusted : rated, 10),
     filters,
   };
@@ -146,10 +149,11 @@ export function cityPage(lang, city, filter, stats) {
       const facts = [t('En DíasLibres hay {total} hoteles en {city}.', { total: num(lang, stats.total) })];
       if (stats.stars[4] + stats.stars[3] + stats.stars[2]) facts.push(t('{n5} son de 5 estrellas, {n4} de 4 estrellas y {n3} de 3 estrellas.', { n5: num(lang, stats.stars[4]), n4: num(lang, stats.stars[3]), n3: num(lang, stats.stars[2]) }));
       if (stats.rating) facts.push(t('La puntuación media de los huéspedes es {avg} sobre 10.', { avg: num(lang, stats.rating) }));
+      if (stats.stay?.apartment) facts.push(t('{n} son apartamentos.', { n: num(lang, stats.stay.apartment) }));
       facts.push(t('{pool} tienen piscina, {pets} admiten mascotas y {parking} tienen parking.', { pool: num(lang, stats.fac.piscina || 0), pets: num(lang, stats.fac.mascotas || 0), parking: num(lang, stats.fac.parking || 0) }));
       parts.push(`<p>${esc(facts.join(' '))}</p>`);
     } else if (fs?.count != null) {
-      parts.push(`<p>${esc(t('Hemos encontrado {n} hoteles en {city} que cumplen esta condición.', { n: num(lang, fs.count) }))}</p>`);
+      parts.push(`<p>${esc(t(filter.found || 'Hemos encontrado {n} hoteles en {city} que cumplen esta condición.', { n: num(lang, fs.count) }))}</p>`);
     }
     const top = filter ? fs?.top || [] : stats.top;
     if (top.length) parts.push(`<h2>${esc(filter ? t('{title}: los mejor valorados', { title: fTitle }) : t('Hoteles mejor valorados en {city}'))}</h2><ul>${top.map((h) => `<li>${esc(hotelLine(lang, h))}</li>`).join('')}</ul>`);
@@ -175,7 +179,7 @@ export function cityPage(lang, city, filter, stats) {
     crumb: fTitle || t('Hoteles en {city}'),
     view: 'hotels',
     destination: name,
-    filters: filter ? { fac: filter.fac, board: filter.board, minStars: filter.minStars, sort: filter.sort } : null,
+    filters: filter ? { fac: filter.fac, board: filter.board, minStars: filter.minStars, sort: filter.sort, stay: filter.stay } : null,
     html: parts.join(''),
     ld,
     // Un filtro sin hoteles que lo cumplan no es una página útil para Google.
