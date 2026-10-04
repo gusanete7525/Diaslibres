@@ -95,3 +95,23 @@ test('búsqueda IA (intérprete local) entiende frases en español', async () =>
   assert.equal(localParse('hoteles en santiago de compostela').destination, 'Santiago de Compostela');
   assert.equal(localParse('escapada a la playa en julio').destination ?? null, null);
 });
+
+test('páginas para buscadores: ciudad, ruta, sitemap y robots', async () => {
+  const html = await fetch(base + '/hoteles/gandia').then((r) => r.text());
+  assert.match(html, /<title>Hoteles en Gandía/);
+  assert.match(html, /<link rel="canonical" href="http:\/\/localhost:\d+\/hoteles\/gandia"/);
+  assert.match(html, /<input name="destination" value="Gandía"/);
+  assert.match(html, /application\/ld\+json/);
+  const route = await fetch(base + '/vuelos/madrid-barcelona').then((r) => r.text());
+  assert.match(route, /Vuelos baratos de Madrid a Barcelona/);
+  assert.match(route, /data-start-view="flights"/);
+  const bad = await fetch(base + '/vuelos/madrid-madrid', { redirect: 'manual' });
+  assert.equal(bad.status, 301);
+  const map = await fetch(base + '/sitemap.xml').then((r) => r.text());
+  assert.match(map, /\/hoteles\/santiago-de-compostela</);
+  assert.match(await fetch(base + '/robots.txt').then((r) => r.text()), /Sitemap: .*\/sitemap\.xml/);
+  const home = await fetch(base + '/').then((r) => r.text());
+  assert.match(home, /rel="manifest"/);
+  assert.doesNotMatch(home, /noindex/);
+  assert.match(await fetch(base + '/?pago=X').then((r) => r.text()), /noindex/);
+});
