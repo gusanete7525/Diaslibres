@@ -1772,7 +1772,12 @@ function microsoftSignIn() {
     if (e.origin !== location.origin || typeof e.data?.authHash !== 'string') return;
     window.removeEventListener('message', onMessage);
     const r = new URLSearchParams(e.data.authHash.replace(/^#/, ''));
-    if (!r.get('id_token')) return r.get('error') === 'access_denied' ? null : toast(t('No se pudo comprobar tu cuenta de Microsoft.'));
+    if (!r.get('id_token')) {
+      if (r.get('error') === 'access_denied') return;
+      // Se enseña el motivo que da Microsoft (p. ej. la app no admite cuentas personales).
+      const why = (r.get('error_description') || r.get('error') || '').split(/\r?\n/)[0].slice(0, 160);
+      return toast(t('No se pudo comprobar tu cuenta de Microsoft.') + (why ? ` (${why})` : ''), why ? 15000 : 3500);
+    }
     try { signedIn((await api('/api/auth/microsoft', { method: 'POST', body: JSON.stringify({ idToken: r.get('id_token'), nonce }) })).user); } catch (err) { toast(err.message); }
   };
   window.addEventListener('message', onMessage);
