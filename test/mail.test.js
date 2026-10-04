@@ -51,3 +51,21 @@ test('la web envía el email al reservar y al cancelar', async () => {
     server.close();
   }
 });
+
+test('/api/health dice si el email está activo y su último error, con pista para onboarding@resend.dev', async () => {
+  const fail = async () => new Response('{"message":"You can only send testing emails to your own email address"}', { status: 403 });
+  const mailer = new Mailer({ apiKey: 're_secreta', fetchImpl: fail });
+  const r = await mailer.bookingCancelled({ code: 'DL-1', email: 'a@b.c', name: 'A', itemName: 'X' });
+  assert.match(r.error, /verifica un dominio en Resend/);
+  const server = createApp({ store: new BookingStore(null), osm: null, live: null, mailer }).listen(0);
+  try {
+    const h = await fetch(`http://localhost:${server.address().port}/api/health`).then((r) => r.text());
+    assert.doesNotMatch(h, /re_secreta/);
+    const { mail } = JSON.parse(h);
+    assert.equal(mail.enabled, true);
+    assert.equal(mail.from, 'DíasLibres <onboarding@resend.dev>');
+    assert.match(mail.lastError.message, /403/);
+  } finally {
+    server.close();
+  }
+});

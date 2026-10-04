@@ -12,6 +12,12 @@ export class Mailer {
     this.apiKey = String(apiKey || '').trim();
     this.from = from || 'DíasLibres <onboarding@resend.dev>';
     this.fetch = fetchImpl;
+    this.lastError = null; // último error de Resend (sin la clave), para /api/health
+  }
+
+  // Estado para /api/health: si está activo, con qué remitente y el último fallo.
+  get status() {
+    return { enabled: this.enabled, from: this.from, lastError: this.lastError };
   }
 
   get enabled() {
@@ -19,18 +25,31 @@ export class Mailer {
   }
 
   async #send(to, subject, html) {
-    if (!this.enabled) return { sent: false };
+    if (!this.enabled) {
+      console.warn('[email] RESEND_API_KEY no está configurada: no se envía el email a', to);
+      return { sent: false };
+    }
     try {
       const res = await this.fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ from: this.from, to: [to], subject, html }),
       });
-      if (!res.ok) throw new Error(`Resend respondió ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      if (!res.ok) {
+        let msg = `Resend respondió ${res.status}: ${(await res.text()).slice(0, 200)}`;
+        // Con el remitente de pruebas de Resend solo se puede enviar al email de la
+        // propia cuenta de Resend; para el resto hay que verificar un dominio.
+        if (/resend\.dev/i.test(this.from) && (res.status === 403 || res.status === 422)) {
+          msg += ' — Con el remitente onboarding@resend.dev solo se envía al email de tu cuenta de Resend: verifica un dominio en Resend y ponlo en MAIL_FROM.';
+        }
+        throw new Error(msg);
+      }
+      this.lastError = null;
       return { sent: true };
     } catch (err) {
       // Un fallo del email nunca deshace la reserva: se registra y sigue.
       console.error('[email]', err.message);
+      this.lastError = { at: new Date().toISOString(), message: err.message.slice(0, 400) };
       return { sent: false, error: err.message };
     }
   }
