@@ -36,13 +36,14 @@
       <button type="button" data-send class="btn primary">Buscar</button>
     </form>
     <div class="examples" id="examples">
-      <button type="button">Escapada romántica de fin de semana</button>
-      <button type="button">Hotel de montaña menos de 100 €</button>
-      <button type="button" data-kind="flight">Vuelos directos de Madrid a Lisboa</button>
-      <button type="button">Playa con niños en Canarias 5 noches</button>
+      <button type="button" class="ex-card"><img src="/img/ex-romantica.svg" alt="" loading="lazy" /><span>Escapada romántica de fin de semana</span></button>
+      <button type="button" class="ex-card"><img src="/img/ex-montana.svg" alt="" loading="lazy" /><span>Hotel de montaña menos de 100 €</span></button>
+      <button type="button" class="ex-card" data-kind="flight"><img src="/img/ex-vuelos.svg" alt="" loading="lazy" /><span>Vuelos directos de Madrid a Lisboa</span></button>
+      <button type="button" class="ex-card"><img src="/img/ex-playa.svg" alt="" loading="lazy" /><span>Playa con niños en Canarias 5 noches</span></button>
     </div>
     <p id="aiExplain" class="ai-explain" hidden></p>
 
+    <button type="button" class="btn manual-toggle" id="manualToggle" aria-expanded="false" aria-controls="filters"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> <span>Búsqueda manual</span></button>
     <form id="filters" class="filters">
       <label class="flight-only f-origin">Origen
         <input name="origin" list="destList" placeholder="Cualquiera" />

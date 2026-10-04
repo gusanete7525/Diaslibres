@@ -487,5 +487,7 @@ export default {
  "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "Impossibile caricare la scheda dell’hotel. Riprova.",
  "Solo alojamiento": "Solo pernottamento",
  "Comprobando disponibilidad…": "Verifica disponibilità…",
- "Comprobando disponibilidad de {n} más…": "Verifica disponibilità di altri {n}…"
+ "Comprobando disponibilidad de {n} más…": "Verifica disponibilità di altri {n}…",
+ "Búsqueda manual": "Ricerca manuale",
+ "Ocultar búsqueda manual": "Nascondi ricerca manuale"
 };

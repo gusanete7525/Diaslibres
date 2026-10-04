@@ -140,11 +140,20 @@ button, input, select { font: inherit; color: inherit; }
 }
 .ai-badge { font-size: 13px; font-weight: 700; color: var(--brand); white-space: nowrap; }
 .ai-box input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; padding: 8px 4px; font-size: 16px; }
-.examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.examples button {
-  border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px; color: var(--text-2);
+.examples { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.ex-card {
+  position: relative; display: block; padding: 0; border: 0; border-radius: 14px; overflow: hidden; cursor: pointer;
+  aspect-ratio: 2 / 1; background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); text-align: left;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
-.examples button:hover { border-color: var(--brand); color: var(--text); }
+.ex-card[hidden] { display: none; }
+.ex-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ex-card span {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; color: #fff; font-size: 13px; font-weight: 700; line-height: 1.25;
+  background: linear-gradient(transparent, rgb(0 0 0 / 0.62)); text-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+.ex-card:hover, .ex-card:focus-visible { transform: translateY(-2px); box-shadow: 0 4px 12px rgb(0 0 0 / 0.18); }
+.manual-toggle { display: none; }
 .ai-explain { background: var(--surface); border-left: 3px solid var(--brand); padding: 8px 12px; border-radius: 6px; margin: 8px 0; color: var(--text-2); }
 
 .btn {
@@ -156,14 +165,14 @@ button, input, select { font: inherit; color: inherit; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ai-box .btn { border-radius: 999px; }
 
-.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 16px 0 8px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 16px 0 8px; }
 .filters label { display: grid; gap: 2px; font-size: 12px; color: var(--text-2); font-weight: 600; }
 .filters input, .filters select {
   font-weight: 400; color: var(--text); border: 1px solid var(--border); background: var(--surface); border-radius: 10px; height: 38px; padding: 0 10px; min-width: 0; width: 130px;
 }
-.filters input[type="number"] { width: 100px; }
-.filters .f-dest input { width: 200px; }
-.filters .f-date input { width: 150px; }
+.filters input[type="number"] { width: 84px; }
+.filters .f-dest input { width: 160px; }
+.filters .f-date input { width: 132px; }
 .filters .f-third input, .filters .f-third select, #kidAges select { width: 80px; }
 .filters .f-btn { height: 38px; padding: 0 14px; }
 .filters input[type="checkbox"] { height: auto; }
@@ -276,9 +285,13 @@ body:not([data-live-flights]) .live-only { display: none; }
   .ai-box { padding: 4px 4px 4px 12px; }
   .ai-box input { font-size: 15px; padding: 6px 2px; }
   .ai-box .btn { padding: 7px 14px; }
-  .examples { flex-wrap: nowrap; overflow-x: auto; margin: 10px -16px; padding: 0 16px 2px; scrollbar-width: none; }
+  .examples { display: flex; overflow-x: auto; margin: 10px -16px; padding: 2px 16px 6px; scrollbar-width: none; scroll-snap-type: x mandatory; }
   .examples::-webkit-scrollbar { display: none; }
-  .examples button { flex: none; white-space: nowrap; }
+  .ex-card { flex: none; width: 46%; aspect-ratio: 16 / 11; scroll-snap-align: start; }
+  .examples { scroll-padding-inline: 16px; }
+  .manual-toggle { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 42px; margin: 4px 0; }
+  .manual-toggle[aria-expanded="true"] { border-color: var(--brand); color: var(--brand); }
+  body:not(.manual-open) #filters { display: none; }
   .filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-top: 4px; align-items: end; }
   .filters .f-dest input, .filters .f-date input, .filters .f-third input, .filters .f-third select, #kidAges select { width: 100%; }
   .filters > label .meta { display: none; }
