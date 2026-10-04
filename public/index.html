@@ -13,18 +13,22 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="logo" href="/" data-view="hotels">Días<span>Libres</span></a>
+    <a class="logo" href="/" data-view="hotels" data-home>Días<span>Libres</span></a>
     <nav class="tabs" role="tablist">
       <button role="tab" data-view="hotels" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V7m0 7h18v4m0-4v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/></svg><span>Hoteles</span></button>
       <button role="tab" data-view="flights" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 13.5 4 11l1.5-1.5 7 1 4-4a2.1 2.1 0 0 1 3 3l-4 4 1 7L15 22l-2.5-6.5L9 19v2.5L7.5 23 6 19.5 2.5 18 4 16.5h2.5z"/></svg><span>Vuelos</span></button>
       <button role="tab" data-view="mine" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6m-6 4h6"/></svg><span>Mis reservas</span></button>
     </nav>
+    <details class="lang-menu">
+      <summary aria-label="Idioma"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>ES</span></summary>
+      <nav><!--LANG_LINKS--></nav>
+    </details>
     <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><g class="sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg></button>
   </header>
 
   <section class="hero" id="searchSection">
-    <h1>Mira qué días están libres <em>antes</em> de elegir fechas</h1>
-    <p class="sub">Cada hotel y vuelo muestra su calendario: <span class="pill good">verde = libre</span> <span class="pill bad">rojo = completo</span>, y una gráfica con los días más baratos.</p>
+    <h1 data-i18n>Mira qué días están libres <em>antes</em> de elegir fechas</h1>
+    <p class="sub" data-i18n>Cada hotel y vuelo muestra su calendario: <span class="pill good">verde = libre</span> <span class="pill bad">rojo = completo</span>, y una gráfica con los días más baratos.</p>
 
     <form id="aiForm" class="ai-box" autocomplete="off">
       <span class="ai-badge" aria-hidden="true">✨ IA</span>
@@ -34,7 +38,7 @@
     <div class="examples" id="examples">
       <button type="button">Escapada romántica de fin de semana</button>
       <button type="button">Hotel de montaña menos de 100 €</button>
-      <button type="button">Vuelos directos de Madrid a Lisboa</button>
+      <button type="button" data-kind="flight">Vuelos directos de Madrid a Lisboa</button>
       <button type="button">Playa con niños en Canarias 5 noches</button>
     </div>
     <p id="aiExplain" class="ai-explain" hidden></p>
@@ -122,7 +126,7 @@
       </label>
       <label>Nombre completo <input name="name" required minlength="2" autocomplete="name" /></label>
       <label>Email <input name="email" type="email" required autocomplete="email" /></label>
-      <label class="check"><input name="terms" type="checkbox" required /> <span>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a> y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+      <label class="check"><input name="terms" type="checkbox" required /> <span data-i18n>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a> y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
       <p class="total">Total: <strong id="bookTotal">—</strong></p>
       <p id="bookExtra" class="meta" hidden></p>
       <p id="bookNote" class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
@@ -155,7 +159,7 @@
         </fieldset>
         <div id="paxList"></div>
         <p class="meta">Escribe los datos tal y como aparecen en el pasaporte o DNI. La aerolínea los necesita para emitir el billete.</p>
-        <label class="check"><input name="terms" type="checkbox" required /> <span>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a>, las condiciones de la tarifa de la aerolínea y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+        <label class="check"><input name="terms" type="checkbox" required /> <span data-i18n>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a>, las condiciones de la tarifa de la aerolínea y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
       </div>
       <div id="flightPayBox" class="paybox" hidden>
         <p class="meta" id="flightPayHint"></p>
@@ -172,10 +176,7 @@
   <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
 
-  <nav class="popular" aria-label="Destinos populares">
-    <p><strong>Hoteles:</strong> <a href="/hoteles/madrid">Madrid</a> · <a href="/hoteles/barcelona">Barcelona</a> · <a href="/hoteles/valencia">Valencia</a> · <a href="/hoteles/sevilla">Sevilla</a> · <a href="/hoteles/malaga">Málaga</a> · <a href="/hoteles/gandia">Gandía</a> · <a href="/hoteles/benidorm">Benidorm</a> · <a href="/hoteles/palma-de-mallorca">Palma de Mallorca</a> · <a href="/hoteles/tenerife">Tenerife</a> · <a href="/hoteles/lisboa">Lisboa</a> · <a href="/hoteles/paris">París</a> · <a href="/hoteles/roma">Roma</a> · <a href="/hoteles/londres">Londres</a> · <a href="/hoteles/nueva-york">Nueva York</a></p>
-    <p><strong>Vuelos:</strong> <a href="/vuelos/madrid-barcelona">Madrid – Barcelona</a> · <a href="/vuelos/madrid-lisboa">Madrid – Lisboa</a> · <a href="/vuelos/madrid-paris">Madrid – París</a> · <a href="/vuelos/madrid-roma">Madrid – Roma</a> · <a href="/vuelos/madrid-tenerife">Madrid – Tenerife</a> · <a href="/vuelos/valencia-palma-de-mallorca">Valencia – Palma de Mallorca</a></p>
-  </nav>
+  <nav class="popular" aria-label="Destinos populares"><!--POPULAR--></nav>
   <footer class="footer">DíasLibres · <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL). · <a href="/legal.html">Información legal</a></footer>
 
   <script type="module" src="/app.js"></script>

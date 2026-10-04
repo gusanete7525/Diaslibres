@@ -1,13 +1,25 @@
 // DíasLibres — interfaz. Vanilla JS, sin dependencias.
 
 const $ = (sel, el = document) => el.querySelector(sel);
-const DOW = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-const fmtDay = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-const fmtShort = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-const fmtMonth = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-const eur = (n) => `${Math.round(n).toLocaleString('es-ES')} €`;
+
+// ---------- Idioma ----------
+// La página dice su idioma (<html lang>). Los textos se escriben en español y se traducen
+// con t('frase', { huecos }); el diccionario de cada idioma está en /i18n/<idioma>.js.
+const LANG = document.documentElement.lang || 'es';
+const LOCALE = { es: 'es-ES', en: 'en-GB', fr: 'fr-FR', de: 'de-DE', it: 'it-IT', pt: 'pt-PT', nl: 'nl-NL' }[LANG] || 'es-ES';
+const DICT = LANG === 'es' ? {} : await import(`/i18n/${LANG}.js`).then((m) => m.default, () => ({}));
+const t = (s, vars = {}) => Object.entries(vars).reduce((out, [k, v]) => out.replaceAll(`{${k}}`, v), DICT[s] ?? s);
+// Singular o plural: tn(3, '{n} noche', '{n} noches').
+const tn = (n, one, many, vars = {}) => t(n === 1 ? one : many, { n, ...vars });
+// En alemán los sustantivos van con mayúscula: no se pasan a minúsculas.
+const lower = (s) => (LANG === 'de' ? s : s.toLowerCase());
+const DOW = Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(LOCALE, { weekday: 'narrow', timeZone: 'UTC' }).format(new Date(Date.UTC(2024, 0, 1 + i))));
+const fmtDay = new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const fmtShort = new Intl.DateTimeFormat(LOCALE, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const fmtMonth = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const eur = (n) => `${Math.round(n).toLocaleString(LOCALE)} €`;
 // Importes a pagar: con céntimos.
-const eur2 = (n) => Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+const eur2 = (n) => Number(n).toLocaleString(LOCALE, { style: 'currency', currency: 'EUR' });
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const toDate = (iso) => new Date(iso + 'T00:00:00Z');
 const addDays = (iso, n) => { const d = toDate(iso); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -60,9 +72,9 @@ function showTip(html, x, y) {
 }
 const hideTip = () => (tooltip.hidden = true);
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json', 'X-Lang': LANG }, ...opts });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || 'Error de conexión');
+  if (!res.ok) throw Object.assign(new Error(body.error || t('Error de conexión')), { body });
   return body;
 }
 
@@ -70,7 +82,7 @@ function setFooter(live) {
   const el = $('#footerNote');
   if (!el) return;
   el.textContent = live
-    ? 'Precios y disponibilidad en tiempo real.' + (state.data?.live?.sandbox ? ' Entorno de pruebas: las reservas son de prueba y no se cobran.' : '') + (state.config.liveFlights || state.config.flights === false ? '' : ' Los vuelos son simulados.')
+    ? [t('Precios y disponibilidad en tiempo real.'), state.data?.live?.sandbox ? t('Entorno de pruebas: las reservas son de prueba y no se cobran.') : '', state.config.liveFlights || state.config.flights === false ? '' : t('Los vuelos son simulados.')].filter(Boolean).join(' ')
     : el.dataset.default;
 }
 
@@ -85,8 +97,8 @@ function setView(view) {
   // Hoteles: destino libre (cualquier ciudad). Vuelos: solo aeropuertos con rutas.
   if (view === 'flights') filters.destination.setAttribute('list', 'destList');
   else filters.destination.removeAttribute('list');
-  filters.destination.placeholder = view === 'flights' ? 'Ciudad o aeropuerto' : 'Escribe cualquier ciudad';
-  filters.origin.placeholder = state.config.liveFlights ? 'Ciudad o código (MAD)' : 'Cualquiera';
+  filters.destination.placeholder = view === 'flights' ? t('Ciudad o aeropuerto') : t('Escribe cualquier ciudad');
+  filters.origin.placeholder = state.config.liveFlights ? t('Ciudad o código (MAD)') : t('Cualquiera');
   if (view === 'mine') {
     const email = store.get('dl-email');
     if (email) { $('#mineForm').email.value = email; loadMine(email); }
@@ -126,7 +138,7 @@ async function search() {
   if (state.view === 'flights' && state.config.liveFlights) return searchLiveFlights(token);
   results.classList.add('loading');
   if (state.view === 'hotels' && filters.destination.value.trim()) {
-    results.innerHTML = `<p class="count">Buscando hoteles en ${esc(filters.destination.value.trim())}…</p>`;
+    results.innerHTML = `<p class="count">${t('Buscando hoteles en {city}…', { city: esc(filters.destination.value.trim()) })}</p>`;
   }
   try {
     const p = filterParams();
@@ -157,14 +169,15 @@ function renderKidAges() {
   const box = $('#kidAges');
   const n = Number(filters.kids.value) || 0;
   const prev = [...box.querySelectorAll('select')].map((s) => s.value);
-  box.innerHTML = Array.from({ length: n }, (_, i) => `<label>Edad niño ${i + 1}<select name="age${i}">${Array.from({ length: 18 }, (_, a) => `<option ${String(a) === (prev[i] ?? '8') ? 'selected' : ''}>${a}</option>`).join('')}</select></label>`).join('');
+  box.innerHTML = Array.from({ length: n }, (_, i) => `<label>${t('Edad niño {n}', { n: i + 1 })}<select name="age${i}">${Array.from({ length: 18 }, (_, a) => `<option ${String(a) === (prev[i] ?? '8') ? 'selected' : ''}>${a}</option>`).join('')}</select></label>`).join('');
 }
 filters.kids.addEventListener('change', renderKidAges);
 
 function guestsText(g) {
   if (!g) return '';
   const kids = g.children?.length || 0;
-  return `${g.adults} adulto${g.adults > 1 ? 's' : ''}${kids ? ` y ${kids} niño${kids > 1 ? 's' : ''} (${g.children.join(', ')} años)` : ''}`;
+  const adults = tn(g.adults, '{n} adulto', '{n} adultos');
+  return kids ? t('{adults} y {kids} ({ages} años)', { adults, kids: tn(kids, '{n} niño', '{n} niños'), ages: g.children.join(', ') }) : adults;
 }
 
 // ---------- Precios reales (LiteAPI): se cargan por semanas y rellenan el calendario ----------
@@ -195,7 +208,7 @@ async function loadLivePrices(token, list = state.data.results) {
     }
     const loaded = Math.min(days, off + 7);
     const note = $('#livePending');
-    if (note) note.textContent = loaded < days ? `Cargando precios reales… ${loaded}/${days} días` : '';
+    if (note) note.textContent = loaded < days ? t('Cargando precios reales… {loaded}/{days} días', { loaded, days }) : '';
   }
   // «Más baratos»: con todos los precios ya cargados se reordenan las tarjetas.
   if (token === searchToken && filters.sort.value === 'price' && state.view === 'hotels') {
@@ -275,7 +288,7 @@ function renderFacilityList() {
   const box = $('#facilityList');
   const checked = new Set([...box.querySelectorAll('input:checked')].map((i) => i.value));
   box.innerHTML = Object.entries(facilityInfo()).map(([k, f]) =>
-    `<label class="check"><input type="checkbox" name="fac" value="${esc(k)}" ${checked.has(k) ? 'checked' : ''} /> <span>${f.icon} ${esc(f.label)}</span></label>`).join('');
+    `<label class="check"><input type="checkbox" name="fac" value="${esc(k)}" ${checked.has(k) ? 'checked' : ''} /> <span>${f.icon} ${esc(t(f.label))}</span></label>`).join('');
 }
 function updateMoreCount() {
   const n = filters.querySelectorAll('[name="fac"]:checked').length
@@ -298,9 +311,9 @@ async function aiSearchSubmit() {
   if (!query) return;
   const btn = $('#aiForm button');
   btn.disabled = true;
-  btn.textContent = 'Pensando…';
+  btn.textContent = t('Pensando…');
   try {
-    const f = await api('/api/ai-search', { method: 'POST', body: JSON.stringify({ query }) });
+    const f = await api('/api/ai-search', { method: 'POST', body: JSON.stringify({ query, lang: LANG }) });
     filters.reset();
     renderKidAges();
     filters.destination.value = f.destination || '';
@@ -321,7 +334,7 @@ async function aiSearchSubmit() {
     ex.textContent = `${f.source === 'claude' ? '✨' : '🔎'} ${f.explanation}`;
     ex.hidden = false;
     if (f.kind === 'flight' && state.config.flights === false) {
-      toast('Los vuelos todavía no están disponibles. De momento solo hoteles.');
+      toast(t('Los vuelos todavía no están disponibles. De momento solo hoteles.'));
       return;
     }
     setView(f.kind === 'flight' ? 'flights' : 'hotels');
@@ -330,7 +343,7 @@ async function aiSearchSubmit() {
     toast(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Buscar';
+    btn.textContent = t('Buscar');
   }
 }
 onSend($('#aiForm'), aiSearchSubmit);
@@ -347,18 +360,18 @@ function renderResults() {
   const ai = state.data.ai;
   const warnings = [osm?.error, ai?.error].filter(Boolean).map((w) => `<p class="count">⚠️ ${esc(w)}</p>`).join('');
   if (!list.length) {
-    results.innerHTML = warnings + '<p class="empty">No hay resultados con esos filtros. Prueba con otra ciudad o quita algún filtro.</p>';
+    results.innerHTML = warnings + `<p class="empty">${t('No hay resultados con esos filtros. Prueba con otra ciudad o quita algún filtro.')}</p>`;
     return;
   }
   const one = list.length === 1;
-  const kind = state.view === 'flights' ? (one ? 'vuelo' : 'vuelos') : one ? 'hotel' : 'hoteles';
-  const osmNote = (osm?.count ? ` · ${osm.count} de OpenStreetMap` : '') + (ai?.count ? ` · ${ai.count} sugerido${ai.count > 1 ? 's' : ''} por IA` : '');
+  const kind = state.view === 'flights' ? (one ? t('vuelo') : t('vuelos')) : one ? t('hotel') : t('hoteles');
+  const osmNote = (osm?.count ? ' · ' + t('{n} de OpenStreetMap', { n: osm.count }) : '') + (ai?.count ? ' · ' + tn(ai.count, '{n} sugerido por IA', '{n} sugeridos por IA') : '');
   const live = state.data.live;
-  const liveNote = live ? ` · precios y disponibilidad en tiempo real${live.sandbox ? ' (entorno de pruebas)' : ''}` : '';
-  const boardNote = state.data.boardName ? ` · precios con ${state.data.boardName.toLowerCase()}` : '';
-  const city = live && !filters.destination.value.trim() ? `<p class="count">Mostrando ${esc(live.city)}. Escribe otra ciudad para ver sus hoteles.</p>` : '';
-  const total = state.data.total > list.length ? `${list.length} de ${state.data.total.toLocaleString('es-ES')}` : list.length;
-  results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote}${boardNote} · próximos ${state.data.days} días</p>${city}${live ? '<p class="count" id="livePending">Cargando precios reales…</p>' : ''}${warnings}`;
+  const liveNote = live ? ' · ' + t('precios y disponibilidad en tiempo real') + (live.sandbox ? ' ' + t('(entorno de pruebas)') : '') : '';
+  const boardNote = state.data.boardName ? ' · ' + t('precios con {board}', { board: lower(t(state.data.boardName)) }) : '';
+  const city = live && !filters.destination.value.trim() ? `<p class="count">${t('Mostrando {city}. Escribe otra ciudad para ver sus hoteles.', { city: esc(live.city) })}</p>` : '';
+  const total = state.data.total > list.length ? t('{shown} de {total}', { shown: `<span id="shownCount">${list.length}</span>`, total: state.data.total.toLocaleString(LOCALE) }) : list.length;
+  results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote}${boardNote} · ${t('próximos {n} días', { n: state.data.days })}</p>${city}${live ? `<p class="count" id="livePending">${t('Cargando precios reales…')}</p>` : ''}${warnings}`;
   setFooter(!!live);
   for (const item of list) results.append(renderCard(item));
   if (state.data.hasMore) results.append(moreHotelsButton());
@@ -369,11 +382,11 @@ function moreHotelsButton() {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn more';
-  btn.textContent = `Ver más hoteles (quedan ${(state.data.total - state.data.results.length).toLocaleString('es-ES')})`;
+  btn.textContent = t('Ver más hoteles (quedan {n})', { n: (state.data.total - state.data.results.length).toLocaleString(LOCALE) });
   btn.addEventListener('click', async () => {
     const token = searchToken;
     btn.disabled = true;
-    btn.textContent = 'Cargando hoteles…';
+    btn.textContent = t('Cargando hoteles…');
     try {
       const p = filterParams();
       p.set('page', state.data.page + 1);
@@ -388,14 +401,14 @@ function moreHotelsButton() {
         state.ui.set(item.id, initialUi(item, state.data, checkIn));
         btn.before(renderCard(item));
       }
-      const count = results.querySelector('.count');
-      if (count) count.firstChild.textContent = count.firstChild.textContent.replace(/^\d+ de/, `${state.data.results.length} de`);
+      const shown = $('#shownCount');
+      if (shown) shown.textContent = state.data.results.length;
       if (state.data.hasMore) btn.replaceWith(moreHotelsButton());
       else btn.remove();
       if (fresh.length) loadLivePrices(token, fresh);
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = 'Ver más hoteles';
+      btn.textContent = t('Ver más hoteles');
       toast(err.message);
     }
   });
@@ -418,22 +431,22 @@ function renderCard(item) {
   const head = isFlight
     ? `<div class="thumb">✈️</div><div>
         <h3>${esc(item.originCity)} → ${esc(item.destinationCity)}</h3>
-        <div class="meta">${esc(item.airline)} · ${esc(item.origin)}–${esc(item.destination)} · sale ${esc(item.departure)} · ${Math.floor(item.duration / 60)} h ${item.duration % 60} min</div>
+        <div class="meta">${esc(item.airline)} · ${esc(item.origin)}–${esc(item.destination)} · ${t('sale {time}', { time: esc(item.departure) })} · ${Math.floor(item.duration / 60)} h ${item.duration % 60} min</div>
       </div>`
     : `${item.photo ? `<img class="thumb photo" src="${esc(item.photo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb&quot;>🏨</div>'">` : `<div class="thumb">${item.image}</div>`}<div>
         <h3>${esc(item.name)}</h3>
-        <div class="meta">${item.stars ? `<span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${String(item.rating).replace('.', ',')}</span>${item.reviewCount ? ` <span class="meta">(${item.reviewCount.toLocaleString('es-ES')} opiniones)</span>` : ''}` : ''}</div>
-        ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">Web oficial ↗</a>` : ''}</div>` : ''}
-        <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="Ficha en OpenStreetMap">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? '<span class="tag osm" title="Datos sugeridos por IA: compruébalos antes de viajar">✨ Sugerido por IA</span>' : ''}${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}${(item.facilities || []).map((k) => facilityInfo()[k]).filter(Boolean).map((f) => `<span class="tag fac" title="${esc(f.label)}">${f.icon} ${esc(f.label)}</span>`).join('')}</div>
+        <div class="meta">${item.stars ? `<span class="stars" aria-label="${t('{n} estrellas', { n: item.stars })}">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${item.rating.toLocaleString(LOCALE)}</span>${item.reviewCount ? ` <span class="meta">(${tn(item.reviewCount, '{n} opinión', '{n} opiniones', { n: item.reviewCount.toLocaleString(LOCALE) })})</span>` : ''}` : ''}</div>
+        ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${t('Web oficial')} ↗</a>` : ''}</div>` : ''}
+        <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="${t('Ficha en OpenStreetMap')}">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? `<span class="tag osm" title="${t('Datos sugeridos por IA: compruébalos antes de viajar')}">✨ ${t('Sugerido por IA')}</span>` : ''}${item.tags.map((x) => `<span class="tag">${esc(t(x))}</span>`).join('')}${(item.facilities || []).map((k) => facilityInfo()[k]).filter(Boolean).map((f) => `<span class="tag fac" title="${esc(t(f.label))}">${f.icon} ${esc(t(f.label))}</span>`).join('')}</div>
       </div>`;
   el.innerHTML = `
     <div>
       <div class="card-head">${head}</div>
       ${isFlight ? '' : `<p class="desc">${esc(item.description)}</p>`}
       <div class="stats">
-        <span>Desde <b>${s.minPrice != null ? eur(s.minPrice) : '—'}</b></span>
-        <span>Media <b>${s.avgPrice != null ? eur(s.avgPrice) : '—'}</b></span>
-        <span>Días libres <b>${s.freeDays}/${item.calendar.length}</b></span>
+        <span>${t('Desde')} <b>${s.minPrice != null ? eur(s.minPrice) : '—'}</b></span>
+        <span>${t('Media')} <b>${s.avgPrice != null ? eur(s.avgPrice) : '—'}</b></span>
+        <span>${t('Días libres')} <b>${s.freeDays}/${item.calendar.length}</b></span>
       </div>
       ${renderChart(item, ui, isFlight)}
     </div>
@@ -441,8 +454,8 @@ function renderCard(item) {
       ${renderCalendar(item, ui)}
       <div class="selection">${selectionText(item, ui, isFlight)}</div>
       <div class="card-actions">
-        ${!isFlight && item.bestStay ? `<button class="btn" data-act="best">💡 Días más baratos (${state.data.nights} noches)</button>` : ''}
-        <button class="btn primary" data-act="book" ${canBook(ui, isFlight) ? '' : 'disabled'}>Reservar</button>
+        ${!isFlight && item.bestStay ? `<button class="btn" data-act="best">💡 ${t('Días más baratos ({n} noches)', { n: state.data.nights })}</button>` : ''}
+        <button class="btn primary" data-act="book" ${canBook(ui, isFlight) ? '' : 'disabled'}>${t('Reservar')}</button>
       </div>
     </div>`;
   bindCard(el, item, isFlight);
@@ -453,15 +466,15 @@ const canBook = (ui, isFlight) => (isFlight ? !!ui.start : !!(ui.start && ui.end
 
 function selectionText(item, ui, isFlight) {
   if (isFlight) {
-    if (!ui.start) return 'Toca un día <b>verde</b> para elegir la fecha del vuelo.';
+    if (!ui.start) return t('Toca un día <b>verde</b> para elegir la fecha del vuelo.');
     const d = item.calendar.find((x) => x.date === ui.start);
-    return `Vuelo el <b>${fmtDay.format(toDate(ui.start))}</b> · ${eur(d.price)} · quedan ${d.left} plazas`;
+    return t('Vuelo el <b>{day}</b> · {price} · quedan {n} plazas', { day: fmtDay.format(toDate(ui.start)), price: eur(d.price), n: d.left });
   }
-  if (!ui.start) return 'Toca un día <b>verde</b> para la entrada; después, el día de salida.';
-  if (!ui.end) return `Entrada <b>${fmtDay.format(toDate(ui.start))}</b>. Ahora elige el día de salida.`;
+  if (!ui.start) return t('Toca un día <b>verde</b> para la entrada; después, el día de salida.');
+  if (!ui.end) return t('Entrada <b>{day}</b>. Ahora elige el día de salida.', { day: fmtDay.format(toDate(ui.start)) });
   const nights = diffDays(ui.start, ui.end);
   const total = stayDays(item, ui).reduce((a, d) => a + d.price, 0);
-  return `<b>${fmtShort.format(toDate(ui.start))} → ${fmtShort.format(toDate(ui.end))}</b> · ${nights} noche${nights > 1 ? 's' : ''} · <b>${eur(total)}</b>`;
+  return `<b>${fmtShort.format(toDate(ui.start))} → ${fmtShort.format(toDate(ui.end))}</b> · ${tn(nights, '{n} noche', '{n} noches')} · <b>${eur(total)}</b>`;
 }
 
 function stayDays(item, ui) {
@@ -496,20 +509,20 @@ function renderCalendar(item, ui) {
     if (d.available && d.price === cheapest) cls.push('cheap');
     if (ui.start && (iso === ui.start || iso === ui.end)) cls.push('sel');
     else if (ui.start && ui.end && iso > ui.start && iso < ui.end) cls.push('in-range');
-    const label = `${fmtDay.format(toDate(iso))}: ${d.pending ? 'cargando precio' : d.available ? `libre, ${d.price} €` : item.liveFlight ? 'sin vuelo' : 'completo'}`;
+    const label = `${fmtDay.format(toDate(iso))}: ${d.pending ? t('cargando precio') : d.available ? t('libre, {price} €', { price: d.price }) : item.liveFlight ? t('sin vuelo') : t('completo')}`;
     cells += `<button class="${cls.join(' ')}" data-date="${iso}" aria-label="${label}"><span>${n}</span><small>${d.pending ? '…' : d.available ? d.price : '—'}</small></button>`;
   }
   return `<div class="cal">
     <div class="cal-head">
-      <button data-act="prev" aria-label="Mes anterior" ${ui.month <= 0 ? 'disabled' : ''}>‹</button>
+      <button data-act="prev" aria-label="${t('Mes anterior')}" ${ui.month <= 0 ? 'disabled' : ''}>‹</button>
       <strong>${cap(fmtMonth.format(mDate))}</strong>
-      <button data-act="next" aria-label="Mes siguiente" ${ui.month >= months - 1 ? 'disabled' : ''}>›</button>
+      <button data-act="next" aria-label="${t('Mes siguiente')}" ${ui.month >= months - 1 ? 'disabled' : ''}>›</button>
     </div>
     <div class="cal-grid">${cells}</div>
     <div class="cal-legend">
-      <span><i style="background:var(--good-bg);outline:1px solid var(--good)"></i>Libre (precio €)</span>
-      <span><i style="background:var(--bad-bg);outline:1px solid var(--bad)"></i>${item.liveFlight ? 'Sin plazas o no vuela' : 'Completo'}</span>
-      <span>★ Más barato</span>
+      <span><i style="background:var(--good-bg);outline:1px solid var(--good)"></i>${t('Libre (precio €)')}</span>
+      <span><i style="background:var(--bad-bg);outline:1px solid var(--bad)"></i>${item.liveFlight ? t('Sin plazas o no vuela') : t('Completo')}</span>
+      <span>★ ${t('Más barato')}</span>
     </div>
   </div>`;
 }
@@ -541,13 +554,13 @@ function renderChart(item, ui, isFlight, title) {
     : '';
   return `<div class="chart-wrap">
     <div class="chart-title">
-      <span><strong>${title || `Precio por ${isFlight ? 'billete' : 'noche'}`}</strong> · ${n} días</span>
-      <span class="legend"><span><i style="background:var(--series-1)"></i>Libre</span><span><i style="background:var(--muted-bar)"></i>Completo</span></span>
+      <span><strong>${title || (isFlight ? t('Precio por billete') : t('Precio por noche'))}</strong> · ${t('{n} días', { n })}</span>
+      <span class="legend"><span><i style="background:var(--series-1)"></i>${t('Libre')}</span><span><i style="background:var(--muted-bar)"></i>${t('Completo')}</span></span>
     </div>
     <div class="chart">
       <div class="yaxis"><span>${max} €</span><span>${max / 2} €</span><span></span></div>
       <div class="plot">
-        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Gráfica de precios diarios. Mínimo ${cheap ? eur(cheap.price) + ' el ' + fmtShort.format(toDate(cheap.date)) : 'sin días libres'}.">${grid}${bars}</svg>
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${cheap ? t('Gráfica de precios diarios. Mínimo {price} el {date}.', { price: eur(cheap.price), date: fmtShort.format(toDate(cheap.date)) }) : t('Gráfica de precios diarios. Sin días libres.')}">${grid}${bars}</svg>
         ${cheapLabel}
       </div>
       <div class="xaxis"><span>${fmtShort.format(toDate(cal[0].date))}</span><span>${fmtShort.format(toDate(cal[Math.floor(n / 2)].date))}</span><span>${fmtShort.format(toDate(cal[n - 1].date))}</span></div>
@@ -613,11 +626,11 @@ function bindChart(el, item, isFlight, onPick) {
 }
 
 function dayText(d, isFlight) {
-  if (d.pending) return 'Cargando precio…';
-  if (d.error) return 'No se pudo consultar ese día';
-  if (d.noFlight) return 'Sin plazas o no vuela ese día';
-  if (!d.available) return d.price != null ? `${eur(d.price)} · completo` : 'Completo';
-  return `${eur(d.price)} · ${d.left != null ? `quedan ${d.left} ${isFlight ? 'plazas' : 'hab.'}` : 'disponible'}`;
+  if (d.pending) return t('Cargando precio…');
+  if (d.error) return t('No se pudo consultar ese día');
+  if (d.noFlight) return t('Sin plazas o no vuela ese día');
+  if (!d.available) return d.price != null ? `${eur(d.price)} · ${t('completo')}` : t('Completo');
+  return `${eur(d.price)} · ${d.left != null ? (isFlight ? t('quedan {n} plazas', { n: d.left }) : t('quedan {n} hab.', { n: d.left })) : t('disponible')}`;
 }
 
 function pickDay(item, ui, iso, isFlight) {
@@ -625,25 +638,25 @@ function pickDay(item, ui, iso, isFlight) {
   const idx = diffDays(state.data.start, iso);
   const d = cal[idx];
   if (d.pending || (ui.picking === 'end' && ui.start && iso > ui.start && cal.slice(diffDays(state.data.start, ui.start), idx).some((x) => x.pending))) {
-    return toast('Todavía estamos cargando los precios de esos días.');
+    return toast(t('Todavía estamos cargando los precios de esos días.'));
   }
   if (isFlight) {
-    if (!d.available) return toast(d.error ? 'No se pudo consultar ese día. Búscalo con la fecha de ida.' : 'Ese día este vuelo no tiene plazas o no vuela.');
+    if (!d.available) return toast(d.error ? t('No se pudo consultar ese día. Búscalo con la fecha de ida.') : t('Ese día este vuelo no tiene plazas o no vuela.'));
     ui.start = iso;
     return rerender(item.id);
   }
   // Segundo clic: día de salida (puede ser un día completo, porque esa noche no se duerme).
   if (ui.picking === 'end' && ui.start && iso > ui.start) {
     const nights = cal.slice(diffDays(state.data.start, ui.start), idx);
-    if (nights.length > 30) return toast('Máximo 30 noches por reserva.');
+    if (nights.length > 30) return toast(t('Máximo 30 noches por reserva.'));
     if (nights.every((x) => x.available)) {
       ui.end = iso;
       ui.picking = 'start';
       return rerender(item.id);
     }
-    if (!d.available) return toast('Hay noches completas entre esas fechas.');
+    if (!d.available) return toast(t('Hay noches completas entre esas fechas.'));
   }
-  if (!d.available) return toast('Ese día está completo. Elige un día verde.');
+  if (!d.available) return toast(t('Ese día está completo. Elige un día verde.'));
   ui.start = iso;
   ui.picking = 'end';
   // Sugerimos la salida según las noches indicadas, si están libres.
@@ -673,10 +686,10 @@ async function refreshQuote() {
     state.booking.total = q.total;
     const extra = $('#bookExtra');
     extra.textContent = q.roomName
-      ? `${q.roomName}${q.board ? ' · ' + q.board : ''} · ${q.refundable ? `cancelación gratuita${q.freeCancellationUntil ? ' hasta el ' + fmtDay.format(new Date(q.freeCancellationUntil.replace(' ', 'T') + 'Z')) : ''}` : 'no reembolsable'}`
+      ? `${q.roomName}${q.board ? ' · ' + t(q.board) : ''} · ${q.refundable ? (q.freeCancellationUntil ? t('cancelación gratuita hasta el {day}', { day: fmtDay.format(new Date(q.freeCancellationUntil.replace(' ', 'T') + 'Z')) }) : t('cancelación gratuita')) : t('no reembolsable')}`
       : '';
     // Tasas que no van en el total y se pagan en el hotel (p. ej. tasa turística).
-    if (q.payAtHotel?.length) extra.textContent += ` · además, a pagar en el hotel: ${payAtHotelText(q.payAtHotel)}`;
+    if (q.payAtHotel?.length) extra.textContent += ' · ' + t('además, a pagar en el hotel: {list}', { list: payAtHotelText(q.payAtHotel) });
     extra.hidden = !q.roomName;
     err.hidden = true;
     btn.disabled = !!state.bookingBlocked;
@@ -690,11 +703,11 @@ async function refreshQuote() {
 
 function openBooking(item, ui, isFlight) {
   state.booking = { item, isFlight, start: ui.start, end: ui.end };
-  $('#bookTitle').textContent = isFlight ? 'Reservar vuelo' : 'Reservar hotel';
-  $('#unitsLabel').textContent = isFlight ? 'Pasajeros' : 'Habitaciones';
+  $('#bookTitle').textContent = isFlight ? t('Reservar vuelo') : t('Reservar hotel');
+  $('#unitsLabel').textContent = isFlight ? t('Pasajeros') : t('Habitaciones');
   $('#bookSummary').innerHTML = isFlight
-    ? `<b>${esc(item.airline)}</b> ${esc(item.originCity)} → ${esc(item.destinationCity)}<br>${fmtDay.format(toDate(ui.start))} · sale ${esc(item.departure)}`
-    : `<b>${esc(item.name)}</b> · ${esc(item.city)}<br>${fmtDay.format(toDate(ui.start))} → ${fmtDay.format(toDate(ui.end))} (${diffDays(ui.start, ui.end)} noches)${item.origin === 'liteapi' && state.data.guests ? `<br>${guestsText(state.data.guests)} por habitación` : ''}`;
+    ? `<b>${esc(item.airline)}</b> ${esc(item.originCity)} → ${esc(item.destinationCity)}<br>${fmtDay.format(toDate(ui.start))} · ${t('sale {time}', { time: esc(item.departure) })}`
+    : `<b>${esc(item.name)}</b> · ${esc(item.city)}<br>${fmtDay.format(toDate(ui.start))} → ${fmtDay.format(toDate(ui.end))} (${tn(diffDays(ui.start, ui.end), '{n} noche', '{n} noches')})${item.origin === 'liteapi' && state.data.guests ? `<br>${t('{guests} por habitación', { guests: guestsText(state.data.guests) })}` : ''}`;
   bookForm.units.value = '1';
   bookForm.terms.checked = false;
   bookForm.email.value ||= store.get('dl-email') || '';
@@ -704,15 +717,15 @@ function openBooking(item, ui, isFlight) {
   state.bookingBlocked = !isFlight && item.origin === 'liteapi' && state.data.live?.bookingEnabled === false;
   state.booking.pays = !isFlight && item.origin === 'liteapi' && state.data.live?.payment === 'customer';
   $('#bookConfirm').hidden = state.bookingBlocked;
-  $('#bookConfirm').textContent = state.booking.pays ? 'Pagar y reservar' : 'Confirmar reserva';
+  $('#bookConfirm').textContent = state.booking.pays ? t('Pagar y reservar') : t('Confirmar reserva');
   $('#bookNote').textContent = item.origin !== 'liteapi'
-    ? 'Reserva de prueba: no se envía al hotel ni a la aerolínea.'
+    ? t('Reserva de prueba: no se envía al hotel ni a la aerolínea.')
     : state.data.live?.sandbox
-      ? 'Entorno de pruebas: la reserva es de prueba y no se cobra nada.'
-      : 'Pago seguro con tarjeta. La reserva se confirma al completar el pago.';
+      ? t('Entorno de pruebas: la reserva es de prueba y no se cobra nada.')
+      : t('Pago seguro con tarjeta. La reserva se confirma al completar el pago.');
   showPayForm(false);
   if (state.bookingBlocked) {
-    $('#bookSummary').insertAdjacentHTML('beforeend', '<br><span class="meta">Precio real de hoy. En esta demostración no se puede reservar.</span>');
+    $('#bookSummary').insertAdjacentHTML('beforeend', `<br><span class="meta">${t('Precio real de hoy. En esta demostración no se puede reservar.')}</span>`);
   }
   dialog.showModal();
   refreshQuote();
@@ -748,14 +761,14 @@ async function startPayment() {
     body: JSON.stringify({ ...bookingRequest(), expectedTotal: state.booking.total, name: bookForm.name.value, email: bookForm.email.value }),
   });
   store.set('dl-email', bookForm.email.value.trim());
-  $('#payHint').innerHTML = `Total a pagar: <b>${eur2(co.total)}</b> · código ${esc(co.code)}` +
-    (co.publicKey === 'sandbox' ? '<br>Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.' : '');
+  $('#payHint').innerHTML = t('Total a pagar: <b>{total}</b>', { total: eur2(co.total) }) + ' · ' + t('código {code}', { code: esc(co.code) }) +
+    (co.publicKey === 'sandbox' ? '<br>' + t('Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.') : '');
   showPayForm(true);
   try {
     await loadPaymentSdk();
   } catch {
     showPayForm(false);
-    throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.');
+    throw new Error(t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'));
   }
   // La pasarela muestra el formulario de tarjeta y, al pagar, vuelve a returnUrl.
   new window.LiteAPIPayment({
@@ -771,10 +784,10 @@ async function startPayment() {
 // Al volver de pagar: /?pago=<id> → confirmar la reserva.
 async function finishPayment(id) {
   history.replaceState(null, '', location.pathname);
-  toast('Confirmando tu reserva…');
+  toast(t('Confirmando tu reserva…'));
   try {
     const b = await api(`/api/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
-    toast(`✅ Pago recibido. ${b.sandbox ? 'Reserva de prueba confirmada' : 'Reserva confirmada'} · código ${b.code} · ${eur2(b.total)}`);
+    toast(`✅ ${t('Pago recibido.')} ${b.sandbox ? t('Reserva de prueba confirmada') : t('Reserva confirmada')} · ${t('código {code}', { code: b.code })} · ${eur2(b.total)}`);
     setView('mine');
     $('#mineForm').email.value = b.email;
     loadMine(b.email);
@@ -786,17 +799,17 @@ async function finishPayment(id) {
 onSend(bookForm, async () => {
   const btn = $('#bookConfirm');
   btn.disabled = true;
-  btn.textContent = state.booking.pays ? 'Preparando el pago…' : 'Reservando…';
+  btn.textContent = state.booking.pays ? t('Preparando el pago…') : t('Reservando…');
   if (state.booking.pays) {
     try {
       await startPayment();
     } catch (err) {
-      if (/precio ha cambiado/.test(err.message)) await refreshQuote();
+      if (err.body?.newTotal != null) await refreshQuote();
       $('#bookError').textContent = err.message;
       $('#bookError').hidden = false;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Pagar y reservar';
+      btn.textContent = t('Pagar y reservar');
     }
     return;
   }
@@ -807,21 +820,21 @@ onSend(bookForm, async () => {
     });
     store.set('dl-email', booking.email);
     dialog.close();
-    toast(`✅ ${booking.sandbox ? 'Reserva de prueba confirmada' : 'Reserva confirmada'} · código ${booking.code} · ${eur(booking.total)}`);
+    toast(`✅ ${booking.sandbox ? t('Reserva de prueba confirmada') : t('Reserva confirmada')} · ${t('código {code}', { code: booking.code })} · ${eur(booking.total)}`);
     await search();
   } catch (err) {
-    if (/precio ha cambiado/.test(err.message)) await refreshQuote(); // muestra el total nuevo
+    if (err.body?.newTotal != null) await refreshQuote(); // muestra el total nuevo
     const box = $('#bookError');
     box.textContent = err.message;
     box.hidden = false;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Confirmar reserva';
+    btn.textContent = t('Confirmar reserva');
   }
 });
 
 const payAtHotelText = (list) =>
-  list.map((t) => `${t.description} ${Number(t.amount).toLocaleString('es-ES', { style: 'currency', currency: t.currency || 'EUR' })}`).join(', ');
+  list.map((t) => `${t.description} ${Number(t.amount).toLocaleString(LOCALE, { style: 'currency', currency: t.currency || 'EUR' })}`).join(', ');
 
 // Cancelar ya no devuelve el dinero: tarifa no reembolsable o pasado el plazo gratuito.
 const noRefund = (b) =>
@@ -831,7 +844,7 @@ const noRefund = (b) =>
 // ---------- Vuelos reales (LiteAPI) ----------
 const hhmm = (iso) => String(iso || '').slice(11, 16);
 const dur = (m) => (m == null ? '' : `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}`);
-const stopsText = (n) => (n === 0 ? 'directo' : `${n} escala${n > 1 ? 's' : ''}`);
+const stopsText = (n) => (n === 0 ? t('directo') : tn(n, '{n} escala', '{n} escalas'));
 function legText(leg) {
   if (!leg) return '';
   return `${hhmm(leg.departure)} ${esc(leg.from)} → ${hhmm(leg.arrival)} ${esc(leg.to)}${leg.dayChange ? ` (+${leg.dayChange})` : ''} · ${stopsText(leg.stops)}`;
@@ -841,7 +854,7 @@ async function searchLiveFlights(token) {
   results.classList.add('loading');
   const origin = filters.origin.value.trim();
   const destination = filters.destination.value.trim();
-  if (origin && destination) results.innerHTML = `<p class="count">Buscando vuelos de ${esc(origin)} a ${esc(destination)}…</p>`;
+  if (origin && destination) results.innerHTML = `<p class="count">${t('Buscando vuelos de {from} a {to}…', { from: esc(origin), to: esc(destination) })}</p>`;
   try {
     const p = new URLSearchParams({ origin, destination, adults: filters.passengers.value });
     for (const k of ['date', 'returnDate', 'maxPrice', 'stops']) if (filters[k].value) p.set(k, filters[k].value);
@@ -861,11 +874,11 @@ function renderFlightResults(data, token) {
   setFooter(true);
   if (data.needRoute) return loadDeals(token);
   const route = `${esc(data.origin.name)} (${esc(data.origin.code)}) → ${esc(data.destination.name)} (${esc(data.destination.code)})`;
-  const when = `${fmtDay.format(toDate(data.date))}${data.returnDate ? ' → ' + fmtDay.format(toDate(data.returnDate)) : ' · solo ida'}`;
-  const note = data.live.sandbox ? ' · entorno de pruebas (precios no reales)' : '';
-  const stopsNote = { 0: ' · solo directos', 1: ' · hasta 1 escala', many: ' · con escalas' }[data.stops] || '';
+  const when = `${fmtDay.format(toDate(data.date))}${data.returnDate ? ' → ' + fmtDay.format(toDate(data.returnDate)) : ' · ' + t('solo ida')}`;
+  const note = data.live.sandbox ? ' · ' + t('entorno de pruebas (precios no reales)') : '';
+  const stopsNote = data.stops in STOPS_NOTE ? ' · ' + t(STOPS_NOTE[data.stops]) : '';
   if (!data.results.length) {
-    results.innerHTML = `<p class="count">${route} · ${when}${stopsNote}</p><p class="empty">${data.stops ? 'No hay vuelos con esas escalas para esas fechas. Prueba otro día o quita el filtro de escalas.' : 'No hay vuelos para esas fechas. Prueba otro día u otro aeropuerto.'}</p>`;
+    results.innerHTML = `<p class="count">${route} · ${when}${stopsNote}</p><p class="empty">${data.stops ? t('No hay vuelos con esas escalas para esas fechas. Prueba otro día o quita el filtro de escalas.') : t('No hay vuelos para esas fechas. Prueba otro día u otro aeropuerto.')}</p>`;
     return;
   }
   // Calendario de cada vuelo: unos días antes y después de la fecha elegida.
@@ -887,13 +900,14 @@ function renderFlightResults(data, token) {
     state.items.set(id, item);
     state.ui.set(id, { month: monthIndex(data.start, data.date), start: data.date });
   }
-  results.innerHTML = `<p class="count">${state.items.size} vuelo${state.items.size > 1 ? 's' : ''} · ${route} · ${when} · ${data.adults} pasajero${data.adults > 1 ? 's' : ''}${stopsNote}${note}</p><div id="routeChart"></div><p class="count" id="livePending"></p>`;
+  results.innerHTML = `<p class="count">${tn(state.items.size, '{n} vuelo', '{n} vuelos')} · ${route} · ${when} · ${tn(data.adults, '{n} pasajero', '{n} pasajeros')}${stopsNote}${note}</p><div id="routeChart"></div><p class="count" id="livePending"></p>`;
   renderRouteChart();
   for (const item of state.items.values()) results.append(liveFlightCard(item));
   loadFlightDays(token);
 }
 
 const FLIGHT_CAL_DAYS = 14;
+const STOPS_NOTE = { 0: 'solo directos', 1: 'hasta 1 escala', many: 'con escalas' };
 
 // El día `date` de un vuelo: su tarifa ese día, o sin plazas / no vuela.
 function fillFlightDay(item, date, trips) {
@@ -925,10 +939,10 @@ function renderRouteChart() {
   if (!box) return;
   const item = { id: 'route', liveFlight: true, calendar: routeCalendar() };
   box.className = 'card route-chart';
-  box.innerHTML = renderChart(item, { start: state.data.date }, true, 'Vuelo más barato de cada día') +
-    '<p class="meta">Pulsa un día de la gráfica para ver los vuelos de esa fecha.</p>';
+  box.innerHTML = renderChart(item, { start: state.data.date }, true, t('Vuelo más barato de cada día')) +
+    `<p class="meta">${t('Pulsa un día de la gráfica para ver los vuelos de esa fecha.')}</p>`;
   bindChart(box, item, true, (d) => {
-    if (!d.available) return toast(d.pending ? 'Todavía estamos cargando ese día.' : 'Ese día no hay vuelos en esta ruta.');
+    if (!d.available) return toast(d.pending ? t('Todavía estamos cargando ese día.') : t('Ese día no hay vuelos en esta ruta.'));
     const data = state.data;
     if (data.returnDate) filters.returnDate.value = addDays(d.date, diffDays(data.date, data.returnDate));
     filters.date.value = d.date;
@@ -944,7 +958,7 @@ async function loadFlightDays(token) {
   const stay = data.returnDate ? diffDays(data.date, data.returnDate) : '';
   const note = () => {
     const el = $('#livePending');
-    if (el) el.textContent = data.loaded.size < data.days ? `Cargando precios de otros días… ${data.loaded.size}/${data.days}` : '';
+    if (el) el.textContent = data.loaded.size < data.days ? t('Cargando precios de otros días… {loaded}/{days}', { loaded: data.loaded.size, days: data.days }) : '';
   };
   note();
   for (let k = 0; k < dates.length; k += 3) {
@@ -968,7 +982,7 @@ async function loadFlightDays(token) {
 
 // Ofertas: el vuelo más barato de rutas populares, al abrir «Vuelos» sin ruta.
 async function loadDeals(token) {
-  results.innerHTML = '<p class="count">Buscando las ofertas de vuelos más baratas…</p>';
+  results.innerHTML = `<p class="count">${t('Buscando las ofertas de vuelos más baratas…')}</p>`;
   for (let tries = 0; tries < 40; tries++) {
     let d;
     try {
@@ -990,19 +1004,19 @@ function renderDeals(d) {
   const from = plain(filters.origin.value.trim());
   const mine = from ? d.deals.filter((x) => plain(x.origin.code) === from || plain(x.origin.name).startsWith(from)) : [];
   const list = mine.length ? mine : d.deals;
-  const sandbox = state.config.sandbox ? ' · entorno de pruebas (precios no reales)' : '';
-  const head = `<p class="count">Ofertas de vuelos${d.date ? ` para el ${fmtDay.format(toDate(d.date))}` : ''} · solo ida · 1 pasajero${sandbox}</p>
-    <p class="count">Pulsa una oferta para ver todos sus vuelos con el calendario de precios, o escribe tu origen y destino arriba.</p>`;
+  const sandbox = state.config.sandbox ? ' · ' + t('entorno de pruebas (precios no reales)') : '';
+  const head = `<p class="count">${d.date ? t('Ofertas de vuelos para el {day}', { day: fmtDay.format(toDate(d.date)) }) : t('Ofertas de vuelos')} · ${t('solo ida')} · ${tn(1, '{n} pasajero', '{n} pasajeros')}${sandbox}</p>
+    <p class="count">${t('Pulsa una oferta para ver todos sus vuelos con el calendario de precios, o escribe tu origen y destino arriba.')}</p>`;
   if (!list.length) {
-    results.innerHTML = head + `<p class="empty">${d.pending ? 'Buscando las ofertas más baratas…' : 'Ahora mismo no hay ofertas. Escribe el origen y el destino para buscar vuelos.'}</p>`;
+    results.innerHTML = head + `<p class="empty">${d.pending ? t('Buscando las ofertas más baratas…') : t('Ahora mismo no hay ofertas. Escribe el origen y el destino para buscar vuelos.')}</p>`;
     return;
   }
   results.innerHTML = head + `<div class="deals">${list.map((x) => `
     <button type="button" class="deal" data-o="${esc(x.origin.name)}" data-d="${esc(x.destination.name)}" data-date="${esc(x.date)}">
       <span class="deal-route">${esc(x.origin.name)} → ${esc(x.destination.name)}</span>
-      <span class="meta">${esc(x.airlines.join(', '))} · ${stopsText(x.stops)} · sale ${hhmm(x.departure)}</span>
-      <span class="deal-price">desde <b>${eur2(x.total)}</b></span>
-    </button>`).join('')}</div>${d.pending ? '<p class="count">Cargando más ofertas…</p>' : ''}`;
+      <span class="meta">${esc(x.airlines.join(', '))} · ${stopsText(x.stops)} · ${t('sale {time}', { time: hhmm(x.departure) })}</span>
+      <span class="deal-price">${t('desde <b>{price}</b>', { price: eur2(x.total) })}</span>
+    </button>`).join('')}</div>${d.pending ? `<p class="count">${t('Cargando más ofertas…')}</p>` : ''}`;
   for (const b of results.querySelectorAll('.deal')) {
     b.addEventListener('click', () => {
       filters.origin.value = b.dataset.o;
@@ -1024,22 +1038,22 @@ function liveFlightCard(item) {
   el.className = 'card flight-card live';
   el.id = 'card-' + item.id;
   const tags = [
-    trip.checkedBag ? '🧳 maleta facturada' : trip.carryOn ? '🎒 equipaje de mano' : 'sin maleta incluida',
-    trip.refundable ? 'reembolsable' : 'no reembolsable',
+    trip.checkedBag ? '🧳 ' + t('maleta facturada') : trip.carryOn ? '🎒 ' + t('equipaje de mano') : t('sin maleta incluida'),
+    trip.refundable ? t('reembolsable') : t('no reembolsable'),
     trip.fare,
-    trip.seatsRemaining > 0 && trip.seatsRemaining <= 5 ? `quedan ${trip.seatsRemaining} plazas` : '',
+    trip.seatsRemaining > 0 && trip.seatsRemaining <= 5 ? t('quedan {n} plazas', { n: trip.seatsRemaining }) : '',
   ].filter(Boolean);
   el.innerHTML = `
     <div>
       <div class="fl-top">
         <div>${flightLegHtml(trip.outbound, trip.segments, 'OUTBOUND')}${flightLegHtml(trip.inbound, trip.segments, 'INBOUND')}</div>
         <div class="fl-side">
-          <div><div class="price">${eur2(trip.total)}</div><div class="meta">${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))}${data.adults > 1 ? ` · ${data.adults} pasajeros` : ''}</div></div>
+          <div><div class="price">${eur2(trip.total)}</div><div class="meta">${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))}${data.adults > 1 ? ' · ' + tn(data.adults, '{n} pasajero', '{n} pasajeros') : ''}</div></div>
           <div class="tags">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-          <button class="btn primary" type="button" data-live-book>Reservar</button>
+          <button class="btn primary" type="button" data-live-book>${t('Reservar')}</button>
         </div>
       </div>
-      ${renderChart(item, ui, true, 'Precio de este vuelo')}
+      ${renderChart(item, ui, true, t('Precio de este vuelo'))}
     </div>
     <div>${renderCalendar(item, ui)}</div>`;
   bindCard(el, item, true);
@@ -1052,14 +1066,14 @@ async function bookLiveFlight(item, trip) {
   const data = state.data;
   if (trip.expiration && Date.parse(trip.expiration) - Date.now() < 60_000) {
     const date = trip.outbound.departure.slice(0, 10);
-    toast('Actualizando el precio de ese día…');
+    toast(t('Actualizando el precio de ese día…'));
     try {
       const p = new URLSearchParams({ origin: data.origin.code, destination: data.destination.code, date, adults: data.adults });
       if (data.returnDate) p.set('returnDate', addDays(date, diffDays(data.date, data.returnDate)));
       const fresh = await api(`/api/flights?${p}`);
-      const t = fresh.results.find((x) => (x.flightKey || x.journeyKey) === (item.flightKey || item.base.journeyKey));
-      if (!t) return toast('Ese vuelo ya no tiene plazas ese día. Elige otro.');
-      trip = t;
+      const fresh1 = fresh.results.find((x) => (x.flightKey || x.journeyKey) === (item.flightKey || item.base.journeyKey));
+      if (!fresh1) return toast(t('Ese vuelo ya no tiene plazas ese día. Elige otro.'));
+      trip = fresh1;
     } catch (err) {
       return toast(err.message);
     }
@@ -1075,33 +1089,35 @@ function flightLegHtml(leg, segments, dir) {
       <div class="fl-mid">${dur(leg.minutes)}<div class="line"></div>${stopsText(leg.stops)}</div>
       <div class="fl-time">${hhmm(leg.arrival)}<small>${esc(leg.to)}${leg.dayChange ? ` +${leg.dayChange}` : ''}</small></div>
     </div>
-    <div class="fl-air">${seg?.logo ? `<img src="${esc(seg.logo)}" alt="" loading="lazy" onerror="this.remove()">` : '✈️'} ${dir === 'INBOUND' ? 'Vuelta · ' : ''}${esc(leg.airlines.join(', '))}${seg ? ' · ' + esc(seg.flight) : ''}</div>`;
+    <div class="fl-air">${seg?.logo ? `<img src="${esc(seg.logo)}" alt="" loading="lazy" onerror="this.remove()">` : '✈️'} ${dir === 'INBOUND' ? t('Vuelta') + ' · ' : ''}${esc(leg.airlines.join(', '))}${seg ? ' · ' + esc(seg.flight) : ''}</div>`;
 }
 
 // Nacionalidades más habituales; el resto se escribe con su código (FR, US…).
 const COUNTRIES = ['ES', 'PT', 'FR', 'IT', 'DE', 'GB', 'IE', 'NL', 'BE', 'CH', 'AT', 'PL', 'RO', 'SE', 'NO', 'DK', 'FI', 'GR', 'US', 'CA', 'MX', 'AR', 'CO', 'CL', 'PE', 'VE', 'EC', 'BR', 'UY', 'MA', 'CN', 'JP'];
-const countryName = (() => { try { const dn = new Intl.DisplayNames(['es'], { type: 'region' }); return (c) => dn.of(c); } catch { return (c) => c; } })();
-const countryOptions = COUNTRIES.map((c) => [c, countryName(c)]).sort((a, b) => (a[0] === 'ES' ? -1 : b[0] === 'ES' ? 1 : a[1].localeCompare(b[1], 'es')))
+const countryName = (() => { try { const dn = new Intl.DisplayNames([LANG], { type: 'region' }); return (c) => dn.of(c); } catch { return (c) => c; } })();
+// Primero el país del idioma de la página; el resto, por orden alfabético.
+const HOME_COUNTRY = { es: 'ES', en: 'GB', fr: 'FR', de: 'DE', it: 'IT', pt: 'PT', nl: 'NL' }[LANG] || 'ES';
+const countryOptions = COUNTRIES.map((c) => [c, countryName(c)]).sort((a, b) => (a[0] === HOME_COUNTRY ? -1 : b[0] === HOME_COUNTRY ? 1 : a[1].localeCompare(b[1], LANG)))
   .map(([c, n]) => `<option value="${c}">${esc(n)}</option>`).join('');
 
 function paxFieldset(i) {
   return `<fieldset data-pax="${i}">
-    <legend>Pasajero ${i + 1}${i === 0 ? ' (titular)' : ''}</legend>
+    <legend>${t('Pasajero {n}', { n: i + 1 })}${i === 0 ? ' ' + t('(titular)') : ''}</legend>
     <div class="row">
-      <label>Nombre <input name="firstName" required autocomplete="${i === 0 ? 'given-name' : 'off'}" /></label>
-      <label>Apellidos <input name="lastName" required minlength="2" autocomplete="${i === 0 ? 'family-name' : 'off'}" /></label>
+      <label>${t('Nombre')} <input name="firstName" required autocomplete="${i === 0 ? 'given-name' : 'off'}" /></label>
+      <label>${t('Apellidos')} <input name="lastName" required minlength="2" autocomplete="${i === 0 ? 'family-name' : 'off'}" /></label>
     </div>
     <div class="row">
-      <label>Fecha de nacimiento <input name="birthday" type="date" required /></label>
-      <label>Sexo (como en el documento) <select name="gender" required><option value="">—</option><option value="F">Mujer</option><option value="M">Hombre</option></select></label>
+      <label>${t('Fecha de nacimiento')} <input name="birthday" type="date" required /></label>
+      <label>${t('Sexo (como en el documento)')} <select name="gender" required><option value="">—</option><option value="F">${t('Mujer')}</option><option value="M">${t('Hombre')}</option></select></label>
     </div>
     <div class="row">
-      <label>Nacionalidad <select name="nationality" required>${countryOptions}</select></label>
-      <label>Documento <select name="documentType" required><option value="passport">Pasaporte</option><option value="id">DNI / documento de identidad</option></select></label>
+      <label>${t('Nacionalidad')} <select name="nationality" required>${countryOptions}</select></label>
+      <label>${t('Documento')} <select name="documentType" required><option value="passport">${t('Pasaporte')}</option><option value="id">${t('DNI / documento de identidad')}</option></select></label>
     </div>
     <div class="row">
-      <label>Número de documento <input name="documentNumber" required minlength="5" autocomplete="off" /></label>
-      <label>Caduca el <input name="documentExpiry" type="date" required /></label>
+      <label>${t('Número de documento')} <input name="documentNumber" required minlength="5" autocomplete="off" /></label>
+      <label>${t('Caduca el')} <input name="documentExpiry" type="date" required /></label>
     </div>
   </fieldset>`;
 }
@@ -1118,15 +1134,24 @@ function showFlightPay(on) {
   if (!on) $('#flightPayment').innerHTML = '';
 }
 
+// Total a pagar, gastos de emisión y quién hace el cargo.
+function flightPayHint(co, sandbox) {
+  const fee = co.total - co.searchTotal;
+  return t('Total a pagar: <b>{total}</b>', { total: eur2(co.total) }) +
+    (Math.abs(fee) > 0.01 ? ' ' + t('(incluye {fee} de gastos de emisión del billete)', { fee: eur2(fee) }) : '') +
+    ' · ' + t('código {code}', { code: esc(co.code) }) +
+    '<br>' + t('El cargo lo hace Nuitée, el proveedor de los billetes, y aparecerá a su nombre en tu tarjeta.') +
+    (sandbox ? '<br>' + t('Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.') : '');
+}
+
 // Sin clave de Stripe en el prebook: la pasarela de LiteAPI (la de los hoteles) muestra la tarjeta y su propio botón de pagar.
 async function payFlightWithWrapper(co) {
   state.flight.checkout = co;
-  await loadPaymentSdk().catch(() => { throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'); });
+  await loadPaymentSdk().catch(() => { throw new Error(t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.')); });
   showFlightPay(true);
   $('#flightConfirm').hidden = true;
   $('#flightTotal').textContent = eur2(co.total);
-  $('#flightPayHint').innerHTML = `Total a pagar: <b>${eur2(co.total)}</b>${Math.abs(co.total - co.searchTotal) > 0.01 ? ` (incluye ${eur2(co.total - co.searchTotal)} de gastos de emisión del billete)` : ''} · código ${esc(co.code)}<br>El cargo lo hace Nuitée, el proveedor de los billetes, y aparecerá a su nombre en tu tarjeta.` +
-    (co.publicKey === 'sandbox' ? '<br>Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.' : '');
+  $('#flightPayHint').innerHTML = flightPayHint(co, co.publicKey === 'sandbox');
   new window.LiteAPIPayment({
     publicKey: co.publicKey,
     appearance: { theme: 'flat' },
@@ -1139,7 +1164,7 @@ async function payFlightWithWrapper(co) {
 
 async function openFlightBooking(trip, data) {
   state.flight = { trip, adults: data.adults, stripe: null, elements: null, checkout: null };
-  $('#flightSummary').innerHTML = `<b>${esc(data.origin.name)} → ${esc(data.destination.name)}</b><br>Ida ${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))} · ${legText(trip.outbound)}${trip.inbound ? `<br>Vuelta ${fmtDay.format(toDate(trip.inbound.departure.slice(0, 10)))} · ${legText(trip.inbound)}` : ''}<br>${data.adults} pasajero${data.adults > 1 ? 's' : ''} · ${esc(trip.outbound.airlines.join(', '))}`;
+  $('#flightSummary').innerHTML = `<b>${esc(data.origin.name)} → ${esc(data.destination.name)}</b><br>${t('Ida')} ${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))} · ${legText(trip.outbound)}${trip.inbound ? `<br>${t('Vuelta')} ${fmtDay.format(toDate(trip.inbound.departure.slice(0, 10)))} · ${legText(trip.inbound)}` : ''}<br>${tn(data.adults, '{n} pasajero', '{n} pasajeros')} · ${esc(trip.outbound.airlines.join(', '))}`;
   $('#paxList').innerHTML = Array.from({ length: data.adults }, (_, i) => paxFieldset(i)).join('');
   for (const d of flightForm.querySelectorAll('[name="birthday"]')) d.max = new Date().toISOString().slice(0, 10);
   for (const d of flightForm.querySelectorAll('[name="documentExpiry"]')) d.min = trip.outbound.departure.slice(0, 10);
@@ -1152,17 +1177,17 @@ async function openFlightBooking(trip, data) {
   const btn = $('#flightConfirm');
   btn.hidden = false;
   btn.disabled = true;
-  btn.textContent = 'Continuar al pago';
+  btn.textContent = t('Continuar al pago');
   flightDialog.showModal();
   try {
     const v = await api('/api/flights/quote', { method: 'POST', body: JSON.stringify({ offerId: trip.offerId }) });
     state.flight.total = v.total;
     $('#flightTotal').textContent = eur2(v.total);
     const extra = [
-      v.changed ? `El precio ha cambiado desde la búsqueda (antes ${eur2(trip.total)}).` : '',
-      trip.refundable ? 'Tarifa reembolsable según las condiciones de la aerolínea.' : 'Tarifa no reembolsable.',
-      trip.checkedBag ? 'Incluye maleta facturada.' : trip.carryOn ? 'Incluye equipaje de mano; maleta facturada no incluida.' : 'No incluye maleta.',
-      data.live.sandbox ? 'Entorno de pruebas: no es un billete real.' : '',
+      v.changed ? t('El precio ha cambiado desde la búsqueda (antes {price}).', { price: eur2(trip.total) }) : '',
+      trip.refundable ? t('Tarifa reembolsable según las condiciones de la aerolínea.') : t('Tarifa no reembolsable.'),
+      trip.checkedBag ? t('Incluye maleta facturada.') : trip.carryOn ? t('Incluye equipaje de mano; maleta facturada no incluida.') : t('No incluye maleta.'),
+      data.live.sandbox ? t('Entorno de pruebas: no es un billete real.') : '',
     ].filter(Boolean).join(' ');
     $('#flightExtra').textContent = extra;
     $('#flightExtra').hidden = !extra;
@@ -1201,33 +1226,32 @@ onSend(flightForm, async () => {
   btn.disabled = true;
   // Paso 2: pagar con la tarjeta (Stripe lleva al cliente de vuelta a /?vuelo=<id>).
   if (f.checkout) {
-    btn.textContent = 'Procesando el pago…';
+    btn.textContent = t('Procesando el pago…');
     const { error } = await f.stripe.confirmPayment({ elements: f.elements, confirmParams: { return_url: f.checkout.returnUrl } });
-    flightError(error?.message || 'No se pudo completar el pago.');
+    flightError(error?.message || t('No se pudo completar el pago.'));
     btn.disabled = false;
-    btn.textContent = `Pagar ${eur2(f.checkout.total)}`;
+    btn.textContent = t('Pagar {total}', { total: eur2(f.checkout.total) });
     return;
   }
   // Paso 1: bloquear la tarifa con los datos de los pasajeros y preparar el pago.
-  btn.textContent = 'Reservando la tarifa…';
+  btn.textContent = t('Reservando la tarifa…');
   try {
     const co = await api('/api/flights/checkout', { method: 'POST', body: JSON.stringify({ offerId: f.trip.offerId, adults: f.adults, ...flightCustomer() }) });
     store.set('dl-email', flightForm.email.value.trim());
     if (!co.publishableKey) return await payFlightWithWrapper(co);
-    await loadStripe().catch(() => { throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'); });
+    await loadStripe().catch(() => { throw new Error(t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.')); });
     f.checkout = co;
     f.stripe = window.Stripe(co.publishableKey);
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
-    f.elements = f.stripe.elements({ clientSecret: co.secretKey, appearance: { theme: dark ? 'night' : 'stripe' }, locale: 'es' });
+    f.elements = f.stripe.elements({ clientSecret: co.secretKey, appearance: { theme: dark ? 'night' : 'stripe' }, locale: LANG });
     showFlightPay(true);
     f.elements.create('payment').mount('#flightPayment');
     $('#flightTotal').textContent = eur2(co.total);
-    $('#flightPayHint').innerHTML = `Total a pagar: <b>${eur2(co.total)}</b>${Math.abs(co.total - co.searchTotal) > 0.01 ? ` (incluye ${eur2(co.total - co.searchTotal)} de gastos de emisión del billete)` : ''} · código ${esc(co.code)}<br>El cargo lo hace Nuitée, el proveedor de los billetes, y aparecerá a su nombre en tu tarjeta.` +
-      (state.data?.live?.sandbox ? '<br>Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.' : '');
-    btn.textContent = `Pagar ${eur2(co.total)}`;
+    $('#flightPayHint').innerHTML = flightPayHint(co, !!state.data?.live?.sandbox);
+    btn.textContent = t('Pagar {total}', { total: eur2(co.total) });
   } catch (err) {
     flightError(err.message);
-    btn.textContent = 'Continuar al pago';
+    btn.textContent = t('Continuar al pago');
   } finally {
     btn.disabled = false;
   }
@@ -1237,11 +1261,11 @@ onSend(flightForm, async () => {
 async function finishFlightPayment(id, redirectStatus) {
   history.replaceState(null, '', location.pathname);
   setView('mine');
-  if (redirectStatus === 'failed') { toast('El pago no se ha completado. No se ha hecho ningún cargo.'); return; }
-  toast('Confirmando tu billete con la aerolínea…');
+  if (redirectStatus === 'failed') { toast(t('El pago no se ha completado. No se ha hecho ningún cargo.')); return; }
+  toast(t('Confirmando tu billete con la aerolínea…'));
   try {
     const b = await api(`/api/flights/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
-    toast(`✅ ${b.sandbox ? 'Reserva de prueba confirmada' : 'Vuelo reservado'} · código ${b.code}${b.pnr ? ' · localizador ' + b.pnr : ''}`, 8000);
+    toast(`✅ ${b.sandbox ? t('Reserva de prueba confirmada') : t('Vuelo reservado')} · ${t('código {code}', { code: b.code })}${b.pnr ? ' · ' + t('localizador {pnr}', { pnr: b.pnr }) : ''}`, 8000);
     $('#mineForm').email.value = b.email;
     loadMine(b.email);
   } catch (err) {
@@ -1254,20 +1278,20 @@ async function loadMine(email) {
   const list = $('#mineList');
   try {
     const items = await api(`/api/bookings?email=${encodeURIComponent(email)}`);
-    if (!items.length) { list.innerHTML = '<p class="empty">No hay reservas con ese email.</p>'; return; }
+    if (!items.length) { list.innerHTML = `<p class="empty">${t('No hay reservas con ese email.')}</p>`; return; }
     list.innerHTML = items.map((b) => `
       <div class="booking">
         <div>
           <div><b>${esc(b.itemName)}</b></div>
-          <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${b.units} hab.` : `${fmtDay.format(toDate(b.date))}${b.returnDate ? ' → ' + fmtDay.format(toDate(b.returnDate)) : ''} · ${b.units} pasajero${b.units > 1 ? 's' : ''}`} · ${eur(b.total)}</div>
-          ${b.type === 'flight' && b.flight ? `<div class="meta">${legText(b.flight.outbound)}${b.flight.inbound ? ' · vuelta ' + legText(b.flight.inbound) : ''}</div>` : ''}
+          <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${t('{n} hab.', { n: b.units })}` : `${fmtDay.format(toDate(b.date))}${b.returnDate ? ' → ' + fmtDay.format(toDate(b.returnDate)) : ''} · ${tn(b.units, '{n} pasajero', '{n} pasajeros')}`} · ${eur(b.total)}</div>
+          ${b.type === 'flight' && b.flight ? `<div class="meta">${legText(b.flight.outbound)}${b.flight.inbound ? ' · ' + t('vuelta') + ' ' + legText(b.flight.inbound) : ''}</div>` : ''}
           ${b.passengers?.length ? `<div class="meta">${esc(b.passengers.join(', '))}</div>` : ''}
-          ${b.guests ? `<div class="meta">${guestsText(b.guests)} por habitación</div>` : ''}
-          ${b.provider === 'liteapi' ? `<div class="meta">${b.sandbox ? 'Prueba · ' : ''}Ref. ${esc(b.bookingRef || b.providerBookingId)}${b.pnr ? ' · localizador ' + esc(b.pnr) : ''}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.type === 'flight' ? (b.refundable ? 'tarifa reembolsable' : 'no reembolsable') : b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
-          ${b.payAtHotel?.length ? `<div class="meta">A pagar en el hotel: ${esc(payAtHotelText(b.payAtHotel))}</div>` : ''}
-          <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : b.status === 'cancelacion_solicitada' ? '…' : '✖'} ${esc(b.status === 'cancelacion_solicitada' ? 'cancelación solicitada' : b.status)}</span></div>
+          ${b.guests ? `<div class="meta">${t('{guests} por habitación', { guests: guestsText(b.guests) })}</div>` : ''}
+          ${b.provider === 'liteapi' ? `<div class="meta">${b.sandbox ? t('Prueba') + ' · ' : ''}${t('Ref.')} ${esc(b.bookingRef || b.providerBookingId)}${b.pnr ? ' · ' + t('localizador {pnr}', { pnr: esc(b.pnr) }) : ''}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.type === 'flight' ? (b.refundable ? t('tarifa reembolsable') : t('no reembolsable')) : b.refundable ? t('cancelación gratuita') : t('no reembolsable')}${b.cancellation ? ' · ' + t('reembolso {amount}', { amount: eur(b.cancellation.refund ?? 0) }) : ''}</div>` : ''}
+          ${b.payAtHotel?.length ? `<div class="meta">${t('A pagar en el hotel: {list}', { list: esc(payAtHotelText(b.payAtHotel)) })}</div>` : ''}
+          <div class="meta">${t('Código')} <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : b.status === 'cancelacion_solicitada' ? '…' : '✖'} ${esc(b.status === 'cancelacion_solicitada' ? t('cancelación solicitada') : t(b.status))}</span></div>
         </div>
-        ${b.status === 'confirmada' ? `<button class="btn" data-cancel="${esc(b.code)}"${b.type === 'flight' && b.provider === 'liteapi' ? ' data-flight="1"' : noRefund(b) ? ' data-norefund="1"' : ''}>Cancelar</button>` : ''}
+        ${b.status === 'confirmada' ? `<button class="btn" data-cancel="${esc(b.code)}"${b.type === 'flight' && b.provider === 'liteapi' ? ' data-flight="1"' : noRefund(b) ? ' data-norefund="1"' : ''}>${t('Cancelar')}</button>` : ''}
       </div>`).join('');
   } catch (err) {
     list.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
@@ -1286,14 +1310,14 @@ $('#mineList').addEventListener('click', async (e) => {
   if (!btn.dataset.armed && btn.dataset.flight) {
     // Vuelos: antes de cancelar se pide a la aerolínea cuánto se devolvería.
     btn.disabled = true;
-    btn.textContent = 'Consultando el reembolso…';
+    btn.textContent = t('Consultando el reembolso…');
     try {
       const q = await api(`/api/bookings/${encodeURIComponent(code)}/cancel-quote?email=${encodeURIComponent($('#mineForm').email.value.trim())}`);
-      btn.textContent = q.refund > 0 ? `Reembolso estimado ${eur2(q.refund)} (no garantizado). ¿Cancelar?` : 'Sin reembolso. ¿Cancelar igualmente?';
+      btn.textContent = q.refund > 0 ? t('Reembolso estimado {amount} (no garantizado). ¿Cancelar?', { amount: eur2(q.refund) }) : t('Sin reembolso. ¿Cancelar igualmente?');
       btn.dataset.armed = '1';
-      setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Cancelar'; } }, 15000);
+      setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = t('Cancelar'); } }, 15000);
     } catch (err) {
-      btn.textContent = 'Cancelar';
+      btn.textContent = t('Cancelar');
       toast(err.message);
     } finally {
       btn.disabled = false;
@@ -1302,14 +1326,14 @@ $('#mineList').addEventListener('click', async (e) => {
   }
   if (!btn.dataset.armed) {
     btn.dataset.armed = '1';
-    btn.textContent = btn.dataset.norefund ? 'Sin reembolso. ¿Cancelar igualmente?' : '¿Seguro? Pulsa otra vez';
-    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Cancelar'; } }, btn.dataset.norefund ? 8000 : 4000);
+    btn.textContent = btn.dataset.norefund ? t('Sin reembolso. ¿Cancelar igualmente?') : t('¿Seguro? Pulsa otra vez');
+    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = t('Cancelar'); } }, btn.dataset.norefund ? 8000 : 4000);
     return;
   }
   const email = $('#mineForm').email.value.trim();
   try {
     const done = await api(`/api/bookings/${encodeURIComponent(code)}/cancel`, { method: 'POST', body: JSON.stringify({ email }) });
-    toast(done.status === 'cancelacion_solicitada' ? 'Cancelación solicitada. La aerolínea la confirmará en breve.' : 'Reserva cancelada.');
+    toast(done.status === 'cancelacion_solicitada' ? t('Cancelación solicitada. La aerolínea la confirmará en breve.') : t('Reserva cancelada.'));
     loadMine(email);
   } catch (err) {
     toast(err.message);
@@ -1325,14 +1349,14 @@ const configReady = api('/api/config').then((config) => {
   // Sin vuelos (datos reales de hoteles y vuelos apagados): fuera la pestaña y el ejemplo de vuelos.
   if (config.flights === false) {
     $('.tabs [data-view="flights"]').hidden = true;
-    for (const b of document.querySelectorAll('#examples button')) if (/vuelo/i.test(b.textContent)) b.hidden = true;
+    for (const b of document.querySelectorAll('#examples [data-kind="flight"]')) b.hidden = true;
   }
   filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
 }).catch(() => { /* sin vuelos reales */ });
 (async () => {
   try {
     const airports = await api('/api/airports');
-    const cities = new Set([...Object.values(airports), 'Benasque']);
+    const cities = new Set(Object.values(airports));
     $('#destList').innerHTML = [...cities].sort().map((c) => `<option value="${esc(c)}">`).join('');
   } catch { /* datalist opcional */ }
   await configReady;
@@ -1342,7 +1366,38 @@ const configReady = api('/api/config').then((config) => {
   // Si ya se pulsó una pestaña mientras cargaba, no se le cambia.
   // Las páginas /vuelos/<ruta> abren directamente la búsqueda de vuelos.
   const start = document.body.dataset.startView === 'flights' && state.config.flights !== false ? 'flights' : 'hotels';
+  // Páginas por filtro (/hoteles/<ciudad>/con-piscina…): la búsqueda empieza con el filtro puesto.
+  try {
+    const f = JSON.parse(document.body.dataset.startFilters || 'null');
+    if (f) {
+      const fac = new Set(f.fac || []);
+      filters.querySelectorAll('[name="fac"]').forEach((c) => { c.checked = fac.has(c.value); });
+      if (f.board) filters.board.value = f.board;
+      if (f.minStars) filters.minStars.value = f.minStars;
+      if (f.sort) filters.sort.value = f.sort;
+      if (fac.size || f.board || f.minStars) { $('#moreFilters').hidden = false; $('#moreFiltersBtn').setAttribute('aria-expanded', 'true'); }
+      updateMoreCount();
+    }
+  } catch { /* sin filtros */ }
   if (state.view === 'hotels') { setView(start); search(); }
+})();
+
+// Si el navegador está en otro idioma de la web, se ofrece la página en ese idioma.
+(() => {
+  const HINT = {
+    es: 'Esta página también está en español', en: 'This page is also available in English', fr: 'Cette page existe aussi en français',
+    de: 'Diese Seite gibt es auch auf Deutsch', it: 'Questa pagina è disponibile anche in italiano', pt: 'Esta página também está disponível em português',
+    nl: 'Deze pagina is ook beschikbaar in het Nederlands',
+  };
+  const want = (navigator.languages || [navigator.language]).map((l) => String(l).slice(0, 2).toLowerCase()).find((l) => HINT[l]);
+  if (!want || want === LANG || store.get('dl-lang-hint') === want) return;
+  const href = document.querySelector(`link[rel="alternate"][hreflang="${want}"]`)?.getAttribute('href') || (want === 'es' ? '/' : `/${want}/`);
+  const bar = document.createElement('p');
+  bar.className = 'lang-hint';
+  bar.lang = want;
+  bar.innerHTML = `🌐 <a href="${esc(href)}" hreflang="${want}">${esc(HINT[want])} →</a> <button type="button" class="btn ghost" aria-label="×">×</button>`;
+  bar.querySelector('button').addEventListener('click', () => { store.set('dl-lang-hint', want); bar.remove(); });
+  $('#searchSection').before(bar);
 })();
 
 // App instalable (Android, escritorio): funciona sin conexión con la última versión vista.

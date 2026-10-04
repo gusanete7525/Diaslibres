@@ -4,6 +4,8 @@ import { dirname } from 'node:path';
 // Almacenes de reservas con la misma interfaz (todo asíncrono):
 //   all(), add(b), get(code), findByCheckout(id), update(code, patch),
 //   listByEmail(email), cancel(code, email)
+// y, aparte, un pequeño almacén clave → valor: kvSet(key, value), kvList(prefix)
+// (p. ej. los datos de cada ciudad para las páginas de buscadores).
 // - BookingStore: fichero JSON (o memoria si file es null). Para pruebas y demos.
 // - PgBookingStore: PostgreSQL (DATABASE_URL). Las reservas sobreviven a reinicios.
 
@@ -17,6 +19,15 @@ export class BookingStore {
     } catch {
       this.bookings = [];
     }
+    this.kv = new Map(); // solo en memoria
+  }
+
+  async kvSet(key, value) {
+    this.kv.set(key, value);
+  }
+
+  async kvList(prefix) {
+    return [...this.kv].filter(([k]) => k.startsWith(prefix));
   }
 
   async all() {
@@ -85,6 +96,11 @@ export class PgBookingStore {
       );
       CREATE INDEX IF NOT EXISTS bookings_email ON bookings (lower(email));
       CREATE INDEX IF NOT EXISTS bookings_checkout ON bookings (checkout_id);
+      CREATE TABLE IF NOT EXISTS kv (
+        key text PRIMARY KEY,
+        value jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
     `);
     await this.ready;
   }
@@ -127,6 +143,17 @@ export class PgBookingStore {
 
   async listByEmail(email) {
     return this.#q('SELECT data FROM bookings WHERE lower(email) = lower($1) ORDER BY created_at DESC', [email]);
+  }
+
+  async kvSet(key, value) {
+    await this.#init();
+    await this.pool.query('INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()', [key, JSON.stringify(value)]);
+  }
+
+  async kvList(prefix) {
+    await this.#init();
+    const { rows } = await this.pool.query("SELECT key, value FROM kv WHERE key LIKE $1 || '%'", [prefix]);
+    return rows.map((r) => [r.key, r.value]);
   }
 
   async cancel(code, email) {

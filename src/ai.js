@@ -2,6 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { HOTELS, AIRPORTS } from './catalog.js';
 import { todayISO, addDays, isISODate } from './availability.js';
 import { FACILITIES, BOARDS } from './liteapi.js';
+import { findPlaceIn, cityName, placeName } from './seo.js';
+import { LANGS, tr } from './i18n.js';
+import { toSpanish } from './ai-langs.js';
 
 // Búsqueda en lenguaje natural ("algo de playa barato en julio para una semana").
 // Con ANTHROPIC_API_KEY se usa Claude para convertir la frase en filtros; sin
@@ -50,7 +53,7 @@ Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
 - board: régimen de comidas si lo pide (${Object.entries(BOARDS).map(([k, v]) => `${k} = ${v}`).join(', ')}); si no, null.
 - stops: solo para vuelos: "0" si pide vuelos directos o sin escalas, "1" si acepta como máximo una escala, "many" si pide vuelos con escalas o transbordos (uno o varios); si no lo dice, null.
 - sort: "price" si busca barato, "rating" si pide los mejor valorados; si no, "stars".
-- explanation: una frase breve en español explicando qué vas a buscar.`;
+- explanation: una frase breve en {LANGUAGE} explicando qué vas a buscar.`;
 
 let client = null;
 function getClient() {
@@ -60,17 +63,19 @@ function getClient() {
 }
 
 // Instrucciones del buscador (también las usa la vista previa del navegador).
-export function searchInstructions() {
-  return SYSTEM.replace('{TODAY}', todayISO());
+export function searchInstructions(lang = 'es') {
+  return SYSTEM.replace('{TODAY}', todayISO()).replace('{LANGUAGE}', lang === 'es' ? 'español' : LANGS[lang]?.name || 'español');
 }
 
-export async function aiSearch(query) {
+// lang: idioma de la página (la búsqueda se puede escribir en ese idioma).
+export async function aiSearch(query, lang = 'es') {
+  if (!LANGS[lang]) lang = 'es';
   const text = String(query || '').slice(0, 500).trim();
   if (!text) throw new Error('Escribe qué buscas.');
   const c = getClient();
   if (c) {
     try {
-      return { ...(await claudeParse(c, text)), source: 'claude' };
+      return { ...(await claudeParse(c, text, lang)), source: 'claude' };
     } catch (err) {
       if (err instanceof Anthropic.AuthenticationError) console.error('[ia] Clave de API no válida; uso el intérprete local.');
       else if (err instanceof Anthropic.RateLimitError) console.error('[ia] Límite de peticiones alcanzado; uso el intérprete local.');
@@ -78,17 +83,17 @@ export async function aiSearch(query) {
       else console.error('[ia]', err.message);
     }
   }
-  return { ...localParse(text), source: 'local' };
+  return { ...localParse(text, lang), source: 'local' };
 }
 
-async function claudeParse(c, text) {
+async function claudeParse(c, text, lang) {
   const response = await c.beta.messages.create({
     model: MODEL,
     max_tokens: 2048,
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',
     output_config: { effort: 'low', format: { type: 'json_schema', schema: FILTER_SCHEMA } },
-    system: searchInstructions(),
+    system: searchInstructions(lang),
     messages: [{ role: 'user', content: text }],
   });
   if (response.stop_reason === 'refusal') throw new Error('La IA no ha podido procesar la búsqueda.');
@@ -143,15 +148,25 @@ const STOP = new Set(['la', 'el', 'los', 'las', 'lo', 'mi', 'tu', 'su', 'este', 
   'semana', 'semanas', 'finde', 'fin', 'verano', 'invierno', 'primavera', 'otono', 'navidad', 'navidades', 'pascua', 'puente', 'principios', 'mediados', 'finales', 'hotel', 'hoteles',
   'casa', 'apartamento', 'pareja', 'familia', 'solas', 'solo', 'sola', 'buen', 'buena', 'precio', 'oferta', 'ver', 'dormir', 'descansar', 'pasar', 'menos', 'partir', 'poder', 'ser',
   'mitad', 'centro', 'zona', 'sitio', 'lugar', 'algo', 'donde', 'nuestro', 'nuestra', 'vacaciones', 'hora', 'dia', 'dias', 'noche', 'noches', 'mes', 'ano', 'lunes', 'martes',
-  'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'manana', 'hoy', 'pasado', 'proximo', 'proxima', 'cuanto', 'cuantos', 'unos', 'unas', 'poco', 'mucho']);
+  'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'manana', 'hoy', 'pasado', 'proximo', 'proxima', 'cuanto', 'cuantos', 'unos', 'unas', 'poco', 'mucho', 'por', 'para', 'the']);
 const REGION = { canarias: 'Tenerife', andalucia: 'Sevilla', galicia: 'Vigo', portugal: 'Lisboa', francia: 'París', italia: 'Roma', cataluna: 'Barcelona', baleares: 'Ibiza' };
 
-export function localParse(text) {
+// La palabra entera («roma», no «romántica»).
+const hasWord = (s, w) => ` ${s.replace(/[^a-z0-9]+/g, ' ')} `.includes(` ${w.replace(/[^a-z0-9]+/g, ' ').trim()} `);
+
+export function localParse(text, lang = 'es') {
+  if (lang !== 'es') text = toSpanish(text, lang);
   const t = norm(text);
   const kind = /\b(vuelo|vuelos|volar|avion|billete)/.test(t) ? 'flight' : 'hotel';
   const findCity = (s) => {
-    for (const [code, name] of Object.entries(AIRPORTS)) if (s.includes(norm(name))) return kind === 'flight' ? code : name;
-    for (const [region, city] of Object.entries(REGION)) if (s.includes(region)) return city;
+    // Hoteles: primero el destino tal como se escribe («Tenerife», no el de su aeropuerto).
+    const named = kind === 'hotel' && findPlaceIn(s);
+    if (named) return cityName(named, lang);
+    for (const [code, name] of Object.entries(AIRPORTS)) if (hasWord(s, norm(name))) return kind === 'flight' ? code : name;
+    for (const [region, city] of Object.entries(REGION)) if (hasWord(s, region)) return city;
+    // Cualquier destino conocido, escrito en cualquier idioma.
+    const place = findPlaceIn(s);
+    if (place) return kind === 'flight' ? place.iata || null : cityName(place, lang);
     return null;
   };
 
@@ -165,12 +180,12 @@ export function localParse(text) {
   destination ??= findCity(t);
   // Cualquier otra ciudad escrita con mayúscula tras "en"/"a" (hoteles vía OpenStreetMap).
   if (!destination && kind === 'hotel') {
-    const m = text.match(/\b(?:en|a|de)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)(?:\s+(?:de\s+|del\s+|la\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)*)/u);
+    const m = text.match(/(?<!\p{L})(?:en|a|de)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)(?:\s+(?:de\s+|del\s+|la\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)*)/u);
     if (m && !MONTHS.includes(norm(m[1]))) destination = m[1];
   }
   // También en minúsculas («algo en gandía»), si la palabra no es un mes, una época u otra cosa conocida.
   if (!destination && kind === 'hotel') {
-    for (const m of text.matchAll(/\b(?:en|a)\s+([a-záéíóúñüç][\wáéíóúñüç'-]+(?:\s+(?:de|del|la)\s+[a-záéíóúñüç][\wáéíóúñüç'-]+)?)/giu)) {
+    for (const m of text.matchAll(/(?<!\p{L})(?:en|a)\s+([a-záéíóúñüç][\wáéíóúñüç'-]+(?:\s+(?:de|del|la)\s+[a-záéíóúñüç][\wáéíóúñüç'-]+)?)/giu)) {
       const first = norm(m[1].split(/\s+/)[0]);
       const tagWord = Object.values(TAG_WORDS).flat().some((w) => first.startsWith(w));
       if (MONTHS.includes(first) || STOP.has(first) || first in NUMBERS || tagWord || /^\d/.test(first)) continue;
@@ -235,19 +250,22 @@ export function localParse(text) {
     : /escala|transbordo|conexion/.test(t) ? 'many' : null;
   for (const k of fac) if (tags.includes(k)) tags.splice(tags.indexOf(k), 1);
 
-  const parts = [];
-  parts.push(kind === 'flight' ? 'vuelos' : 'hoteles');
-  if (origin) parts.push(`desde ${AIRPORTS[origin] || origin}`);
-  if (destination) parts.push(`${kind === 'flight' ? 'a' : 'en'} ${AIRPORTS[destination] || destination}`);
-  if (tags.length) parts.push(`(${tags.join(', ')})`);
-  if (nights) parts.push(`para ${nights} noche${nights > 1 ? 's' : ''}`);
-  if (checkIn) parts.push(`a partir del ${checkIn}`);
-  if (maxPrice) parts.push(`por menos de ${maxPrice} €`);
-  if (fac.length) parts.push(`(${fac.map((k) => FACILITIES[k].label.toLowerCase()).join(', ')})`);
-  if (board) parts.push(`en ${BOARDS[board].toLowerCase()}`);
-  if (stops) parts.push(`(${STOPS[stops]})`);
-  if (cheap) parts.push('ordenados por precio');
-  else if (best) parts.push('ordenados por puntuación');
+  // Explicación en el idioma de la página.
+  const x = (k, v) => tr(lang, k, v);
+  const low = (w) => (lang === 'de' ? w : w.toLowerCase());
+  const where = (code) => (kind === 'flight' ? placeName(code, lang, AIRPORTS[code] || code) : code);
+  const parts = [x(kind === 'flight' ? 'vuelos' : 'hoteles')];
+  if (origin) parts.push(x('desde {place}', { place: where(origin) }));
+  if (destination) parts.push(x(kind === 'flight' ? 'a {place}' : 'en {place}', { place: where(destination) }));
+  if (tags.length) parts.push(`(${tags.map((g) => x(g)).join(', ')})`);
+  if (nights) parts.push(x(nights > 1 ? 'para {n} noches' : 'para {n} noche', { n: nights }));
+  if (checkIn) parts.push(x('a partir del {date}', { date: checkIn }));
+  if (maxPrice) parts.push(x('por menos de {price} €', { price: maxPrice }));
+  if (fac.length) parts.push(`(${fac.map((k) => low(x(FACILITIES[k].label))).join(', ')})`);
+  if (board) parts.push(x('en {board}', { board: low(x(BOARDS[board])) }));
+  if (stops) parts.push(`(${x(STOPS[stops])})`);
+  if (cheap) parts.push(x('ordenados por precio'));
+  else if (best) parts.push(x('ordenados por puntuación'));
 
-  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: `Busco ${parts.join(' ')}.` });
+  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: x('Busco {what}.', { what: parts.join(' ') }) });
 }
