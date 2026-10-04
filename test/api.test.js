@@ -5,10 +5,11 @@ import { BookingStore } from '../src/store.js';
 import { localParse } from '../src/ai.js';
 
 delete process.env.ANTHROPIC_API_KEY;
-let server, base;
+let server, base, app;
 
 before(async () => {
-  server = createApp({ store: new BookingStore(null), osm: null, live: null }).listen(0);
+  app = createApp({ store: new BookingStore(null), osm: null, live: null });
+  server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
   base = `http://localhost:${server.address().port}`;
 });
@@ -107,8 +108,15 @@ test('páginas para buscadores: ciudad, ruta, sitemap y robots', async () => {
   assert.match(route, /data-start-view="flights"/);
   const bad = await fetch(base + '/vuelos/madrid-madrid', { redirect: 'manual' });
   assert.equal(bad.status, 301);
-  const map = await fetch(base + '/sitemap.xml').then((r) => r.text());
+  const index = await fetch(base + '/sitemap.xml').then((r) => r.text());
+  assert.match(index, /<sitemapindex/);
+  assert.match(index, /\/sitemap-de\.xml</);
+  const map = await fetch(base + '/sitemap-es.xml').then((r) => r.text());
   assert.match(map, /\/hoteles\/santiago-de-compostela</);
+  assert.match(map, /\/vuelos\/londres-malaga</);
+  const en = await fetch(base + '/sitemap-en.xml').then((r) => r.text());
+  assert.match(en, /\/en\/hotels\/seville</);
+  assert.match(en, /\/en\/flights\/london-malaga</);
   assert.match(await fetch(base + '/robots.txt').then((r) => r.text()), /Sitemap: .*\/sitemap\.xml/);
   const home = await fetch(base + '/').then((r) => r.text());
   assert.match(home, /rel="manifest"/);
@@ -150,4 +158,58 @@ test('la IA entiende las escalas de los vuelos', () => {
   assert.equal(localParse('vuelos baratos de Madrid a Tenerife con varios transbordos').stops, 'many');
   assert.equal(localParse('vuelos de Madrid a Lisboa').stops, null);
   assert.equal(localParse('hotel directo en la playa').stops, null);
+});
+
+test('la web en otros idiomas: páginas, enlaces entre idiomas y filtros', async () => {
+  const de = await fetch(base + '/de/hotels/sevilla').then((r) => r.text());
+  assert.match(de, /<html lang="de">/);
+  assert.match(de, /<link rel="alternate" hreflang="en" href="http:\/\/localhost:\d+\/en\/hotels\/seville"/);
+  assert.match(de, /<link rel="alternate" hreflang="es" href="http:\/\/localhost:\d+\/hoteles\/sevilla"/);
+  assert.match(de, /<input name="destination" value="Sevilla"/);
+  const en = await fetch(base + '/en/').then((r) => r.text());
+  assert.match(en, /<html lang="en">/);
+  assert.match(en, /href="\/en\/hotels\/seville"/);
+  const filter = await fetch(base + '/hoteles/benidorm/con-piscina').then((r) => r.text());
+  assert.match(filter, /<title>Hoteles con piscina en Benidorm/);
+  assert.match(filter, /data-start-filters="[^"]*piscina/);
+  const bad = await fetch(base + '/hoteles/benidorm/no-existe', { redirect: 'manual' });
+  assert.equal(bad.status, 301);
+  const fr = await fetch(base + '/fr/vols/paris-madrid').then((r) => r.text());
+  assert.match(fr, /data-start-view="flights"/);
+  assert.match(fr, /<input name="origin" value="Paris"/);
+});
+
+test('la IA entiende otros idiomas', () => {
+  const en = localParse('cheap beach hotel with pool in Benidorm for a week in July', 'en');
+  assert.equal(en.destination, 'Benidorm');
+  assert.equal(en.nights, 7);
+  assert.equal(en.sort, 'price');
+  assert.ok(en.fac.includes('piscina'));
+  const de = localParse('Direktflüge von London nach Málaga', 'de');
+  assert.equal(de.kind, 'flight');
+  assert.equal(de.origin, 'LHR');
+  assert.equal(de.destination, 'AGP');
+  assert.equal(de.stops, '0');
+  const fr = localParse('hôtel tout compris à Tenerife', 'fr');
+  assert.equal(fr.board, 'AI');
+  assert.equal(fr.destination, 'Tenerife');
+  assert.equal(localParse('hotel in Sevilla', 'en').destination, 'Seville');
+  assert.equal(localParse('Romantic weekend getaway', 'en').destination ?? null, null);
+  assert.equal(localParse('Strand mit Kindern auf den Kanaren, 5 Nächte', 'de').destination, 'Tenerife');
+  assert.equal(localParse('Hotel de montanha por menos de 100 €', 'pt').destination ?? null, null);
+});
+
+test('IndexNow: clave publicada y envío de todas las páginas', async () => {
+  assert.equal(await fetch(base + '/5f3c9e1a7b2d4c8e9a0f6b1d3e7c2a94.txt').then((r) => r.text()), '5f3c9e1a7b2d4c8e9a0f6b1d3e7c2a94');
+  const sent = [];
+  process.env.SITE_URL = 'https://diaslibre.com';
+  try {
+    const r = await app.locals.submitIndexNow(async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200 }; });
+    assert.ok(r.sent > 3000);
+    assert.equal(sent[0].host, 'diaslibre.com');
+    assert.ok(sent[0].urlList.includes('https://diaslibre.com/de/hotels/sevilla'));
+    assert.equal((await app.locals.submitIndexNow(async () => { throw new Error('no debería enviar'); })).sent, 0);
+  } finally {
+    delete process.env.SITE_URL;
+  }
 });

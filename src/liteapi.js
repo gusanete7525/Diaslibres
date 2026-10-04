@@ -21,14 +21,19 @@ const norm = (s) =>
     .trim();
 const addDays = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * DAY).toISOString().slice(0, 10);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const countryName = (() => {
+// Nombre del país en el idioma de la web.
+const regionNames = new Map();
+const countryName = (code, lang = 'es') => {
+  if (!code) return '';
   try {
-    const dn = new Intl.DisplayNames(['es'], { type: 'region' });
-    return (code) => (code ? dn.of(String(code).toUpperCase()) : '');
+    if (!regionNames.has(lang)) regionNames.set(lang, new Intl.DisplayNames([lang], { type: 'region' }));
+    return regionNames.get(lang).of(String(code).toUpperCase());
   } catch {
-    return (code) => code || '';
+    return code;
   }
-})();
+};
+// Listas de hoteles guardadas a la vez (cada una puede tener 2.000 hoteles).
+const MAX_LISTS = 40;
 
 // Primer párrafo del HTML de la descripción, en texto plano y corto.
 function shortDescription(html) {
@@ -174,29 +179,36 @@ export class LiteApi {
 
   // ---------- Hoteles de una ciudad ----------
 
-  async #placeId(city) {
+  async #placeId(city, lang = 'es', priority = true) {
     const key = norm(city);
     const hit = this.places.get(key);
     if (hit && Date.now() - hit.at < HOTELS_TTL) return hit.value;
-    const { data = [] } = await this.#request('GET', `${API}/data/places?textQuery=${encodeURIComponent(city)}&language=es`);
+    const { data = [] } = await this.#request('GET', `${API}/data/places?textQuery=${encodeURIComponent(city)}&language=${lang}`, null, { priority });
     const place = data.find((p) => p.types?.includes('locality')) || data[0] || null;
     this.places.set(key, { at: Date.now(), value: place?.placeId || null });
     return place?.placeId || null;
   }
 
-  async hotels(city) {
-    const key = norm(city);
+  // Todos los hoteles de una ciudad, con descripción y país en `lang`.
+  // keep: false para consultas de fondo (datos para buscadores) que no deben llenar la memoria.
+  async hotels(city, { lang = 'es', keep = true } = {}) {
+    const key = `${lang}|${norm(city)}`;
     const hit = this.hotelLists.get(key);
     if (hit && Date.now() - hit.at < HOTELS_TTL) return hit.value;
-    const placeId = await this.#placeId(city);
+    const placeId = await this.#placeId(city, lang, keep);
     if (!placeId) return [];
-    const { data = [] } = await this.#request('GET', `${API}/data/hotels?placeId=${encodeURIComponent(placeId)}&limit=${MAX_HOTELS}&language=es`);
-    const hotels = data.map((h) => this.#toHotel(h));
-    this.hotelLists.set(key, { at: Date.now(), value: hotels });
+    const { data = [] } = await this.#request('GET', `${API}/data/hotels?placeId=${encodeURIComponent(placeId)}&limit=${MAX_HOTELS}&language=${lang}`, null, { priority: keep });
+    const hotels = data.map((h) => this.#toHotel(h, lang, keep));
+    if (keep) {
+      this.hotelLists.delete(key);
+      this.hotelLists.set(key, { at: Date.now(), value: hotels });
+      // La más antigua fuera (el Map conserva el orden de inserción).
+      while (this.hotelLists.size > MAX_LISTS) this.hotelLists.delete(this.hotelLists.keys().next().value);
+    }
     return hotels;
   }
 
-  #toHotel(h) {
+  #toHotel(h, lang = 'es', keep = true) {
     const stars = Number.isInteger(h.stars) && h.stars >= 1 && h.stars <= 5 ? h.stars : null;
     const ids = new Set(Array.isArray(h.facilityIds) ? h.facilityIds : []);
     const facilities = Object.keys(FACILITIES).filter((k) => FACILITIES[k].ids.some((id) => ids.has(id)));
@@ -210,7 +222,7 @@ export class LiteApi {
       liteId: h.id,
       name: h.name,
       city: h.city || '',
-      country: countryName(h.country),
+      country: countryName(h.country, lang),
       stars,
       address: [h.address, [h.zip, h.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || null,
       website: null,
@@ -223,7 +235,11 @@ export class LiteApi {
       description: shortDescription(h.hotelDescription),
       origin: 'liteapi',
     };
-    this.hotelsById.set(hotel.id, hotel);
+    if (keep) {
+      this.hotelsById.delete(hotel.id);
+      this.hotelsById.set(hotel.id, hotel);
+      if (this.hotelsById.size > 60000) this.hotelsById.delete(this.hotelsById.keys().next().value);
+    }
     return hotel;
   }
 

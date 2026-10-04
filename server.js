@@ -8,7 +8,8 @@ import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { readFileSync } from 'node:fs';
 import { minify } from 'terser';
-import { renderPage, sitemap, cityFromSlug, routeFromSlug } from './src/seo.js';
+import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, cityStats, cityKey, cityByName, cityByIata, placeName, CITIES } from './src/seo.js';
+import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
 import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS } from './src/liteapi.js';
@@ -42,57 +43,114 @@ export function createApp({
     if (req.get('host') === host || /^localhost(:|$)|^127\./.test(req.get('host') || '')) return next();
     res.redirect(301, site.replace(/\/$/, '') + req.originalUrl);
   });
-  const sendPage = (req, res, page) => {
+  const sendPage = (req, res, page, lang = 'es') => {
     res.set('Cache-Control', 'public, max-age=300');
-    res.type('html').send(renderPage(indexHtml, page, { site: siteUrl(req), verification: process.env.GOOGLE_SITE_VERIFICATION?.trim() }));
+    res.type('html').send(renderPage(indexHtml, page, { site: siteUrl(req), verification: process.env.GOOGLE_SITE_VERIFICATION?.trim(), lang }));
   };
-  app.get(['/', '/index.html'], (req, res) => sendPage(req, res, {
-    path: '/',
-    title: 'DíasLibres · Hoteles y vuelos baratos con calendario de días libres',
-    description: 'Reserva hoteles y vuelos de todo el mundo viendo de un vistazo qué días están libres y cuándo es más barato. Precios reales y pago seguro.',
-    // Las vueltas del pago (?pago=, ?vuelo=) no son páginas para Google.
-    noindex: Object.keys(req.query).length > 0,
-  }));
-  app.get('/hoteles/:slug', async (req, res) => {
-    const city = cityFromSlug(req.params.slug);
-    if (!city) return res.redirect(301, '/');
-    let list = [];
-    if (live) {
-      const hotels = await Promise.race([live.hotels(city).catch(() => []), new Promise((r) => setTimeout(() => r([]), 3500))]);
-      list = [...hotels].sort((a, b) => (b.stars || 0) - (a.stars || 0) || (b.rating || 0) - (a.rating || 0)).slice(0, 15)
-        .map((h) => `${h.name}${h.stars ? ' ' + '★'.repeat(h.stars) : ''}${h.address ? ' · ' + h.address : ''}`);
+
+  // Datos de cada ciudad para sus páginas (nº de hoteles, estrellas, servicios, mejor valorados).
+  // Se calculan en segundo plano con la lista completa de hoteles y se guardan (sobreviven a reinicios).
+  const STATS_TTL = 7 * 24 * 60 * 60 * 1000;
+  const seoStats = new Map(); // cityKey -> datos
+  const statsOf = (city) => seoStats.get(cityKey(city)) || null;
+  const statsQueue = [];
+  const statsLoaded = Promise.resolve(store.kvList?.('seo:') || []).then((rows) => {
+    for (const [k, v] of rows) seoStats.set(k.slice(4), v);
+  }).catch((err) => console.error('[seo]', err.message));
+  // Pide los datos de una ciudad (las que se visitan van primero).
+  const wantStats = (city) => {
+    const s = statsOf(city);
+    if ((!s || Date.now() - s.at > STATS_TTL) && !statsQueue.includes(city)) statsQueue.unshift(city);
+    if (statsQueue.length > 50) statsQueue.length = 50;
+  };
+  let statsBusy = false;
+  async function statsTick() {
+    if (!live || statsBusy) return;
+    await statsLoaded;
+    const city = statsQueue.shift() || CITIES.find((c) => { const s = statsOf(c); return !s || Date.now() - s.at > STATS_TTL; });
+    if (!city) return;
+    statsBusy = true;
+    try {
+      const hotels = await live.hotels(city.es, { keep: false });
+      const s = cityStats(hotels);
+      seoStats.set(cityKey(city), s);
+      await store.kvSet?.('seo:' + cityKey(city), s);
+    } catch (err) {
+      console.error('[seo]', city.es, err.message);
+    } finally {
+      statsBusy = false;
     }
-    sendPage(req, res, {
-      path: `/hoteles/${req.params.slug}`,
-      title: `Hoteles en ${city} · Precios por día y disponibilidad | DíasLibres`,
-      description: `Hoteles en ${city} con calendario de días libres y precio de cada noche. Compara, elige las fechas más baratas y reserva con pago seguro.`,
-      h1: `Hoteles en ${city}: mira qué días están libres y cuándo es más barato`,
-      sub: `Todos los hoteles de ${city} con su calendario de disponibilidad y el precio de cada noche de los próximos 30 días.`,
-      crumb: `Hoteles en ${city}`,
-      view: 'hotels',
-      destination: city,
-      list,
+  }
+  app.locals.statsTick = statsTick;
+
+  // ---------- IndexNow: avisa a Bing, Yandex, Seznam, Naver y Yep de todas las páginas ----------
+  // La clave es pública (se publica en /<clave>.txt); se puede cambiar con INDEXNOW_KEY.
+  const INDEXNOW_KEY = process.env.INDEXNOW_KEY?.trim() || '5f3c9e1a7b2d4c8e9a0f6b1d3e7c2a94';
+  app.get(`/${INDEXNOW_KEY}.txt`, (_req, res) => res.type('text/plain').send(INDEXNOW_KEY));
+  // Una vez al día como mucho (o si hay páginas nuevas), solo con dominio propio (SITE_URL).
+  async function submitIndexNow(fetchImpl = globalThis.fetch) {
+    const site = process.env.SITE_URL?.trim().replace(/\/$/, '');
+    if (!site) return { sent: 0 };
+    await statsLoaded;
+    const urls = LANG_CODES.flatMap((l) => [...sitemap(site, l, statsOf).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, '&')));
+    const last = (await store.kvList?.('indexnow:last'))?.[0]?.[1];
+    if (last && Date.now() - last.at < 24 * 60 * 60 * 1000 && last.count === urls.length) return { sent: 0 };
+    const host = new URL(site).host;
+    for (let i = 0; i < urls.length; i += 10000) {
+      const res = await fetchImpl('https://api.indexnow.org/indexnow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({ host, key: INDEXNOW_KEY, keyLocation: `${site}/${INDEXNOW_KEY}.txt`, urlList: urls.slice(i, i + 10000) }),
+      });
+      if (!res.ok && res.status !== 202) throw new Error(`IndexNow respondió ${res.status}`);
+    }
+    await store.kvSet?.('indexnow:last', { at: Date.now(), count: urls.length });
+    console.log(`[indexnow] ${urls.length} páginas enviadas`);
+    return { sent: urls.length };
+  }
+  app.locals.submitIndexNow = submitIndexNow;
+
+  for (const lang of LANG_CODES) {
+    const L = LANGS[lang];
+    const home = lang === 'es' ? ['/', '/index.html'] : [`/${lang}/`];
+    // Las vueltas del pago (?pago=, ?vuelo=) no son páginas para Google.
+    app.get(home, (req, res) => sendPage(req, res, homePage(lang, Object.keys(req.query).length > 0), lang));
+    const hotelsPage = async (req, res) => {
+      const city = cityFromSlug(lang, req.params.slug);
+      const filter = req.params.filter ? filterFromSlug(lang, req.params.filter) : null;
+      if (!city || (req.params.filter && !filter)) return res.redirect(301, L.prefix + '/');
+      await statsLoaded;
+      const stats = statsOf(city);
+      if (live) wantStats(city);
+      const page = cityPage(lang, city, filter, stats);
+      sendPage(req, res, page, lang);
+    };
+    app.get(`${L.prefix}/${L.hotels}/:slug`, hotelsPage);
+    app.get(`${L.prefix}/${L.hotels}/:slug/:filter`, hotelsPage);
+    app.get(`${L.prefix}/${L.flights}/:slug`, (req, res) => {
+      const route = routeFromSlug(lang, req.params.slug);
+      if (!route) return res.redirect(301, L.prefix + '/');
+      sendPage(req, res, routePage(lang, route.o, route.d), lang);
     });
-  });
-  app.get('/vuelos/:slug', (req, res) => {
-    const route = routeFromSlug(req.params.slug);
-    if (!route) return res.redirect(301, '/');
-    sendPage(req, res, {
-      path: `/vuelos/${req.params.slug}`,
-      title: `Vuelos baratos de ${route.origin} a ${route.destination} | DíasLibres`,
-      description: `Vuelos de ${route.origin} a ${route.destination}: precio de cada día de las próximas dos semanas, gráfica de precios y reserva con pago seguro.`,
-      h1: `Vuelos de ${route.origin} a ${route.destination}: el día más barato de un vistazo`,
-      sub: `Compara el precio de los vuelos de ${route.origin} a ${route.destination} día a día y reserva el más barato.`,
-      crumb: `Vuelos ${route.origin} – ${route.destination}`,
-      view: 'flights',
-      origin: route.origin,
-      destination: route.destination,
-    });
-  });
+  }
   app.get('/robots.txt', (req, res) => {
     res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${siteUrl(req)}/sitemap.xml\n`);
   });
-  app.get('/sitemap.xml', (req, res) => res.type('application/xml').send(sitemap(siteUrl(req))));
+  app.get('/sitemap.xml', (req, res) => res.type('application/xml').send(sitemapIndex(siteUrl(req))));
+  app.get('/sitemap-:lang.xml', async (req, res, next) => {
+    if (!isLang(req.params.lang)) return next();
+    await statsLoaded;
+    res.type('application/xml').send(sitemap(siteUrl(req), req.params.lang, statsOf));
+  });
+  // Errores de la API en el idioma de la página (cabecera X-Lang).
+  app.use('/api', (req, res, next) => {
+    const lang = langOf(req);
+    if (lang !== 'es') {
+      const json = res.json.bind(res);
+      res.json = (body) => json(body && typeof body.error === 'string' ? { ...body, error: trText(lang, body.error) } : body);
+    }
+    next();
+  });
   // App Android (Trusted Web Activity): Google Play comprueba que la web y la app son del mismo dueño.
   app.get('/.well-known/assetlinks.json', (_req, res) => {
     const pkg = process.env.ANDROID_PACKAGE?.trim();
@@ -160,7 +218,7 @@ export function createApp({
   async function liveHotels(q, res) {
     const city = String(q.destination || '').trim() || 'Madrid';
     try {
-      let hotels = await live.hotels(city);
+      let hotels = await live.hotels(city, { lang: q.lang });
       // Filtros: estrellas, puntuación y servicios (todos los marcados).
       const fac = list(q.fac).filter((k) => k in FACILITIES);
       if (q.minStars) hotels = hotels.filter((h) => (h.stars || 0) >= Number(q.minStars));
@@ -206,7 +264,7 @@ export function createApp({
 
   app.get('/api/hotels', async (req, res) => {
     const q = req.query;
-    if (live) return liveHotels(q, res);
+    if (live) return liveHotels({ ...q, lang: langOf(req) }, res);
     const extra = await osmHotels(q.destination);
     const data = searchHotels(await store.all(), { ...q, tags: list(q.tags) }, extra.hotels);
     data.osm = { count: data.results.filter((h) => h.origin === 'osm').length, error: extra.error };
@@ -214,7 +272,7 @@ export function createApp({
   });
 
   app.get('/api/flights', async (req, res) => {
-    if (liveFlights) return liveFlightSearch(req.query, res);
+    if (liveFlights) return liveFlightSearch({ ...req.query, lang: langOf(req) }, res);
     if (live) return res.status(404).json({ error: 'Los vuelos todavía no están disponibles.' });
     res.json(searchFlights(await store.all(), req.query));
   });
@@ -227,6 +285,9 @@ export function createApp({
     if (/^[a-z]{3}$/i.test(text)) return { code: text.toUpperCase(), name: AIRPORTS[text.toUpperCase()] || text.toUpperCase() };
     const known = Object.entries(AIRPORTS).find(([, city]) => norm(city) === norm(text));
     if (known) return { code: known[0], name: known[1] };
+    // Destinos conocidos, con su nombre en cualquier idioma («Londres», «London», «Londen»…).
+    const place = cityByName(text);
+    if (place?.iata) return { code: place.iata, name: place.es };
     if (text.length < 2) return null;
     const [first] = await live.airports(text);
     return first ? { code: first.code, name: first.city || first.name } : null;
@@ -255,7 +316,8 @@ export function createApp({
       let trips = await live.flightSearch({ origin: from.code, destination: to.code, date, returnDate, adults });
       if (q.maxPrice) trips = trips.filter((t) => t.total <= Number(q.maxPrice));
       trips = byStops(trips, q.stops);
-      res.json({ ...base, stops: q.stops in STOP_FILTERS ? q.stops : null, origin: from, destination: to, results: trips });
+      const named = (a) => ({ ...a, name: cityByIata(a.code) ? placeName(a.code, q.lang) : a.name });
+      res.json({ ...base, stops: q.stops in STOP_FILTERS ? q.stops : null, origin: named(from), destination: named(to), results: trips });
     } catch (err) {
       console.error('[liteapi vuelos]', err.message);
       res.status(502).json({ error: 'No se pudieron consultar los vuelos ahora mismo. Inténtalo de nuevo en unos segundos.' });
@@ -311,10 +373,12 @@ export function createApp({
     return deals.running;
   }
   app.locals.refreshDeals = refreshDeals;
-  app.get('/api/flights/deals', (_req, res) => {
+  app.get('/api/flights/deals', (req, res) => {
     if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
     if (Date.now() - deals.at > DEALS_TTL) refreshDeals();
-    res.json({ date: deals.date, deals: [...deals.list].sort((a, b) => a.total - b.total), pending: !deals.at && !!deals.running });
+    const lang = langOf(req);
+    const named = (p) => ({ ...p, name: placeName(p.code, lang, p.name) });
+    res.json({ date: deals.date, deals: [...deals.list].sort((a, b) => a.total - b.total).map((d) => ({ ...d, origin: named(d.origin), destination: named(d.destination) })), pending: !deals.at && !!deals.running });
   });
 
   app.post('/api/flights/quote', async (req, res) => {
@@ -377,6 +441,7 @@ export function createApp({
       const checkoutId = randomBytes(16).toString('hex');
       const booking = await store.add({
         code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        lang: langOf(req),
         type: 'flight',
         itemId: 'lite-flight',
         itemName: `${trip.outbound.from} → ${trip.outbound.to}${trip.inbound ? ' (ida y vuelta)' : ''} · ${trip.outbound.airlines.join(', ')}`,
@@ -407,7 +472,7 @@ export function createApp({
         secretKey: pre.secretKey,
         publishableKey: pre.publishableKey,
         publicKey: live.sandbox ? 'sandbox' : 'live',
-        returnUrl: `${base}/?vuelo=${checkoutId}`,
+        returnUrl: `${base}${LANGS[langOf(req)].prefix}/?vuelo=${checkoutId}`,
       });
     } catch (err) {
       console.error('[liteapi vuelos]', err.message);
@@ -446,7 +511,7 @@ export function createApp({
     }
   });
 
-  app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
+  app.get('/api/airports', (req, res) => res.json(Object.fromEntries(Object.entries(AIRPORTS).map(([code, name]) => [code, placeName(code, langOf(req), name)]))));
   // flights: false con datos reales de hoteles y los vuelos apagados (no se enseñan vuelos simulados).
   app.get('/api/config', (_req, res) => res.json({
     liveFlights, flights: liveFlights || !live, sandbox: live?.sandbox ?? null,
@@ -457,7 +522,7 @@ export function createApp({
 
   app.post('/api/ai-search', async (req, res) => {
     try {
-      res.json(await aiSearch(req.body?.query));
+      res.json(await aiSearch(req.body?.query, langOf(req)));
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -500,6 +565,7 @@ export function createApp({
       const checkoutId = randomBytes(16).toString('hex');
       const booking = await store.add({
         code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        lang: langOf(req),
         type: 'hotel',
         itemId: q.item.id,
         itemName: `${q.item.name} (${q.item.city})`,
@@ -529,7 +595,7 @@ export function createApp({
         total: booking.total,
         secretKey: pre.secretKey,
         publicKey: live.sandbox ? 'sandbox' : 'live',
-        returnUrl: `${base}/?pago=${checkoutId}`,
+        returnUrl: `${base}${LANGS[langOf(req)].prefix}/?pago=${checkoutId}`,
       });
     } catch (err) {
       console.error('[liteapi]', err.message);
@@ -584,6 +650,7 @@ export function createApp({
         const b = await live.book({ offerId: q.offerId, name, email, units: q.units, maxTotal: seen });
         const booking = await store.add({
           code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        lang: langOf(req),
           type: 'hotel',
           itemId: q.item.id,
           itemName: `${q.item.name} (${q.item.city})`,
@@ -615,6 +682,7 @@ export function createApp({
       const q = quote(await store.all(), body, osm?.known());
       const booking = await store.add({
         code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        lang: langOf(req),
         type: body.type,
         itemId: q.item.id,
         itemName: body.type === 'hotel' ? `${q.item.name} (${q.item.city})` : `${q.item.airline} ${q.item.origin}→${q.item.destination} ${q.item.departure}`,
@@ -694,5 +762,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (process.env.LITEAPI_KEY?.trim()) console.log(`Hoteles con datos reales de LiteAPI${process.env.LITEAPI_KEY.trim().replace(/^["']/, '').startsWith('sand_') ? ' (entorno de pruebas)' : ''}.`);
     else console.log('Sin LITEAPI_KEY: hoteles con precios y disponibilidad simulados.');
     app.locals.refreshDeals(); // las ofertas de vuelos ya preparadas para la primera visita
+    // Datos de las ciudades para las páginas de buscadores: una ciudad cada 20 s, sin prisa.
+    setInterval(() => app.locals.statsTick(), 20000).unref();
+    // Avisar a los buscadores de IndexNow pasado un rato (con los datos de las ciudades ya cargados).
+    setTimeout(() => app.locals.submitIndexNow().catch((err) => console.error('[indexnow]', err.message)), 5 * 60 * 1000).unref();
   });
 }
