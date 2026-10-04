@@ -11,12 +11,15 @@ const MODEL = process.env.DIASLIBRES_MODEL || 'claude-opus-5-5';
 const TAGS = [...new Set(HOTELS.flatMap((h) => h.tags))];
 const CITIES = [...new Set(HOTELS.map((h) => h.city))];
 
+// Escalas de un vuelo (filtro «Escalas»).
+export const STOPS = { 0: 'solo vuelos directos', 1: 'como máximo una escala', many: 'con escalas o transbordos' };
+
 const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
 
 const FILTER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'tags', 'fac', 'board', 'sort', 'explanation'],
+  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'tags', 'fac', 'board', 'stops', 'sort', 'explanation'],
   properties: {
     kind: { type: 'string', enum: ['hotel', 'flight'] },
     destination: nullable({ type: 'string' }),
@@ -28,6 +31,7 @@ const FILTER_SCHEMA = {
     tags: { type: 'array', items: { type: 'string', enum: TAGS } },
     fac: { type: 'array', items: { type: 'string', enum: Object.keys(FACILITIES) } },
     board: nullable({ type: 'string', enum: Object.keys(BOARDS) }),
+    stops: nullable({ type: 'string', enum: Object.keys(STOPS) }),
     sort: { type: 'string', enum: ['price', 'stars', 'rating'] },
     explanation: { type: 'string' },
   },
@@ -44,6 +48,7 @@ Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
 - tags: solo etiquetas de la lista que encajen con lo pedido.
 - fac: servicios del hotel que pida expresamente (${Object.entries(FACILITIES).map(([k, f]) => `${k} = ${f.label}`).join(', ')}).
 - board: régimen de comidas si lo pide (${Object.entries(BOARDS).map(([k, v]) => `${k} = ${v}`).join(', ')}); si no, null.
+- stops: solo para vuelos: "0" si pide vuelos directos o sin escalas, "1" si acepta como máximo una escala, "many" si pide vuelos con escalas o transbordos (uno o varios); si no lo dice, null.
 - sort: "price" si busca barato, "rating" si pide los mejor valorados; si no, "stars".
 - explanation: una frase breve en español explicando qué vas a buscar.`;
 
@@ -105,6 +110,7 @@ export function sanitize(f) {
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => TAGS.includes(t)) : [],
     fac: Array.isArray(f.fac) ? [...new Set(f.fac.filter((k) => k in FACILITIES))] : [],
     board: f.board in BOARDS ? f.board : null,
+    stops: f.kind === 'flight' && f.stops in STOPS ? f.stops : null,
     sort: ['price', 'rating'].includes(f.sort) ? f.sort : 'stars',
     explanation: String(f.explanation || '').slice(0, 300),
   };
@@ -223,6 +229,10 @@ export function localParse(text) {
     : /media pension/.test(t) ? 'HB'
     : /desayuno/.test(t) ? 'BI' : null;
   const best = /mejor valorad|mejor puntua|mejores opiniones/.test(t);
+  const stops = kind !== 'flight' ? null
+    : /\b(directo|directos|sin escala|sin transbordo)/.test(t) ? '0'
+    : /\b(una|1|un|maximo una|max\.? 1) (escala|transbordo|conexion)\b/.test(t) ? '1'
+    : /escala|transbordo|conexion/.test(t) ? 'many' : null;
   for (const k of fac) if (tags.includes(k)) tags.splice(tags.indexOf(k), 1);
 
   const parts = [];
@@ -235,8 +245,9 @@ export function localParse(text) {
   if (maxPrice) parts.push(`por menos de ${maxPrice} €`);
   if (fac.length) parts.push(`(${fac.map((k) => FACILITIES[k].label.toLowerCase()).join(', ')})`);
   if (board) parts.push(`en ${BOARDS[board].toLowerCase()}`);
+  if (stops) parts.push(`(${STOPS[stops]})`);
   if (cheap) parts.push('ordenados por precio');
   else if (best) parts.push('ordenados por puntuación');
 
-  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: `Busco ${parts.join(' ')}.` });
+  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: `Busco ${parts.join(' ')}.` });
 }

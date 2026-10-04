@@ -142,3 +142,12 @@ test('app.js se sirve minificado', async () => {
   assert.ok(js.length > 1000);
   assert.doesNotMatch(js, /\/\/ ---------- /);
 });
+
+test('la IA entiende las escalas de los vuelos', () => {
+  assert.equal(localParse('vuelos directos de Madrid a Lisboa').stops, '0');
+  assert.equal(localParse('vuelo de Madrid a Roma sin escalas').stops, '0');
+  assert.equal(localParse('vuelos de Madrid a Londres con una escala').stops, '1');
+  assert.equal(localParse('vuelos baratos de Madrid a Tenerife con varios transbordos').stops, 'many');
+  assert.equal(localParse('vuelos de Madrid a Lisboa').stops, null);
+  assert.equal(localParse('hotel directo en la playa').stops, null);
+});

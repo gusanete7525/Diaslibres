@@ -34,7 +34,7 @@
     <div class="examples" id="examples">
       <button type="button">Escapada romántica de fin de semana</button>
       <button type="button">Hotel de montaña menos de 100 €</button>
-      <button type="button">Vuelos de Madrid a Lisboa</button>
+      <button type="button">Vuelos directos de Madrid a Lisboa</button>
       <button type="button">Playa con niños en Canarias 5 noches</button>
     </div>
     <p id="aiExplain" class="ai-explain" hidden></p>
@@ -53,7 +53,7 @@
       <label class="flight-only live-only f-half">Vuelta <span class="meta">(opcional)</span>
         <input name="returnDate" type="date" />
       </label>
-      <label class="flight-only live-only f-half">Pasajeros
+      <label class="flight-only live-only f-half f-pax">Pasajeros
         <select name="passengers"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
       </label>
       <label class="hotel-only f-third">Noches
@@ -66,7 +66,10 @@
         <select name="kids"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
       </label>
       <span id="kidAges" class="hotel-only kid-ages"></span>
-      <label class="f-half">Precio máx.
+      <label class="flight-only live-only f-half f-stops">Escalas
+        <select name="stops"><option value="">Cualquiera</option><option value="0">Solo directos</option><option value="1">Hasta 1 escala</option><option value="many">Con escalas</option></select>
+      </label>
+      <label class="f-half f-price">Precio máx.
         <input name="maxPrice" type="number" min="0" step="10" placeholder="€" />
       </label>
       <label class="hotel-only f-half">Ordenar

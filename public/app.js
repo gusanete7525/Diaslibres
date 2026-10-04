@@ -114,7 +114,7 @@ function filterParams() {
   }
   if (state.view === 'flights') { for (const k of ['nights', 'sort', 'tags', 'minStars', 'minRating', 'board', 'fac', 'adults']) p.delete(k); }
   else p.delete('origin');
-  for (const k of ['date', 'returnDate', 'passengers']) p.delete(k);
+  for (const k of ['date', 'returnDate', 'passengers', 'stops']) p.delete(k);
   return p;
 }
 
@@ -312,6 +312,7 @@ async function aiSearchSubmit() {
     filters.minStars.value = f.minStars || '';
     filters.checkIn.value = f.checkIn || '';
     filters.board.value = f.board || '';
+    filters.stops.value = f.stops || '';
     const fac = new Set(f.fac || []);
     filters.querySelectorAll('[name="fac"]').forEach((c) => { c.checked = fac.has(c.value); });
     if (fac.size || f.board) { $('#moreFilters').hidden = false; $('#moreFiltersBtn').setAttribute('aria-expanded', 'true'); }
@@ -843,7 +844,7 @@ async function searchLiveFlights(token) {
   if (origin && destination) results.innerHTML = `<p class="count">Buscando vuelos de ${esc(origin)} a ${esc(destination)}…</p>`;
   try {
     const p = new URLSearchParams({ origin, destination, adults: filters.passengers.value });
-    for (const k of ['date', 'returnDate', 'maxPrice']) if (filters[k].value) p.set(k, filters[k].value);
+    for (const k of ['date', 'returnDate', 'maxPrice', 'stops']) if (filters[k].value) p.set(k, filters[k].value);
     const data = await api(`/api/flights?${p}`);
     if (token !== searchToken) return;
     state.data = data;
@@ -862,8 +863,9 @@ function renderFlightResults(data, token) {
   const route = `${esc(data.origin.name)} (${esc(data.origin.code)}) → ${esc(data.destination.name)} (${esc(data.destination.code)})`;
   const when = `${fmtDay.format(toDate(data.date))}${data.returnDate ? ' → ' + fmtDay.format(toDate(data.returnDate)) : ' · solo ida'}`;
   const note = data.live.sandbox ? ' · entorno de pruebas (precios no reales)' : '';
+  const stopsNote = { 0: ' · solo directos', 1: ' · hasta 1 escala', many: ' · con escalas' }[data.stops] || '';
   if (!data.results.length) {
-    results.innerHTML = `<p class="count">${route} · ${when}</p><p class="empty">No hay vuelos para esas fechas. Prueba otro día u otro aeropuerto.</p>`;
+    results.innerHTML = `<p class="count">${route} · ${when}${stopsNote}</p><p class="empty">${data.stops ? 'No hay vuelos con esas escalas para esas fechas. Prueba otro día o quita el filtro de escalas.' : 'No hay vuelos para esas fechas. Prueba otro día u otro aeropuerto.'}</p>`;
     return;
   }
   // Calendario de cada vuelo: unos días antes y después de la fecha elegida.
@@ -885,7 +887,7 @@ function renderFlightResults(data, token) {
     state.items.set(id, item);
     state.ui.set(id, { month: monthIndex(data.start, data.date), start: data.date });
   }
-  results.innerHTML = `<p class="count">${state.items.size} vuelo${state.items.size > 1 ? 's' : ''} · ${route} · ${when} · ${data.adults} pasajero${data.adults > 1 ? 's' : ''}${note}</p><div id="routeChart"></div><p class="count" id="livePending"></p>`;
+  results.innerHTML = `<p class="count">${state.items.size} vuelo${state.items.size > 1 ? 's' : ''} · ${route} · ${when} · ${data.adults} pasajero${data.adults > 1 ? 's' : ''}${stopsNote}${note}</p><div id="routeChart"></div><p class="count" id="livePending"></p>`;
   renderRouteChart();
   for (const item of state.items.values()) results.append(liveFlightCard(item));
   loadFlightDays(token);
@@ -949,7 +951,7 @@ async function loadFlightDays(token) {
     const chunk = dates.slice(k, k + 3);
     let res;
     try {
-      res = await api(`/api/flights/days?origin=${data.origin.code}&destination=${data.destination.code}&dates=${chunk.join(',')}&stay=${stay}&adults=${data.adults}`);
+      res = await api(`/api/flights/days?origin=${data.origin.code}&destination=${data.destination.code}&dates=${chunk.join(',')}&stay=${stay}&adults=${data.adults}${data.stops ? '&stops=' + data.stops : ''}`);
     } catch {
       res = { days: chunk.map((date) => ({ date, error: true })) };
     }
