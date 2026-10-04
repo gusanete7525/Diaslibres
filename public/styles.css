@@ -83,12 +83,27 @@ button, input, select { font: inherit; color: inherit; }
 }
 .logo { font-weight: 800; font-size: 22px; text-decoration: none; color: var(--text); letter-spacing: -0.02em; }
 .logo span { color: var(--brand); }
-.tabs { display: flex; gap: 4px; margin-left: auto; overflow-x: auto; }
+.tabs { display: flex; gap: 2px; margin-left: auto; padding: 3px; background: var(--surface-2); border-radius: 999px; }
 .tabs button {
-  border: 0; background: none; padding: 8px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; color: var(--text-2);
+  display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 6px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  color: var(--text-2); font-size: 14px; font-weight: 500; transition: background .15s, color .15s;
 }
-.tabs button[aria-selected="true"] { background: var(--surface-2); color: var(--text); font-weight: 600; }
-.theme-toggle { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; width: 36px; height: 36px; cursor: pointer; }
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--brand); font-weight: 600; box-shadow: 0 1px 3px rgb(0 0 0 / 12%); }
+.tabs svg, .theme-toggle svg, .ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.ico { vertical-align: -4px; }
+.theme-toggle {
+  display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); border-radius: 999px;
+  width: 36px; height: 36px; padding: 0; cursor: pointer; transition: color .15s, border-color .15s;
+}
+.theme-toggle:hover { color: var(--brand); border-color: var(--brand); }
+.theme-toggle .sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .sun { display: inline; }
+:root[data-theme="dark"] .theme-toggle .moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .sun { display: inline; }
+  :root:not([data-theme="light"]) .theme-toggle .moon { display: none; }
+}
 
 .hero { max-width: 1180px; margin: 0 auto; padding: 32px 16px 8px; }
 .hero h1 { font-size: clamp(24px, 4vw, 38px); line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.02em; }
@@ -124,9 +139,13 @@ button, input, select { font: inherit; color: inherit; }
 .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 16px 0 8px; }
 .filters label { display: grid; gap: 2px; font-size: 12px; color: var(--text-2); font-weight: 600; }
 .filters input, .filters select {
-  border: 1px solid var(--border); background: var(--surface); border-radius: 10px; padding: 7px 10px; min-width: 0; width: 150px;
+  font-weight: 400; color: var(--text); border: 1px solid var(--border); background: var(--surface); border-radius: 10px; height: 38px; padding: 0 10px; min-width: 0; width: 130px;
 }
 .filters input[type="number"] { width: 100px; }
+.filters .f-dest input { width: 200px; }
+.filters .f-third input, .filters .f-third select, #kidAges select { width: 80px; }
+.filters .f-btn { height: 38px; padding: 0 14px; }
+.filters input[type="checkbox"] { height: auto; }
 body[data-view="hotels"] .flight-only, body[data-view="flights"] .hotel-only { display: none; }
 body:not([data-live-flights]) .live-only { display: none; }
 
@@ -220,10 +239,37 @@ body:not([data-live-flights]) .live-only { display: none; }
 
 @media (max-width: 760px) {
   .card { grid-template-columns: 1fr; }
-  .topbar { flex-wrap: wrap; gap: 8px; }
+  .topbar { flex-wrap: wrap; gap: 8px 10px; padding-top: 8px; padding-bottom: 8px; }
+  .logo { font-size: 20px; }
   .tabs { order: 3; width: 100%; margin-left: 0; }
-  .theme-toggle { margin-left: auto; }
-  .filters input, .filters select { width: 130px; }
+  .tabs button { flex: 1; justify-content: center; padding: 6px 8px; font-size: 13px; }
+  .theme-toggle { margin-left: auto; width: 32px; height: 32px; }
+  .theme-toggle svg { width: 16px; height: 16px; }
+  /* Búsqueda compacta y ordenada en el móvil */
+  .hero { padding-top: 16px; }
+  .hero h1 { font-size: 22px; margin-bottom: 4px; }
+  .hero .sub { font-size: 13px; margin-bottom: 12px; }
+  .ai-box { padding: 4px 4px 4px 12px; }
+  .ai-box input { font-size: 15px; padding: 6px 2px; }
+  .ai-box .btn { padding: 7px 14px; }
+  .examples { flex-wrap: nowrap; overflow-x: auto; margin: 10px -16px; padding: 0 16px 2px; scrollbar-width: none; }
+  .examples::-webkit-scrollbar { display: none; }
+  .examples button { flex: none; white-space: nowrap; }
+  .filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-top: 4px; align-items: end; }
+  .filters .f-dest input, .filters .f-third input, .filters .f-third select, #kidAges select { width: 100%; }
+  .filters > label .meta { display: none; }
+  .filters > label, #kidAges label { grid-column: span 3; }
+  .filters .f-dest { grid-column: span 6; }
+  body[data-view="flights"] .filters .f-origin, body[data-view="flights"] .filters .f-dest { grid-column: span 3; }
+  .filters .f-third, #kidAges label { grid-column: span 2; }
+  .filters input, .filters select, .filters input[type="number"] { width: 100%; height: 40px; padding: 0 10px; }
+  .filters .f-btn { grid-column: span 2; height: 40px; padding: 0 6px; white-space: nowrap; font-size: 14px; }
+  body[data-view="flights"] .filters .f-btn { grid-column: span 3; }
+  .filters .more-filters { grid-column: 1 / -1; order: 1; }
+  .more-filters #facilityList { grid-template-columns: 1fr 1fr; }
+  .filters input[type="checkbox"] { width: auto; height: auto; }
+  .mf-row label { flex: 1 1 40%; }
+  .mf-row select { width: 100%; }
 }
 .tag.osm { text-decoration: none; color: var(--brand); }
 .footer a { color: inherit; }
@@ -293,4 +339,4 @@ body:not([data-live-flights]) .live-only { display: none; }
 #facilityList { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 12px; }
 #facilityList .check { display: flex; align-items: center; gap: 6px; font-weight: 500; }
 .tag.fac { background: var(--surface-2); }
-.filters input[type="checkbox"] { width: auto; }
+.filters input[type="checkbox"] { width: auto; height: auto; }
