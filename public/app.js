@@ -159,7 +159,7 @@ async function search() {
     const checkIn = filters.checkIn.value;
     for (const item of data.results) state.ui.set(item.id, initialUi(item, data, checkIn));
     renderResults();
-    if (data.live && data.results.length) loadLivePrices(token);
+    if (data.live && data.results.length) loadLivePrices(token).then(() => autoMore(token, state.data.results));
   } catch (err) {
     results.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
   } finally {
@@ -195,7 +195,12 @@ async function loadLivePrices(token, list = state.data.results) {
       const occ = `&adults=${g.adults || 2}${g.children?.length ? '&children=' + g.children.join(',') : ''}`;
       res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}${occ}${state.data.board ? '&board=' + state.data.board : ''}`);
     } catch (err) {
-      if (token === searchToken) toast(err.message);
+      if (token === searchToken) {
+        toast(err.message);
+        state.data.pricesFailed = true;
+        for (const item of list) rerender(item.id);
+        updateHiddenNote();
+      }
       return;
     }
     if (token !== searchToken) return;
@@ -217,10 +222,6 @@ async function loadLivePrices(token, list = state.data.results) {
     const note = $('#livePending');
     if (note) note.textContent = loaded < days ? t('Cargando precios reales… {loaded}/{days} días', { loaded, days }) : '';
   }
-  // Si con las fechas o el precio pedidos no queda ninguno, se buscan solos unos cuantos más.
-  if (token === searchToken && state.view === 'hotels' && state.data.hasMore && !state.data.results.some(passesStay) && (state.autoMore = (state.autoMore || 0) + 1) <= 3) {
-    $('#results .btn.more')?.click();
-  }
   // «Más baratos»: con todos los precios ya cargados se reordenan las tarjetas.
   if (token === searchToken && filters.sort.value === 'price' && state.view === 'hotels') {
     const price = (h) => h.summary?.minPrice ?? Infinity;
@@ -231,10 +232,25 @@ async function loadLivePrices(token, list = state.data.results) {
   }
 }
 
+// Si con las fechas o el precio pedidos no queda ninguno, se buscan solos unos cuantos más.
+function autoMore(token, list) {
+  if (token !== searchToken || state.view !== 'hotels' || !state.data.hasMore || list.some(passesStay)) return;
+  if ((state.autoMore = (state.autoMore || 0) + 1) > 3) return;
+  const btn = $('#results .btn.more');
+  if (btn) { btn.dataset.auto = '1'; btn.click(); }
+}
+
+const filtering = () => state.view === 'hotels' && !!(filters.checkIn.value || Number(filters.maxPrice.value));
+const settled = (list) => new Promise((resolve) => {
+  const check = () => (list.some((x) => stayState(x) === 'wait') && !state.data.pricesFailed ? setTimeout(check, 300) : resolve());
+  check();
+});
+
 // Con fechas o precio máximo, se ocultan los alojamientos que no están libres esas noches
-// o que cuestan más (precio medio por noche). Mientras llegan los precios, se enseñan.
-function passesStay(item) {
-  if (state.view !== 'hotels' || !state.data?.live) return true;
+// o que cuestan más (precio medio por noche). Mientras llegan sus precios no se enseñan
+// (si no, aparecerían y desaparecerían): 'ok' se ve, 'no' está oculto, 'wait' aún se comprueba.
+function stayState(item) {
+  if (state.view !== 'hotels' || !state.data?.live || state.data.pricesFailed) return 'ok';
   const max = Number(filters.maxPrice.value) || 0;
   const checkIn = filters.checkIn.value;
   const n = state.data.nights;
@@ -242,24 +258,34 @@ function passesStay(item) {
   if (checkIn) {
     const i = diffDays(state.data.start, checkIn);
     const slice = i >= 0 ? cal.slice(i, i + n) : [];
-    if (slice.length < n || slice.some((d) => d.pending)) return true;
-    if (!slice.every((d) => d.available)) return false;
-    return !max || slice.reduce((sum, d) => sum + d.price, 0) / n <= max;
+    if (slice.length < n) return 'ok';
+    if (slice.some((d) => !d.pending && !d.available)) return 'no';
+    if (slice.some((d) => d.pending)) return 'wait';
+    return !max || slice.reduce((sum, d) => sum + d.price, 0) / n <= max ? 'ok' : 'no';
   }
-  if (!max || cal.some((d) => d.pending)) return true;
-  return item.summary.minPrice != null && item.summary.minPrice <= max;
+  if (!max) return 'ok';
+  if (cal.some((d) => d.available && d.price <= max)) return 'ok';
+  return cal.some((d) => d.pending) ? 'wait' : 'no';
+}
+function passesStay(item) {
+  return stayState(item) === 'ok';
 }
 function updateHiddenNote() {
   const note = $('#hiddenNote');
   if (!note || state.view !== 'hotels') return;
-  const hidden = state.data.results.filter((h) => !passesStay(h)).length;
+  const states = state.data.results.map(stayState);
+  const hidden = states.filter((x) => x === 'no').length;
+  const waiting = states.filter((x) => x === 'wait').length;
   const max = Number(filters.maxPrice.value) || 0;
   const why = filters.checkIn.value
     ? (max ? t('sin plazas libres esas noches o más de {price} por noche', { price: eur(max) }) : t('sin plazas libres esas noches'))
     : t('más de {price} por noche', { price: eur(max) });
-  note.hidden = !hidden;
-  note.textContent = hidden ? tn(hidden, '{n} oculto ({why}).', '{n} ocultos ({why}).', { why })
-    + (hidden === state.data.results.length && state.data.hasMore ? ' ' + t('Pulsa «Ver más hoteles» para buscar entre los demás.') : '') : '';
+  const parts = [];
+  if (hidden) parts.push(tn(hidden, '{n} oculto ({why}).', '{n} ocultos ({why}).', { why }));
+  if (waiting) parts.push(t('Comprobando disponibilidad de {n} más…', { n: waiting }));
+  if (hidden && !waiting && !states.includes('ok') && state.data.hasMore) parts.push(t('Pulsa «Ver más hoteles» para buscar entre los demás.'));
+  note.hidden = !parts.length;
+  note.textContent = parts.join(' ');
 }
 
 function refreshSummary(item) {
@@ -432,6 +458,7 @@ function moreHotelsButton() {
   btn.textContent = t('Ver más hoteles (quedan {n})', { n: (state.data.total - state.data.results.length).toLocaleString(LOCALE) });
   btn.addEventListener('click', async () => {
     const token = searchToken;
+    if (!btn.dataset.auto) state.autoMore = 0;
     btn.disabled = true;
     btn.textContent = t('Cargando hoteles…');
     try {
@@ -450,9 +477,16 @@ function moreHotelsButton() {
       }
       const shown = $('#shownCount');
       if (shown) shown.textContent = state.data.results.length;
+      const prices = fresh.length && state.data.live ? loadLivePrices(token, fresh) : Promise.resolve();
+      // Con fechas o precio máximo, el botón espera a saber cuáles están libres antes de volver.
+      if (filtering()) {
+        btn.textContent = t('Comprobando disponibilidad…');
+        await Promise.race([prices, settled(fresh)]);
+        if (token !== searchToken) return;
+      }
       if (state.data.hasMore) btn.replaceWith(moreHotelsButton());
       else btn.remove();
-      if (fresh.length) loadLivePrices(token, fresh);
+      if (filtering()) prices.then(() => autoMore(token, fresh));
     } catch (err) {
       btn.disabled = false;
       btn.textContent = t('Ver más hoteles');
@@ -1525,6 +1559,8 @@ const configReady = api('/api/config').then((config) => {
   }
   filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
 }).catch(() => { /* sin vuelos reales */ });
+filters.checkIn.min = new Date().toISOString().slice(0, 10);
+filters.checkIn.max = addDays(filters.checkIn.min, 330);
 (async () => {
   try {
     const airports = await api('/api/airports');

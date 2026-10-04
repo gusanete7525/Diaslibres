@@ -485,5 +485,7 @@ export default {
  "Ver fechas y precios": "Data en prijzen bekijken",
  "Esa habitación ya no está disponible. Elige otra.": "Deze kamer is niet meer beschikbaar. Kies een andere.",
  "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "De hotelgegevens konden niet worden geladen. Probeer het opnieuw.",
- "Solo alojamiento": "Alleen logies"
+ "Solo alojamiento": "Alleen logies",
+ "Comprobando disponibilidad…": "Beschikbaarheid controleren…",
+ "Comprobando disponibilidad de {n} más…": "Beschikbaarheid van nog {n} controleren…"
 };
