@@ -562,6 +562,8 @@ async function refreshQuote() {
     extra.textContent = q.roomName
       ? `${q.roomName}${q.board ? ' · ' + q.board : ''} · ${q.refundable ? `cancelación gratuita${q.freeCancellationUntil ? ' hasta el ' + fmtDay.format(new Date(q.freeCancellationUntil.replace(' ', 'T') + 'Z')) : ''}` : 'no reembolsable'}`
       : '';
+    // Tasas que no van en el total y se pagan en el hotel (p. ej. tasa turística).
+    if (q.payAtHotel?.length) extra.textContent += ` · además, a pagar en el hotel: ${payAtHotelText(q.payAtHotel)}`;
     extra.hidden = !q.roomName;
     err.hidden = true;
     btn.disabled = !!state.bookingBlocked;
@@ -705,6 +707,14 @@ onSend(bookForm, async () => {
   }
 });
 
+const payAtHotelText = (list) =>
+  list.map((t) => `${t.description} ${Number(t.amount).toLocaleString('es-ES', { style: 'currency', currency: t.currency || 'EUR' })}`).join(', ');
+
+// Cancelar ya no devuelve el dinero: tarifa no reembolsable o pasado el plazo gratuito.
+const noRefund = (b) =>
+  b.provider === 'liteapi' &&
+  (!b.refundable || (b.freeCancellationUntil && Date.now() > Date.parse(b.freeCancellationUntil.replace(' ', 'T') + 'Z')));
+
 // ---------- Mis reservas ----------
 async function loadMine(email) {
   const list = $('#mineList');
@@ -718,9 +728,10 @@ async function loadMine(email) {
           <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${b.units} hab.` : `${fmtDay.format(toDate(b.date))} · ${b.units} pasajero${b.units > 1 ? 's' : ''}`} · ${eur(b.total)}</div>
           ${b.guests ? `<div class="meta">${guestsText(b.guests)} por habitación</div>` : ''}
           ${b.provider === 'liteapi' ? `<div class="meta">LiteAPI${b.sandbox ? ' (prueba)' : ''} · ref. ${esc(b.providerBookingId)}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
+          ${b.payAtHotel?.length ? `<div class="meta">A pagar en el hotel: ${esc(payAtHotelText(b.payAtHotel))}</div>` : ''}
           <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : '✖'} ${esc(b.status)}</span></div>
         </div>
-        ${b.status === 'confirmada' ? `<button class="btn" data-cancel="${esc(b.code)}">Cancelar</button>` : ''}
+        ${b.status === 'confirmada' ? `<button class="btn" data-cancel="${esc(b.code)}"${noRefund(b) ? ' data-norefund="1"' : ''}>Cancelar</button>` : ''}
       </div>`).join('');
   } catch (err) {
     list.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
@@ -738,8 +749,8 @@ $('#mineList').addEventListener('click', async (e) => {
   // Confirmación en dos pasos dentro de la página (sin diálogos del navegador).
   if (!btn.dataset.armed) {
     btn.dataset.armed = '1';
-    btn.textContent = '¿Seguro? Pulsa otra vez';
-    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Cancelar'; } }, 4000);
+    btn.textContent = btn.dataset.norefund ? 'Sin reembolso. ¿Cancelar igualmente?' : '¿Seguro? Pulsa otra vez';
+    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Cancelar'; } }, btn.dataset.norefund ? 8000 : 4000);
     return;
   }
   const email = $('#mineForm').email.value.trim();

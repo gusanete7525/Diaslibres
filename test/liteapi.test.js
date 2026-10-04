@@ -29,7 +29,7 @@ function fakeLiteApi(log) {
       assert.equal(body.occupancies.length, 1);
       return Response.json({ data: [{ hotelId: 'lpA', roomTypes: [
         { offerId: 'caro', offerRetailRate: { amount: 500 }, rates: [{ name: 'Suite', boardName: 'Room Only', cancellationPolicies: { refundableTag: 'NRFN' } }] },
-        { offerId: 'barato', offerRetailRate: { amount: 241.5 }, rates: [{ name: 'Doble', boardName: 'Desayuno', cancellationPolicies: { refundableTag: 'RFN', cancelPolicyInfos: [{ cancelTime: '2026-12-01 12:00:00' }] } }] },
+        { offerId: 'barato', offerRetailRate: { amount: 241.5 }, rates: [{ name: 'Doble', boardName: 'Desayuno', retailRate: { taxesAndFees: [{ included: true, description: 'IVA', amount: 20 }, { included: false, description: 'Tasa turística', amount: 4.4, currency: 'EUR' }] }, cancellationPolicies: { refundableTag: 'RFN', cancelPolicyInfos: [{ cancelTime: '2026-12-01 12:00:00' }] } }] },
       ] }] });
     }
     if (u.endsWith('/rates/prebook')) {
@@ -39,6 +39,7 @@ function fakeLiteApi(log) {
     }
     if (u.endsWith('/rates/book') && body.prebookId === 'PB2') {
       assert.deepEqual(body.payment, { method: 'TRANSACTION_ID', transactionId: 'tr_1' });
+      if (fakeLiteApi.paid === 'fail') return Response.json({ error: { code: 5000, description: 'supplier error' } }, { status: 500 });
       if (!fakeLiteApi.paid) return Response.json({ error: { code: 2014, description: 'payment not completed' } }, { status: 400 });
       return Response.json({ data: { bookingId: 'BK2', status: 'CONFIRMED', price: 241.5 } });
     }
@@ -88,6 +89,7 @@ test('hoteles, precios por noche, reserva y cancelación con LiteAPI', async () 
     assert.equal(quote.refundable, true);
     assert.equal(quote.freeCancellationUntil, '2026-12-01 12:00:00');
     assert.equal(quote.offerId, undefined, 'el offerId no sale al navegador');
+    assert.deepEqual(quote.payAtHotel, [{ description: 'Tasa turística', currency: 'EUR', amount: 4.4 }], 'solo las tasas no incluidas en el precio');
 
     const req = { type: 'hotel', itemId: a.id, checkIn: '2026-11-10', checkOut: '2026-11-12', units: 1, name: 'Ana García López', email: 'ana@test.com' };
     assert.equal((await post('/api/bookings', req)).status, 400, 'sin el precio visto no se reserva');
@@ -103,6 +105,7 @@ test('hoteles, precios por noche, reserva y cancelación con LiteAPI', async () 
     assert.equal(booking.providerBookingId, 'BK1');
     assert.equal(booking.total, 241.5);
     assert.equal(booking.sandbox, true);
+    assert.equal(booking.payAtHotel[0].amount, 4.4);
 
     const cancel = await post(`/api/bookings/${booking.code}/cancel`, { email: 'ana@test.com' }).then((r) => r.json());
     assert.equal(cancel.status, 'cancelada');
@@ -249,6 +252,32 @@ test('pago del cliente: checkout, pago pendiente, confirmación y datos internos
     assert.equal(mine[0].transactionId, undefined);
     assert.equal((await post('/api/checkout/noexiste/confirm', {})).status, 404);
   } finally {
+    server.close();
+  }
+});
+
+test('pago cobrado sin reserva confirmada: aviso al titular', async () => {
+  fakeLiteApi.paid = 'fail';
+  const alerts = [];
+  const mailer = { paymentWithoutBooking: async (b) => alerts.push(b) };
+  const live = new LiteApi({ key: 'prod_test', fetchImpl: fakeLiteApi([]) });
+  const server = createApp({ store: new BookingStore(null), osm: null, live, mailer }).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://localhost:${server.address().port}`;
+  const post = (path, body) => fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const data = await fetch(`${base}/api/hotels?destination=Granada`).then((r) => r.json());
+    const co = await post('/api/checkout', { type: 'hotel', itemId: data.results[0].id, checkIn: '2026-11-10', checkOut: '2026-11-12', units: 1, name: 'Ana López', email: 'ana@test.com', expectedTotal: 241.5 }).then((r) => r.json());
+    const r = await post(`/api/checkout/${co.checkoutId}/confirm`, {});
+    assert.equal(r.status, 502);
+    assert.match((await r.json()).error, new RegExp(co.code));
+    await new Promise((res) => setTimeout(res, 20));
+    assert.equal(alerts.length, 1);
+    assert.equal(alerts[0].code, co.code);
+    assert.equal(alerts[0].transactionId, 'tr_1');
+    assert.match(alerts[0].error, /supplier error/);
+  } finally {
+    fakeLiteApi.paid = false;
     server.close();
   }
 });

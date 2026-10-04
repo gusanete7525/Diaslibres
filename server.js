@@ -22,7 +22,7 @@ export function createApp({
   mailer = new Mailer(),
 } = {}) {
   // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
-  const notify = (fn, b) => { if (b && mailer) Promise.resolve(mailer[fn](b)).catch(() => {}); };
+  const notify = (fn, b) => { if (b && mailer?.[fn]) Promise.resolve().then(() => mailer[fn](b)).catch(() => {}); };
   const app = express();
   app.set('trust proxy', true); // https correcto detrás del proxy de Render
   app.use(express.json({ limit: '20kb' }));
@@ -175,6 +175,7 @@ export function createApp({
         sandbox: live.sandbox,
         refundable: q.refundable,
         freeCancellationUntil: q.freeCancellationUntil,
+        payAtHotel: q.payAtHotel,
         roomName: q.roomName,
         checkoutId,
         prebookId: pre.prebookId,
@@ -213,6 +214,8 @@ export function createApp({
     } catch (err) {
       console.error('[liteapi]', err.message);
       if (err instanceof PaymentPendingError) return res.status(402).json({ error: 'El pago no se ha completado. No se ha hecho ningún cargo ni reserva.' });
+      // El cliente ha pagado y no hay reserva: hay que avisar al titular para resolverlo.
+      notify('paymentWithoutBooking', { ...b, error: err.message });
       res.status(502).json({ error: 'El pago se recibió, pero el hotel no confirmó la reserva: ' + err.message + ' Escríbenos con tu código ' + b.code + '.' });
     } finally {
       confirming.delete(id);
@@ -255,6 +258,7 @@ export function createApp({
           sandbox: live.sandbox,
           refundable: q.refundable,
           freeCancellationUntil: q.freeCancellationUntil,
+          payAtHotel: q.payAtHotel,
           roomName: q.roomName,
           createdAt: new Date().toISOString(),
         });

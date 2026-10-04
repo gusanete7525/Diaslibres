@@ -1,15 +1,17 @@
 // Emails al cliente (confirmación y cancelación) con Resend (https://resend.com).
 // Se activa con RESEND_API_KEY; MAIL_FROM fija el remitente (dominio verificado en
-// Resend). Sin clave no se envía nada y la web funciona igual.
+// Resend). Sin clave no se envía nada y la web funciona igual. ADMIN_EMAIL recibe
+// los avisos internos (p. ej. un pago cobrado cuya reserva no confirmó el hotel).
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const money = (n) => Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
+const money = (n, currency = 'EUR') => Number(n).toLocaleString('es-ES', { style: 'currency', currency });
 const day = (iso) =>
   iso ? new Date(iso + 'T00:00:00Z').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '';
 
 export class Mailer {
-  constructor({ apiKey = process.env.RESEND_API_KEY, from = process.env.MAIL_FROM, fetchImpl = globalThis.fetch } = {}) {
+  constructor({ apiKey = process.env.RESEND_API_KEY, from = process.env.MAIL_FROM, admin = process.env.ADMIN_EMAIL, fetchImpl = globalThis.fetch } = {}) {
     this.apiKey = String(apiKey || '').trim();
+    this.admin = String(admin || '').trim();
     this.from = from || 'DíasLibres <onboarding@resend.dev>';
     this.fetch = fetchImpl;
     this.lastError = null; // último error de Resend (sin la clave), para /api/health
@@ -17,7 +19,7 @@ export class Mailer {
 
   // Estado para /api/health: si está activo, con qué remitente y el último fallo.
   get status() {
-    return { enabled: this.enabled, from: this.from, lastError: this.lastError };
+    return { enabled: this.enabled, from: this.from, admin: !!this.admin, lastError: this.lastError };
   }
 
   get enabled() {
@@ -61,7 +63,8 @@ export class Mailer {
       b.checkIn ? ['Entrada', day(b.checkIn)] : b.date ? ['Fecha', day(b.date)] : null,
       b.checkOut ? ['Salida', day(b.checkOut)] : null,
       b.roomName ? ['Habitación', b.roomName] : null,
-      ['Total', money(b.total)],
+      ['Total pagado', money(b.total)],
+      ...(b.payAtHotel || []).map((t) => [`A pagar en el hotel: ${t.description}`, money(t.amount, t.currency)]),
       b.provider === 'liteapi' ? ['Cancelación', b.refundable ? `Gratuita${b.freeCancellationUntil ? ' hasta ' + b.freeCancellationUntil + ' (GMT)' : ''}` : 'No reembolsable'] : null,
       b.providerBookingId ? ['Referencia del proveedor', b.providerBookingId] : null,
     ].filter(Boolean);
@@ -88,8 +91,33 @@ export class Mailer {
         table([
           ['Código', b.code],
           ['Alojamiento', b.itemName],
-          refund != null ? ['Reembolso', money(refund)] : null,
+          refund != null ? ['Reembolso', Number(refund) > 0 ? money(refund) : 'Sin reembolso'] : null,
         ].filter(Boolean)),
+      ),
+    );
+  }
+
+  // Aviso interno: el cliente pagó, pero LiteAPI no confirmó la reserva.
+  paymentWithoutBooking(b) {
+    if (!this.admin) {
+      console.error('[email] ADMIN_EMAIL no está configurado: nadie recibe el aviso de pago sin reserva', b.code);
+      return { sent: false };
+    }
+    return this.#send(
+      this.admin,
+      `⚠️ Pago sin reserva ${b.code}${b.sandbox ? ' [Prueba]' : ''} · DíasLibres`,
+      layout(
+        'Un cliente ha pagado, pero el hotel no ha confirmado la reserva. Revísalo en el panel de LiteAPI y devuelve el pago o rehaz la reserva.',
+        table([
+          ['Código', b.code],
+          ['Cliente', `${b.name} <${b.email}>`],
+          ['Alojamiento', b.itemName],
+          ['Fechas', `${b.checkIn} → ${b.checkOut}`],
+          ['Importe', money(b.total)],
+          ['Transacción', b.transactionId || '—'],
+          ['Prebook', b.prebookId || '—'],
+          ['Error', b.error || '—'],
+        ]),
       ),
     );
   }
