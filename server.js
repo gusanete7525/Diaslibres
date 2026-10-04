@@ -47,6 +47,7 @@ export function createApp({
 
   // ---------- Hoteles con datos reales de LiteAPI (si hay LITEAPI_KEY) ----------
   const LIVE_DAYS = 30;
+  const HOTEL_PAGE = 15;
   // Si paga el cliente, se puede reservar siempre. Si se carga a la cuenta del titular,
   // con la clave real solo con ALLOW_REAL_BOOKINGS=1 (si no, cualquiera reservaría a su costa).
   const liveFlights = !!live && process.env.LITEAPI_FLIGHTS !== 'off';
@@ -73,6 +74,10 @@ export function createApp({
       if (q.minStars) hotels = hotels.filter((h) => (h.stars || 0) >= Number(q.minStars));
       hotels = [...hotels].sort((a, b) => (b.stars || 0) - (a.stars || 0) || (b.rating || 0) - (a.rating || 0));
       const start = todayISO();
+      // Se envían por páginas: la ciudad puede tener cientos de hoteles.
+      const page = Math.max(0, Math.floor(Number(q.page) || 0));
+      const total = hotels.length;
+      hotels = hotels.slice(page * HOTEL_PAGE, (page + 1) * HOTEL_PAGE);
       // Las fichas llegan al momento; los precios de cada noche se piden después por tandas.
       const results = hotels.map((h) => ({
         ...h,
@@ -80,7 +85,7 @@ export function createApp({
         summary: { freeDays: 0, minPrice: null, maxPrice: null, avgPrice: null },
         bestStay: null,
       }));
-      res.json({ start, days: LIVE_DAYS, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
+      res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudo consultar LiteAPI ahora mismo. Inténtalo de nuevo en unos segundos.' });

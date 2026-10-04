@@ -167,8 +167,8 @@ function guestsText(g) {
 }
 
 // ---------- Precios reales (LiteAPI): se cargan por semanas y rellenan el calendario ----------
-async function loadLivePrices(token) {
-  const { start, days, results: list } = state.data;
+async function loadLivePrices(token, list = state.data.results) {
+  const { start, days } = state.data;
   const ids = list.map((h) => h.id).join(',');
   for (let off = 0; off < days; off += 7) {
     if (token !== searchToken) return; // hay una búsqueda más nueva
@@ -311,9 +311,49 @@ function renderResults() {
   const live = state.data.live;
   const liveNote = live ? ` · precios y disponibilidad reales de LiteAPI${live.sandbox ? ' (entorno de pruebas)' : ''}` : '';
   const city = live && !filters.destination.value.trim() ? `<p class="count">Mostrando ${esc(live.city)}. Escribe otra ciudad para ver sus hoteles.</p>` : '';
-  results.innerHTML = `<p class="count">${list.length} ${kind}${osmNote}${liveNote} · próximos ${state.data.days} días</p>${city}${live ? '<p class="count" id="livePending">Cargando precios reales…</p>' : ''}${warnings}`;
+  const total = state.data.total > list.length ? `${list.length} de ${state.data.total.toLocaleString('es-ES')}` : list.length;
+  results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote} · próximos ${state.data.days} días</p>${city}${live ? '<p class="count" id="livePending">Cargando precios reales…</p>' : ''}${warnings}`;
   setFooter(!!live);
   for (const item of list) results.append(renderCard(item));
+  if (state.data.hasMore) results.append(moreHotelsButton());
+}
+
+// La ciudad puede tener cientos de hoteles: se piden de 15 en 15.
+function moreHotelsButton() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn more';
+  btn.textContent = `Ver más hoteles (quedan ${(state.data.total - state.data.results.length).toLocaleString('es-ES')})`;
+  btn.addEventListener('click', async () => {
+    const token = searchToken;
+    btn.disabled = true;
+    btn.textContent = 'Cargando hoteles…';
+    try {
+      const p = filterParams();
+      p.set('page', state.data.page + 1);
+      const data = await api(`/api/hotels?${p}`);
+      if (token !== searchToken) return;
+      const fresh = data.results.filter((x) => !state.items.has(x.id));
+      Object.assign(state.data, { page: data.page, hasMore: data.hasMore, total: data.total });
+      state.data.results.push(...fresh);
+      const checkIn = filters.checkIn.value;
+      for (const item of fresh) {
+        state.items.set(item.id, item);
+        state.ui.set(item.id, initialUi(item, state.data, checkIn));
+        btn.before(renderCard(item));
+      }
+      const count = results.querySelector('.count');
+      if (count) count.firstChild.textContent = count.firstChild.textContent.replace(/^\d+ de/, `${state.data.results.length} de`);
+      if (state.data.hasMore) btn.replaceWith(moreHotelsButton());
+      else btn.remove();
+      if (fresh.length) loadLivePrices(token, fresh);
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Ver más hoteles';
+      toast(err.message);
+    }
+  });
+  return btn;
 }
 
 function rerender(id) {
