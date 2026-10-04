@@ -158,7 +158,7 @@ export class LiteApi {
           continue;
         }
         if (!res.ok || data.error) {
-          const msg = data.error?.description || data.error?.message || `LiteAPI respondió ${res.status}`;
+          const msg = data.error?.description || data.error?.message || `El proveedor respondió ${res.status}`;
           this.lastError = { at: new Date().toISOString(), status: res.status, message: String(msg).slice(0, 200) };
           const err = new LiteApiError(msg);
           err.status = res.status;

@@ -70,7 +70,7 @@ function setFooter(live) {
   const el = $('#footerNote');
   if (!el) return;
   el.textContent = live
-    ? 'Hoteles, precios y disponibilidad de LiteAPI' + (state.data?.live?.sandbox ? ' (entorno de pruebas: las reservas son de prueba y no se cobran)' : '') + (state.config.liveFlights ? '. Vuelos de LiteAPI (Nuitée).' : state.config.flights === false ? '.' : '. Los vuelos son simulados.')
+    ? 'Precios y disponibilidad en tiempo real.' + (state.data?.live?.sandbox ? ' Entorno de pruebas: las reservas son de prueba y no se cobran.' : '') + (state.config.liveFlights || state.config.flights === false ? '' : ' Los vuelos son simulados.')
     : el.dataset.default;
 }
 
@@ -353,7 +353,7 @@ function renderResults() {
   const kind = state.view === 'flights' ? (one ? 'vuelo' : 'vuelos') : one ? 'hotel' : 'hoteles';
   const osmNote = (osm?.count ? ` · ${osm.count} de OpenStreetMap` : '') + (ai?.count ? ` · ${ai.count} sugerido${ai.count > 1 ? 's' : ''} por IA` : '');
   const live = state.data.live;
-  const liveNote = live ? ` · precios y disponibilidad reales de LiteAPI${live.sandbox ? ' (entorno de pruebas)' : ''}` : '';
+  const liveNote = live ? ` · precios y disponibilidad en tiempo real${live.sandbox ? ' (entorno de pruebas)' : ''}` : '';
   const boardNote = state.data.boardName ? ` · precios con ${state.data.boardName.toLowerCase()}` : '';
   const city = live && !filters.destination.value.trim() ? `<p class="count">Mostrando ${esc(live.city)}. Escribe otra ciudad para ver sus hoteles.</p>` : '';
   const total = state.data.total > list.length ? `${list.length} de ${state.data.total.toLocaleString('es-ES')}` : list.length;
@@ -707,8 +707,8 @@ function openBooking(item, ui, isFlight) {
   $('#bookNote').textContent = item.origin !== 'liteapi'
     ? 'Reserva de prueba: no se envía al hotel ni a la aerolínea.'
     : state.data.live?.sandbox
-      ? 'Entorno de pruebas de LiteAPI: la reserva es de prueba y no se cobra nada.'
-      : 'Pago seguro con tarjeta a través de LiteAPI. La reserva se confirma al completar el pago.';
+      ? 'Entorno de pruebas: la reserva es de prueba y no se cobra nada.'
+      : 'Pago seguro con tarjeta. La reserva se confirma al completar el pago.';
   showPayForm(false);
   if (state.bookingBlocked) {
     $('#bookSummary').insertAdjacentHTML('beforeend', '<br><span class="meta">Precio real de hoy. En esta demostración no se puede reservar.</span>');
@@ -861,7 +861,7 @@ function renderFlightResults(data, token) {
   if (data.needRoute) return loadDeals(token);
   const route = `${esc(data.origin.name)} (${esc(data.origin.code)}) → ${esc(data.destination.name)} (${esc(data.destination.code)})`;
   const when = `${fmtDay.format(toDate(data.date))}${data.returnDate ? ' → ' + fmtDay.format(toDate(data.returnDate)) : ' · solo ida'}`;
-  const note = data.live.sandbox ? ' · entorno de pruebas de LiteAPI (precios no reales)' : '';
+  const note = data.live.sandbox ? ' · entorno de pruebas (precios no reales)' : '';
   if (!data.results.length) {
     results.innerHTML = `<p class="count">${route} · ${when}</p><p class="empty">No hay vuelos para esas fechas. Prueba otro día u otro aeropuerto.</p>`;
     return;
@@ -988,7 +988,7 @@ function renderDeals(d) {
   const from = plain(filters.origin.value.trim());
   const mine = from ? d.deals.filter((x) => plain(x.origin.code) === from || plain(x.origin.name).startsWith(from)) : [];
   const list = mine.length ? mine : d.deals;
-  const sandbox = state.config.sandbox ? ' · entorno de pruebas de LiteAPI (precios no reales)' : '';
+  const sandbox = state.config.sandbox ? ' · entorno de pruebas (precios no reales)' : '';
   const head = `<p class="count">Ofertas de vuelos${d.date ? ` para el ${fmtDay.format(toDate(d.date))}` : ''} · solo ida · 1 pasajero${sandbox}</p>
     <p class="count">Pulsa una oferta para ver todos sus vuelos con el calendario de precios, o escribe tu origen y destino arriba.</p>`;
   if (!list.length) {
@@ -1261,7 +1261,7 @@ async function loadMine(email) {
           ${b.type === 'flight' && b.flight ? `<div class="meta">${legText(b.flight.outbound)}${b.flight.inbound ? ' · vuelta ' + legText(b.flight.inbound) : ''}</div>` : ''}
           ${b.passengers?.length ? `<div class="meta">${esc(b.passengers.join(', '))}</div>` : ''}
           ${b.guests ? `<div class="meta">${guestsText(b.guests)} por habitación</div>` : ''}
-          ${b.provider === 'liteapi' ? `<div class="meta">LiteAPI${b.sandbox ? ' (prueba)' : ''} · ref. ${esc(b.bookingRef || b.providerBookingId)}${b.pnr ? ' · localizador ' + esc(b.pnr) : ''}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.type === 'flight' ? (b.refundable ? 'tarifa reembolsable' : 'no reembolsable') : b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
+          ${b.provider === 'liteapi' ? `<div class="meta">${b.sandbox ? 'Prueba · ' : ''}Ref. ${esc(b.bookingRef || b.providerBookingId)}${b.pnr ? ' · localizador ' + esc(b.pnr) : ''}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.type === 'flight' ? (b.refundable ? 'tarifa reembolsable' : 'no reembolsable') : b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
           ${b.payAtHotel?.length ? `<div class="meta">A pagar en el hotel: ${esc(payAtHotelText(b.payAtHotel))}</div>` : ''}
           <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : b.status === 'cancelacion_solicitada' ? '…' : '✖'} ${esc(b.status === 'cancelacion_solicitada' ? 'cancelación solicitada' : b.status)}</span></div>
         </div>

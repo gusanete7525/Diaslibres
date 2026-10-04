@@ -187,7 +187,7 @@ export function createApp({
       res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, board, boardName: board ? BOARDS[board] : null, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
-      res.status(502).json({ error: 'No se pudo consultar LiteAPI ahora mismo. Inténtalo de nuevo en unos segundos.' });
+      res.status(502).json({ error: 'No se pudieron consultar los hoteles ahora mismo. Inténtalo de nuevo en unos segundos.' });
     }
   }
 
@@ -200,7 +200,7 @@ export function createApp({
       res.json({ start, days, prices: await live.nightlyPrices(ids, start, days, { adults: req.query.adults, children: req.query.children }, req.query.board) });
     } catch (err) {
       console.error('[liteapi]', err.message);
-      res.status(502).json({ error: 'LiteAPI no ha devuelto precios. Inténtalo de nuevo.' });
+      res.status(502).json({ error: 'No se pudieron consultar los precios. Inténtalo de nuevo.' });
     }
   });
 
@@ -412,7 +412,7 @@ export function createApp({
     const b = await store.findByCheckout(id);
     if (!b || b.type !== 'flight') return res.status(404).json({ error: 'No encontramos ese pago.' });
     if (b.status !== 'pendiente_pago') return res.json(publicBooking(b));
-    if (!liveFlights) return res.status(503).json({ error: 'No se puede confirmar ahora: falta la conexión con LiteAPI.' });
+    if (!liveFlights) return res.status(503).json({ error: 'No se puede confirmar ahora: falta la conexión con el proveedor.' });
     if (confirmingFlights.has(id)) return res.status(409).json({ error: 'Estamos confirmando tu reserva. Espera unos segundos.' });
     confirmingFlights.add(id);
     try {
@@ -652,11 +652,11 @@ export function createApp({
     if (!found || found.email.toLowerCase() !== email || found.status !== 'confirmada') return res.status(404).json({ error: 'Reserva no encontrada.' });
     let cancellation;
     if (found.provider === 'liteapi') {
-      if (!live) return res.status(503).json({ error: 'No se puede cancelar ahora: falta la conexión con LiteAPI.' });
+      if (!live) return res.status(503).json({ error: 'No se puede cancelar ahora: falta la conexión con el proveedor.' });
       try {
         cancellation = found.type === 'flight' ? await live.flightCancel(found.providerBookingId) : await live.cancel(found.providerBookingId);
       } catch (err) {
-        return res.status(502).json({ error: (found.type === 'flight' ? 'La aerolínea' : 'LiteAPI') + ' no ha aceptado la cancelación: ' + err.message });
+        return res.status(502).json({ error: (found.type === 'flight' ? 'La aerolínea' : 'El hotel') + ' no ha aceptado la cancelación: ' + err.message });
       }
       // La aerolínea a veces confirma la cancelación más tarde.
       if (cancellation.pending) {
