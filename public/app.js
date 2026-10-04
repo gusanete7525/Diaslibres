@@ -468,6 +468,18 @@ function rerender(id) {
   if (old) old.replaceWith(item.liveFlight ? liveFlightCard(item) : renderCard(item));
 }
 
+// Enlace a Google Maps: por coordenadas si las hay, si no por nombre y dirección.
+function mapsUrl(item, address) {
+  const query = Number.isFinite(item.lat) && Number.isFinite(item.lng)
+    ? `${item.lat},${item.lng}`
+    : [item.name, address || item.city].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+function mapLink(item, text) {
+  return `<a class="map-link" href="${esc(mapsUrl(item, text))}" target="_blank" rel="noopener" title="${esc(t('Ver en Google Maps'))}">${esc(text)}</a>`;
+}
+
 function renderCard(item) {
   const isFlight = state.view === 'flights';
   const ui = state.ui.get(item.id);
@@ -484,7 +496,7 @@ function renderCard(item) {
     : `${item.origin === 'liteapi' ? '<button type="button" class="open-hotel" data-act="info" aria-label="' + esc(t('Ver fotos y detalles')) + '">' : ''}${item.photo ? `<img class="thumb photo" src="${esc(item.photo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb&quot;>🏨</div>'">` : `<div class="thumb">${item.image}</div>`}${item.origin === 'liteapi' ? '</button>' : ''}<div>
         <h3>${item.origin === 'liteapi' ? `<button type="button" class="link-title" data-act="info">${esc(item.name)}</button>` : esc(item.name)}</h3>
         <div class="meta">${STAY_LABEL[item.stay] ? `<span class="stay-type">${t(STAY_LABEL[item.stay])}</span> · ` : ''}${item.stars ? `<span class="stars" aria-label="${t('{n} estrellas', { n: item.stars })}">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${item.rating.toLocaleString(LOCALE)}</span>${item.reviewCount ? ` <span class="meta">(${tn(item.reviewCount, '{n} opinión', '{n} opiniones', { n: item.reviewCount.toLocaleString(LOCALE) })})</span>` : ''}` : ''}</div>
-        ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${t('Web oficial')} ↗</a>` : ''}</div>` : ''}
+        ${item.address ? `<div class="meta">📍 ${mapLink(item, item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${t('Web oficial')} ↗</a>` : ''}</div>` : ''}
         <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="${t('Ficha en OpenStreetMap')}">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? `<span class="tag osm" title="${t('Datos sugeridos por IA: compruébalos antes de viajar')}">✨ ${t('Sugerido por IA')}</span>` : ''}${item.tags.map((x) => `<span class="tag">${esc(t(x))}</span>`).join('')}${(item.facilities || []).map((k) => facilityInfo()[k]).filter(Boolean).map((f) => `<span class="tag fac" title="${esc(t(f.label))}">${f.icon} ${esc(t(f.label))}</span>`).join('')}</div>
       </div>`;
   el.innerHTML = `
@@ -738,14 +750,14 @@ async function openHotel(item) {
     const d = await hotelDetails(item.id);
     const times = [d.checkin ? t('Entrada desde las {time}', { time: d.checkin }) : '', d.checkout ? t('Salida hasta las {time}', { time: d.checkout }) : ''].filter(Boolean).join(' · ');
     body.innerHTML = `<h2>${esc(d.name)}</h2>
-      <p class="meta">${STAY_LABEL[item.stay] ? esc(t(STAY_LABEL[item.stay])) + ' · ' : ''}${item.stars ? '★'.repeat(item.stars) + ' · ' : ''}${esc(d.address || item.city)}${item.rating ? ` · ${item.rating.toLocaleString(LOCALE)}/10` : ''}</p>
+      <p class="meta">${STAY_LABEL[item.stay] ? esc(t(STAY_LABEL[item.stay])) + ' · ' : ''}${item.stars ? '★'.repeat(item.stars) + ' · ' : ''}${mapLink({ ...item, ...(d.location || {}) }, d.address || item.address || item.city)}${item.rating ? ` · ${item.rating.toLocaleString(LOCALE)}/10` : ''}</p>
       ${gallery(d.photos)}
       ${times ? `<p class="meta">🕑 ${esc(times)}</p>` : ''}
       ${paragraphs(d.description)}
       ${d.facilities?.length ? `<h3>${t('Servicios')}</h3>${chips(d.facilities)}` : ''}
       ${d.rooms?.length ? `<h3>${t('Habitaciones')}</h3>${d.rooms.map((r) => `<div class="room-card">${roomHtml(r)}</div>`).join('')}` : ''}
       ${d.important ? `<details><summary>${t('Información importante')}</summary>${paragraphs(d.important)}</details>` : ''}
-      ${d.location ? `<p><a href="https://www.openstreetmap.org/?mlat=${d.location.lat}&mlon=${d.location.lng}#map=17/${d.location.lat}/${d.location.lng}" target="_blank" rel="noopener">📍 ${t('Ver en el mapa')}</a></p>` : ''}`;
+      <p><a href="${esc(mapsUrl({ ...item, ...(d.location || {}) }, d.address || item.address))}" target="_blank" rel="noopener">📍 ${t('Ver en Google Maps')}</a></p>`;
   } catch (e) {
     body.innerHTML = `<h2>${esc(item.name)}</h2><p class="error">${esc(e.message)}</p>`;
   }

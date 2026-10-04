@@ -480,7 +480,7 @@ export default {
  "Entrada desde las {time}": "Inchecken vanaf {time}",
  "Salida hasta las {time}": "Uitchecken tot {time}",
  "Información importante": "Belangrijke informatie",
- "Ver en el mapa": "Bekijk op de kaart",
+ "Ver en Google Maps": "Bekijk op Google Maps",
  "Cerrar": "Sluiten",
  "Ver fechas y precios": "Data en prijzen bekijken",
  "Esa habitación ya no está disponible. Elige otra.": "Deze kamer is niet meer beschikbaar. Kies een andere.",

@@ -246,6 +246,8 @@ export class LiteApi {
       stars,
       address: [h.address, [h.zip, h.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || null,
       website: null,
+      lat: Number.isFinite(h.latitude) ? h.latitude : null,
+      lng: Number.isFinite(h.longitude) ? h.longitude : null,
       photo: /^https:\/\//.test(h.thumbnail || h.main_photo || '') ? h.thumbnail || h.main_photo : null,
       rating: typeof h.rating === 'number' && h.rating > 0 ? h.rating : null,
       reviewCount: h.reviewCount || null,
