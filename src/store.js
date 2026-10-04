@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 // Almacenes de reservas con la misma interfaz (todo asíncrono):
 //   all(), add(b), get(code), findByCheckout(id), update(code, patch),
 //   listByEmail(email), cancel(code, email)
-// y, aparte, un pequeño almacén clave → valor: kvSet(key, value), kvList(prefix)
+// y, aparte, un pequeño almacén clave → valor: kvSet(key, value), kvGet(key), kvDelete(key), kvList(prefix)
 // (p. ej. los datos de cada ciudad para las páginas de buscadores).
 // - BookingStore: fichero JSON (o memoria si file es null). Para pruebas y demos.
 // - PgBookingStore: PostgreSQL (DATABASE_URL). Las reservas sobreviven a reinicios.
@@ -28,6 +28,14 @@ export class BookingStore {
 
   async kvList(prefix) {
     return [...this.kv].filter(([k]) => k.startsWith(prefix));
+  }
+
+  async kvGet(key) {
+    return this.kv.has(key) ? structuredClone(this.kv.get(key)) : null;
+  }
+
+  async kvDelete(key) {
+    this.kv.delete(key);
   }
 
   async all() {
@@ -148,6 +156,17 @@ export class PgBookingStore {
   async kvSet(key, value) {
     await this.#init();
     await this.pool.query('INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()', [key, JSON.stringify(value)]);
+  }
+
+  async kvGet(key) {
+    await this.#init();
+    const { rows } = await this.pool.query('SELECT value FROM kv WHERE key = $1', [key]);
+    return rows[0]?.value ?? null;
+  }
+
+  async kvDelete(key) {
+    await this.#init();
+    await this.pool.query('DELETE FROM kv WHERE key = $1', [key]);
   }
 
   async kvList(prefix) {

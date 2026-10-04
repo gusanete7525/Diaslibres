@@ -23,6 +23,7 @@
       <summary aria-label="Idioma"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>ES</span></summary>
       <nav><!--LANG_LINKS--></nav>
     </details>
+    <button class="theme-toggle account-btn" id="accountBtn" type="button" aria-label="Mi cuenta"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span id="accountInitial" hidden></span></button>
     <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><g class="sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg></button>
   </header>
 
@@ -41,6 +42,10 @@
       <button type="button" class="ex-card" data-kind="flight"><img src="/img/ex-vuelos.svg" alt="" loading="lazy" /><span>Vuelos directos de Madrid a Lisboa</span></button>
       <button type="button" class="ex-card"><img src="/img/ex-playa.svg" alt="" loading="lazy" /><span>Playa con niños en Canarias 5 noches</span></button>
     </div>
+    <section id="forYou" class="for-you" hidden>
+      <h2>Para ti <span class="meta" id="forYouWhy">según tus últimas búsquedas</span></h2>
+      <div class="examples" id="forYouList"></div>
+    </section>
     <p id="aiExplain" class="ai-explain" hidden></p>
 
     <button type="button" class="btn manual-toggle" id="manualToggle" aria-expanded="false" aria-controls="filters"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> <span>Búsqueda manual</span></button>
@@ -155,6 +160,10 @@
       <button type="button" class="btn ghost" data-close>Cerrar</button>
       <button type="button" class="btn primary" id="hotelDates">Ver fechas y precios</button>
     </div>
+  </dialog>
+
+  <dialog id="accountDialog" class="dialog">
+    <div class="account-body" id="accountBody"></div>
   </dialog>
 
   <dialog id="roomDialog" class="dialog wide sheet">

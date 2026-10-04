@@ -114,6 +114,8 @@ export function cityStats(hotels) {
     fac,
     stay: hotels.reduce((o, h) => ({ ...o, [h.stay || 'hotel']: (o[h.stay || 'hotel'] || 0) + 1 }), {}),
     top: best(trusted.length >= 5 ? trusted : rated, 10),
+    // Foto de portada de la ciudad (para «Para ti»): la del alojamiento mejor valorado que tenga foto.
+    cover: [...(trusted.length >= 5 ? trusted : rated)].sort((a, b) => (b.rating || 0) - (a.rating || 0)).find((h) => /^https:\/\//.test(h.photo || ''))?.photo || null,
     filters,
   };
 }

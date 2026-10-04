@@ -12,6 +12,8 @@ import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterF
 import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
+import { Accounts, COOKIE, publicUser, mergeHistory } from './src/accounts.js';
+import { recommend } from './src/recommend.js';
 import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS, STAY_TYPES } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +26,7 @@ export function createApp({
   // carga a la cuenta de LiteAPI del titular de la clave.
   livePayment = process.env.LITEAPI_PAYMENT === 'account' ? 'account' : 'customer',
   mailer = new Mailer(),
+  accounts = new Accounts({ store, mailer }),
 } = {}) {
   // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
   const notify = (fn, b) => { if (b && mailer?.[fn]) Promise.resolve().then(() => mailer[fn](b)).catch(() => {}); };
@@ -59,16 +62,18 @@ export function createApp({
     for (const [k, v] of rows) if (v?.stay) seoStats.set(k.slice(4), v);
   }).catch((err) => console.error('[seo]', err.message));
   // Pide los datos de una ciudad (las que se visitan van primero).
+  // Los datos sin foto de portada (de antes de «Para ti») se renuevan poco a poco.
+  const stale = (s) => !s || Date.now() - s.at > STATS_TTL || !('cover' in s);
   const wantStats = (city) => {
     const s = statsOf(city);
-    if ((!s || Date.now() - s.at > STATS_TTL) && !statsQueue.includes(city)) statsQueue.unshift(city);
+    if (stale(s) && !statsQueue.includes(city)) statsQueue.unshift(city);
     if (statsQueue.length > 50) statsQueue.length = 50;
   };
   let statsBusy = false;
   async function statsTick() {
     if (!live || statsBusy) return;
     await statsLoaded;
-    const city = statsQueue.shift() || CITIES.find((c) => { const s = statsOf(c); return !s || Date.now() - s.at > STATS_TTL; });
+    const city = statsQueue.shift() || CITIES.find((c) => stale(statsOf(c)));
     if (!city) return;
     statsBusy = true;
     try {
@@ -532,6 +537,8 @@ export function createApp({
   app.get('/api/airports', (req, res) => res.json(Object.fromEntries(Object.entries(AIRPORTS).map(([code, name]) => [code, placeName(code, langOf(req), name)]))));
   // flights: false con datos reales de hoteles y los vuelos apagados (no se enseñan vuelos simulados).
   app.get('/api/config', (_req, res) => res.json({
+    googleClientId: accounts?.googleClientId || null,
+    appleClientId: accounts?.appleClientId || null,
     liveFlights, flights: liveFlights || !live, sandbox: live?.sandbox ?? null,
     facilities: Object.fromEntries(Object.entries(FACILITIES).map(([k, f]) => [k, { label: f.label, icon: f.icon }])),
     boards: BOARDS,
@@ -719,6 +726,81 @@ export function createApp({
     } catch (err) {
       res.status(409).json({ error: err.message });
     }
+  });
+
+  // ---------- Cuentas (enlace por email o Google) y «Para ti» ----------
+  const setSession = (req, res, session) =>
+    res.cookie(COOKIE, session.token, { httpOnly: true, secure: req.secure, sameSite: 'lax', maxAge: session.maxAge, path: '/' });
+  const authError = (res, err) => res.status(err.status || 500).json({ error: err.status ? err.message : 'No se pudo completar. Inténtalo de nuevo.' });
+  const me = (req) => (accounts?.enabled ? accounts.userFromRequest(req).catch(() => null) : null);
+
+  app.post('/api/auth/email', async (req, res) => {
+    try {
+      await accounts.sendLoginLink({ email: req.body?.email, lang: langOf(req), site: siteUrl(req), ip: req.ip });
+      res.json({ ok: true });
+    } catch (err) {
+      if (!err.status) console.error('[cuentas]', err.message);
+      authError(res, err);
+    }
+  });
+  app.post('/api/auth/verify', async (req, res) => {
+    try {
+      const { user, session } = await accounts.verifyLoginLink(String(req.body?.token || ''));
+      setSession(req, res, session);
+      res.json({ user: publicUser(user) });
+    } catch (err) {
+      authError(res, err);
+    }
+  });
+  app.post('/api/auth/google', async (req, res) => {
+    try {
+      const { user, session } = await accounts.loginWithGoogle(req.body?.credential);
+      setSession(req, res, session);
+      res.json({ user: publicUser(user) });
+    } catch (err) {
+      if (!err.status) console.error('[cuentas]', err.message);
+      authError(res, err);
+    }
+  });
+  app.post('/api/auth/apple', async (req, res) => {
+    try {
+      const { user, session } = await accounts.loginWithApple(req.body?.idToken, String(req.body?.name || '').slice(0, 80));
+      setSession(req, res, session);
+      res.json({ user: publicUser(user) });
+    } catch (err) {
+      if (!err.status) console.error('[cuentas]', err.message);
+      authError(res, err);
+    }
+  });
+  app.post('/api/auth/logout', async (req, res) => {
+    await accounts?.logout(req).catch(() => {});
+    res.clearCookie(COOKIE, { path: '/' });
+    res.json({ ok: true });
+  });
+  app.get('/api/me', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ user: publicUser(await me(req)) });
+  });
+  app.delete('/api/me', async (req, res) => {
+    const user = await me(req);
+    if (!user) return res.status(401).json({ error: 'Entra en tu cuenta primero.' });
+    await accounts.deleteUser(req, user.email);
+    res.clearCookie(COOKIE, { path: '/' });
+    res.json({ ok: true });
+  });
+  // Propuestas: con cuenta se guardan y se usan sus búsquedas; sin cuenta, las que manda el navegador.
+  app.post('/api/recommendations', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const sent = Array.isArray(req.body?.history) ? req.body.history.slice(0, 30) : [];
+    let user = await me(req);
+    if (user && sent.length) user = await accounts.addSearches(user.email, sent);
+    const history = mergeHistory(user?.history || [], sent);
+    const items = recommend(history, { lang: langOf(req) }).map((r) => {
+      const c = cityByName(r.city);
+      if (c && r.kind === 'hotel') wantStats(c);
+      return { ...r, photo: (c && statsOf(c)?.cover) || null };
+    });
+    res.json({ items });
   });
 
   app.get('/api/bookings', async (req, res) => {
