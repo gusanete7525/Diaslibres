@@ -232,6 +232,14 @@ export function createApp({
     return first ? { code: first.code, name: first.city || first.name } : null;
   }
 
+  // Escalas: «0» solo directos, «1» como máximo una escala por trayecto, «many» con alguna escala.
+  const STOP_FILTERS = {
+    0: (t) => [t.outbound, t.inbound].every((l) => !l || l.stops === 0),
+    1: (t) => [t.outbound, t.inbound].every((l) => !l || l.stops <= 1),
+    many: (t) => [t.outbound, t.inbound].some((l) => l && l.stops >= 1),
+  };
+  const byStops = (trips, s) => (STOP_FILTERS[s] ? trips.filter(STOP_FILTERS[s]) : trips);
+
   async function liveFlightSearch(q, res) {
     const adults = Math.max(1, Math.min(6, Number(q.adults) || 1));
     const date = isISODate(q.date) && q.date > todayISO() ? q.date : addDays(todayISO(), 14);
@@ -246,7 +254,8 @@ export function createApp({
       if (from.code === to.code) return res.status(400).json({ error: 'El origen y el destino son el mismo aeropuerto.' });
       let trips = await live.flightSearch({ origin: from.code, destination: to.code, date, returnDate, adults });
       if (q.maxPrice) trips = trips.filter((t) => t.total <= Number(q.maxPrice));
-      res.json({ ...base, origin: from, destination: to, results: trips });
+      trips = byStops(trips, q.stops);
+      res.json({ ...base, stops: q.stops in STOP_FILTERS ? q.stops : null, origin: from, destination: to, results: trips });
     } catch (err) {
       console.error('[liteapi vuelos]', err.message);
       res.status(502).json({ error: 'No se pudieron consultar los vuelos ahora mismo. Inténtalo de nuevo en unos segundos.' });
@@ -270,7 +279,7 @@ export function createApp({
     const out = await Promise.all(dates.map(async (date) => {
       try {
         const trips = await live.flightSearch({ origin, destination, date, returnDate: stay == null ? null : addDays(date, stay), adults }, { priority: false });
-        return { date, trips };
+        return { date, trips: byStops(trips, q.stops) };
       } catch (err) {
         console.error('[liteapi vuelos]', date, err.message);
         return { date, error: true };

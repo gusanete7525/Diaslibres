@@ -265,6 +265,7 @@ body:not([data-live-flights]) .live-only { display: none; }
   .filters input, .filters select, .filters input[type="number"] { width: 100%; height: 40px; padding: 0 10px; }
   .filters .f-btn { grid-column: span 2; height: 40px; padding: 0 6px; white-space: nowrap; font-size: 14px; }
   body[data-view="flights"] .filters .f-btn { grid-column: span 3; }
+  body[data-view="flights"] .filters .f-pax, body[data-view="flights"] .filters .f-stops, body[data-view="flights"] .filters .f-price { grid-column: span 2; }
   .filters .more-filters { grid-column: 1 / -1; order: 1; }
   .more-filters #facilityList { grid-template-columns: 1fr 1fr; }
   .filters input[type="checkbox"] { width: auto; height: auto; }
