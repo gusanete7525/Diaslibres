@@ -471,5 +471,19 @@ export default {
  "sin plazas libres esas noches": "niet vrij op die nachten",
  "más de {price} por noche": "meer dan {price} per nacht",
  "{n} oculto ({why}).": "{n} verborgen ({why}).",
- "{n} ocultos ({why}).": "{n} verborgen ({why})."
+ "{n} ocultos ({why}).": "{n} verborgen ({why}).",
+ "Ver fotos y detalles": "Foto’s en details bekijken",
+ "Elige la habitación": "Kies je kamer",
+ "hasta {n} persona": "tot {n} persoon",
+ "hasta {n} personas": "tot {n} personen",
+ "Cargando…": "Laden…",
+ "Entrada desde las {time}": "Inchecken vanaf {time}",
+ "Salida hasta las {time}": "Uitchecken tot {time}",
+ "Información importante": "Belangrijke informatie",
+ "Ver en el mapa": "Bekijk op de kaart",
+ "Cerrar": "Sluiten",
+ "Ver fechas y precios": "Data en prijzen bekijken",
+ "Esa habitación ya no está disponible. Elige otra.": "Deze kamer is niet meer beschikbaar. Kies een andere.",
+ "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "De hotelgegevens konden niet worden geladen. Probeer het opnieuw.",
+ "Solo alojamiento": "Alleen logies"
 };

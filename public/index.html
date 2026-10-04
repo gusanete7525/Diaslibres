@@ -124,6 +124,7 @@
     <form id="bookForm">
       <h2 id="bookTitle">Reservar</h2>
       <div id="bookSummary" class="summary"></div>
+      <div id="roomBox" class="rooms" hidden></div>
       <label><span id="unitsLabel">Habitaciones</span>
         <select name="units"><option>1</option><option>2</option><option>3</option><option>4</option></select>
       </label>
@@ -143,6 +144,21 @@
         <button type="button" data-send id="bookConfirm" class="btn primary">Confirmar reserva</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="hotelDialog" class="dialog wide sheet">
+    <div class="sheet-body" id="hotelBody"></div>
+    <div class="actions sheet-actions">
+      <button type="button" class="btn ghost" data-close>Cerrar</button>
+      <button type="button" class="btn primary" id="hotelDates">Ver fechas y precios</button>
+    </div>
+  </dialog>
+
+  <dialog id="roomDialog" class="dialog wide sheet">
+    <div class="sheet-body" id="roomBody"></div>
+    <div class="actions sheet-actions">
+      <button type="button" class="btn ghost" data-close>Cerrar</button>
+    </div>
   </dialog>
 
   <dialog id="flightDialog" class="dialog wide">

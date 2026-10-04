@@ -471,5 +471,19 @@ export default {
  "sin plazas libres esas noches": "non libero quelle notti",
  "más de {price} por noche": "più di {price} a notte",
  "{n} oculto ({why}).": "{n} nascosto ({why}).",
- "{n} ocultos ({why}).": "{n} nascosti ({why})."
+ "{n} ocultos ({why}).": "{n} nascosti ({why}).",
+ "Ver fotos y detalles": "Vedi foto e dettagli",
+ "Elige la habitación": "Scegli la camera",
+ "hasta {n} persona": "fino a {n} persona",
+ "hasta {n} personas": "fino a {n} persone",
+ "Cargando…": "Caricamento…",
+ "Entrada desde las {time}": "Check-in dalle {time}",
+ "Salida hasta las {time}": "Check-out entro le {time}",
+ "Información importante": "Informazioni importanti",
+ "Ver en el mapa": "Vedi sulla mappa",
+ "Cerrar": "Chiudi",
+ "Ver fechas y precios": "Vedi date e prezzi",
+ "Esa habitación ya no está disponible. Elige otra.": "Questa camera non è più disponibile. Scegline un’altra.",
+ "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "Impossibile caricare la scheda dell’hotel. Riprova.",
+ "Solo alojamiento": "Solo pernottamento"
 };

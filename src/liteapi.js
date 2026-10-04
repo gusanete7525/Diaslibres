@@ -81,6 +81,8 @@ export const FACILITIES = {
 // Régimen de comidas: código de LiteAPI → texto.
 export const BOARDS = { BI: 'Desayuno incluido', HB: 'Media pensión', FB: 'Pensión completa', AI: 'Todo incluido' };
 const boardOf = (b) => (b in BOARDS ? b : null);
+// Nombre del régimen de una tarifa en español (el proveedor lo da en inglés).
+const boardName = (rate) => ({ RO: 'Solo alojamiento', BB: 'Desayuno incluido', ...BOARDS })[rate.boardType] || rate.boardName || '';
 
 // Tasas que no van en el precio y se pagan en el hotel (p. ej. tasa turística),
 // sumadas por concepto y moneda de todas las habitaciones de la oferta.
@@ -143,6 +145,7 @@ export class LiteApi {
     this.waiting = [];
     this.places = new Map(); // ciudad -> { at, value }
     this.hotelLists = new Map();
+    this.details = new Map(); // fichas de hotel (fotos, habitaciones)
     this.hotelsById = new Map(); // id interno -> hotel
     this.prices = new Map(); // `${liteId}|${fecha}` -> { at, price }
     this.offers = new Map(); // offerId de vuelo -> { at, trip }
@@ -323,11 +326,13 @@ export class LiteApi {
 
   // ---------- Presupuesto, reserva y cancelación ----------
 
-  async quote({ itemId, checkIn, checkOut, units = 1, adults, children, board }) {
+  // Presupuesto de una estancia: todas las habitaciones disponibles (la más barata de cada
+  // tipo, régimen y cancelación) y la elegida (room = su clave; si no, la más barata).
+  async quote({ itemId, checkIn, checkOut, units = 1, adults, children, board, room }) {
     const hotel = this.hotelsById.get(itemId);
     if (!hotel) throw new LiteApiError('Hotel no encontrado. Vuelve a buscar la ciudad.');
     const rooms = Math.max(1, Math.min(4, Number(units) || 1));
-    const { data = [] } = await this.#request('POST', `${API}/hotels/rates`, {
+    const body = {
       hotelIds: [hotel.liteId],
       checkin: checkIn,
       checkout: checkOut,
@@ -336,31 +341,99 @@ export class LiteApi {
       guestNationality: 'ES',
       timeout: 8,
       ...(boardOf(board) ? { boardType: boardOf(board) } : {}),
-    });
-    const offers = (data[0]?.roomTypes || []).filter((o) => typeof o.offerRetailRate?.amount === 'number');
+    };
+    // Con roomMapping cada tarifa dice a qué habitación del catálogo corresponde (fotos y datos);
+    // sin ella llegan también las tarifas sin habitación conocida (a veces más baratas).
+    const [mapped, all] = await Promise.all([
+      this.#request('POST', `${API}/hotels/rates`, { ...body, roomMapping: true }).catch(noAvailability),
+      this.#request('POST', `${API}/hotels/rates`, body).catch(noAvailability),
+    ]);
+    const roomOf = new Map();
+    for (const o of mapped.data?.[0]?.roomTypes || []) {
+      const r = o.rates?.[0];
+      if (r?.mappedRoomId) roomOf.set(`${r.name}|${r.boardType}`, r.mappedRoomId);
+    }
+    const byKey = new Map();
+    for (const o of [...(mapped.data?.[0]?.roomTypes || []), ...(all.data?.[0]?.roomTypes || [])]) {
+      if (typeof o.offerRetailRate?.amount !== 'number') continue;
+      const rate = o.rates?.[0] || {};
+      const refundable = rate.cancellationPolicies?.refundableTag === 'RFN';
+      const key = [rate.name || '', rate.boardType || '', refundable ? 'R' : 'N'].join('|');
+      const total = Math.round(o.offerRetailRate.amount * 100) / 100;
+      if (byKey.has(key) && byKey.get(key).total <= total) continue;
+      byKey.set(key, {
+        key,
+        offerId: o.offerId,
+        roomName: rate.name || '',
+        roomId: rate.mappedRoomId || roomOf.get(`${rate.name}|${rate.boardType}`) || null,
+        board: boardName(rate),
+        refundable,
+        freeCancellationUntil: refundable ? rate.cancellationPolicies?.cancelPolicyInfos?.[0]?.cancelTime || null : null,
+        total,
+        payAtHotel: payAtHotel(o.rates),
+      });
+    }
+    const offers = [...byKey.values()].sort((a, b) => a.total - b.total).slice(0, 25);
     if (!offers.length) {
       throw new LiteApiError(boardOf(board)
         ? `No quedan habitaciones con ${BOARDS[board].toLowerCase()} para esas fechas. Prueba otros días u otro régimen.`
         : 'Ya no quedan habitaciones para esas fechas. Elige otros días.');
     }
-    offers.sort((a, b) => a.offerRetailRate.amount - b.offerRetailRate.amount);
-    const best = offers[0];
-    const rate = best.rates?.[0] || {};
-    const refundable = rate.cancellationPolicies?.refundableTag === 'RFN';
-    const deadline = rate.cancellationPolicies?.cancelPolicyInfos?.[0]?.cancelTime || null;
+    const chosen = room ? offers.find((o) => o.key === room) : offers[0];
+    if (!chosen) throw new LiteApiError('Esa habitación ya no está disponible. Elige otra.');
     return {
       item: hotel,
-      offerId: best.offerId,
+      offerId: chosen.offerId,
       units: rooms,
       nights: Math.round((Date.parse(checkOut) - Date.parse(checkIn)) / DAY),
-      total: Math.round(best.offerRetailRate.amount * 100) / 100,
-      roomName: rate.name || '',
-      board: rate.boardName || '',
-      refundable,
-      freeCancellationUntil: refundable ? deadline : null,
-      payAtHotel: payAtHotel(best.rates),
+      total: chosen.total,
+      room: chosen.key,
+      roomName: chosen.roomName,
+      board: chosen.board,
+      refundable: chosen.refundable,
+      freeCancellationUntil: chosen.freeCancellationUntil,
+      payAtHotel: chosen.payAtHotel,
+      offers: offers.map(({ offerId, ...o }) => o),
     };
   }
+
+  // Ficha del hotel: fotos, descripción completa, servicios, horarios y habitaciones (con fotos).
+  async hotelDetails(itemId, lang = 'es') {
+    const hotel = this.hotelsById.get(itemId);
+    if (!hotel) throw new LiteApiError('Hotel no encontrado. Vuelve a buscar la ciudad.');
+    const key = `${lang}|${hotel.liteId}`;
+    const hit = this.details.get(key);
+    if (hit && Date.now() - hit.at < HOTELS_TTL) return hit.value;
+    const { data: d = {} } = await this.#request('GET', `${API}/data/hotel?hotelId=${encodeURIComponent(hotel.liteId)}&language=${lang}`);
+    const https = (u) => (/^https:\/\//.test(u || '') ? u : null);
+    const text = (html) => String(html || '').replace(/<\/(p|li|h\d)>|<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\n\s*\n+/g, '\n\n').trim();
+    const value = {
+      id: itemId,
+      name: d.name || hotel.name,
+      photos: (d.hotelImages || []).map((i) => https(i.urlHd || i.url)).filter(Boolean).slice(0, 40),
+      description: text(d.hotelDescription).slice(0, 4000),
+      important: text(d.hotelImportantInformation).slice(0, 1500),
+      facilities: [...new Set((d.facilities || []).map((f) => f.name).filter(Boolean))].slice(0, 24),
+      checkin: d.checkinCheckoutTimes?.checkin_start || null,
+      checkout: d.checkinCheckoutTimes?.checkout || null,
+      address: hotel.address,
+      location: d.location?.latitude ? { lat: d.location.latitude, lng: d.location.longitude } : null,
+      rooms: (d.rooms || []).map((r) => ({
+        id: r.id,
+        name: r.roomName,
+        description: text(r.description).slice(0, 600),
+        size: r.roomSizeSquare ? `${r.roomSizeSquare} m²` : null,
+        maxOccupancy: r.maxOccupancy || null,
+        beds: (r.bedTypes || []).map((b) => `${b.quantity} × ${b.bedType}`).join(', '),
+        amenities: (r.roomAmenities || []).map((a) => a.name.replace(/\.$/, '')).slice(0, 14),
+        photos: (r.photos || []).map((p) => https(p.hd_url || p.url)).filter(Boolean).slice(0, 10),
+      })),
+    };
+    this.details.set(key, { at: Date.now(), value });
+    while (this.details.size > 300) this.details.delete(this.details.keys().next().value);
+    return value;
+  }
+
 
   // Bloquea la habitación (prebook). Con `customerPays`, LiteAPI devuelve además
   // `secretKey` y `transactionId` para que el cliente pague con su tarjeta.

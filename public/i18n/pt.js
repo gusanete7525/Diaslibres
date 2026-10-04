@@ -471,5 +471,19 @@ export default {
  "sin plazas libres esas noches": "sem vagas nessas noites",
  "más de {price} por noche": "mais de {price} por noite",
  "{n} oculto ({why}).": "{n} oculto ({why}).",
- "{n} ocultos ({why}).": "{n} ocultos ({why})."
+ "{n} ocultos ({why}).": "{n} ocultos ({why}).",
+ "Ver fotos y detalles": "Ver fotos e detalhes",
+ "Elige la habitación": "Escolha o quarto",
+ "hasta {n} persona": "até {n} pessoa",
+ "hasta {n} personas": "até {n} pessoas",
+ "Cargando…": "A carregar…",
+ "Entrada desde las {time}": "Entrada a partir das {time}",
+ "Salida hasta las {time}": "Saída até às {time}",
+ "Información importante": "Informações importantes",
+ "Ver en el mapa": "Ver no mapa",
+ "Cerrar": "Fechar",
+ "Ver fechas y precios": "Ver datas e preços",
+ "Esa habitación ya no está disponible. Elige otra.": "Esse quarto já não está disponível. Escolha outro.",
+ "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "Não foi possível carregar a ficha do hotel. Tente novamente.",
+ "Solo alojamiento": "Só alojamento"
 };
