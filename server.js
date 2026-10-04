@@ -7,6 +7,7 @@ import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { OsmHotels } from './src/osm.js';
+import { Mailer } from './src/mail.js';
 import { LiteApi, PriceChangedError, PaymentPendingError, occupancy } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -18,7 +19,10 @@ export function createApp({
   // 'customer': paga el cliente con su tarjeta (pasarela de LiteAPI). 'account': se
   // carga a la cuenta de LiteAPI del titular de la clave.
   livePayment = process.env.LITEAPI_PAYMENT === 'account' ? 'account' : 'customer',
+  mailer = new Mailer(),
 } = {}) {
+  // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
+  const notify = (fn, b) => { if (b && mailer?.enabled) Promise.resolve(mailer[fn](b)).catch(() => {}); };
   const app = express();
   app.set('trust proxy', true); // https correcto detrás del proxy de Render
   app.use(express.json({ limit: '20kb' }));
@@ -204,6 +208,7 @@ export function createApp({
     try {
       const r = await live.confirm({ prebookId: b.prebookId, name: b.name, email: b.email, units: b.units, transactionId: b.transactionId });
       const done = await store.update(b.code, { status: 'confirmada', providerBookingId: r.bookingId, total: r.total ?? b.total, paidAt: new Date().toISOString() });
+      notify('bookingConfirmed', done);
       res.json(publicBooking(done));
     } catch (err) {
       console.error('[liteapi]', err.message);
@@ -253,6 +258,7 @@ export function createApp({
           roomName: q.roomName,
           createdAt: new Date().toISOString(),
         });
+        notify('bookingConfirmed', booking);
         return res.status(201).json(publicBooking(booking));
       } catch (err) {
         console.error('[liteapi]', err.message);
@@ -276,7 +282,8 @@ export function createApp({
         status: 'confirmada',
         createdAt: new Date().toISOString(),
       });
-      res.status(201).json(booking);
+      notify('bookingConfirmed', booking);
+      res.status(201).json(publicBooking(booking));
     } catch (err) {
       res.status(409).json({ error: err.message });
     }
@@ -303,7 +310,9 @@ export function createApp({
     }
     const b = await store.cancel(req.params.code, req.body?.email);
     if (!b) return res.status(404).json({ error: 'Reserva no encontrada.' });
-    res.json(publicBooking(cancellation ? await store.update(b.code, { cancellation }) : b));
+    const cancelled = cancellation ? await store.update(b.code, { cancellation }) : b;
+    notify('bookingCancelled', cancelled);
+    res.json(publicBooking(cancelled));
   });
 
   return app;

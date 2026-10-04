@@ -56,6 +56,7 @@ Los **24 hoteles son reales** (2 por ciudad): nombre, categoría, dirección, we
 - **Pago del cliente (por defecto con LiteAPI):** «Pagar y reservar» bloquea la habitación al precio mostrado (`/api/checkout`), muestra el formulario de tarjeta de la pasarela de LiteAPI y, al pagar, el cliente vuelve a `/?pago=<id>`, donde la reserva se confirma con el pago (`/api/checkout/:id/confirm`). Sin pago completado no hay reserva ni cargo. En el entorno de pruebas se paga con la tarjeta `4242 4242 4242 4242`, cualquier fecha futura y cualquier CVC.
 - `LITEAPI_PAYMENT=account` vuelve al modo anterior (se carga a la cuenta de LiteAPI del titular); con la clave real solo funciona con `ALLOW_REAL_BOOKINGS=1`.
 - `PUBLIC_URL` (opcional): dirección pública de la web para la vuelta del pago, si no se deduce bien de la petición.
+- **Emails al cliente:** confirmación y cancelación con [Resend](https://resend.com) si defines `RESEND_API_KEY`. `MAIL_FROM` es el remitente (por ejemplo `DíasLibres <reservas@tudominio.es>`, con el dominio verificado en Resend); sin dominio propio, Resend solo deja enviar a tu propio email desde `onboarding@resend.dev`. Un fallo del email nunca anula la reserva.
 - **Reservas guardadas:** en PostgreSQL si hay `DATABASE_URL` (Render la crea con `render.yaml`); si no, en `data/bookings.json`.
 
 ## Publicar en internet (Render)
