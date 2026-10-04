@@ -70,7 +70,7 @@ function setFooter(live) {
   const el = $('#footerNote');
   if (!el) return;
   el.textContent = live
-    ? 'Hoteles, precios y disponibilidad de LiteAPI' + (state.data?.live?.sandbox ? ' (entorno de pruebas: las reservas son de prueba y no se cobran)' : '') + (state.config.liveFlights ? '. Vuelos de LiteAPI (Nuitée).' : '. Los vuelos son simulados.')
+    ? 'Hoteles, precios y disponibilidad de LiteAPI' + (state.data?.live?.sandbox ? ' (entorno de pruebas: las reservas son de prueba y no se cobran)' : '') + (state.config.liveFlights ? '. Vuelos de LiteAPI (Nuitée).' : state.config.flights === false ? '.' : '. Los vuelos son simulados.')
     : el.dataset.default;
 }
 
@@ -275,6 +275,10 @@ async function aiSearchSubmit() {
     const ex = $('#aiExplain');
     ex.textContent = `${f.source === 'claude' ? '✨' : '🔎'} ${f.explanation}`;
     ex.hidden = false;
+    if (f.kind === 'flight' && state.config.flights === false) {
+      toast('Los vuelos todavía no están disponibles. De momento solo hoteles.');
+      return;
+    }
     setView(f.kind === 'flight' ? 'flights' : 'hotels');
     await search();
   } catch (err) {
@@ -1230,6 +1234,11 @@ $('#mineList').addEventListener('click', async (e) => {
 const configReady = api('/api/config').then((config) => {
   state.config = config;
   if (config.liveFlights) document.body.dataset.liveFlights = '1';
+  // Sin vuelos (datos reales de hoteles y vuelos apagados): fuera la pestaña y el ejemplo de vuelos.
+  if (config.flights === false) {
+    $('.tabs [data-view="flights"]').hidden = true;
+    for (const b of document.querySelectorAll('#examples button')) if (/vuelo/i.test(b.textContent)) b.hidden = true;
+  }
   filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
 }).catch(() => { /* sin vuelos reales */ });
 (async () => {
