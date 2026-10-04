@@ -71,7 +71,7 @@ test('vuelos reales: búsqueda, precio, datos de pasajeros, pago y confirmación
   const sent = [];
   const { server, base, post } = await setup(state, { bookingConfirmed: async (b) => sent.push(b) });
   try {
-    assert.deepEqual(await fetch(`${base}/api/config`).then((r) => r.json()), { liveFlights: true, sandbox: true });
+    assert.deepEqual(await fetch(`${base}/api/config`).then((r) => r.json()), { liveFlights: true, flights: true, sandbox: true });
     assert.equal((await fetch(`${base}/api/flights?origin=Madrid`).then((r) => r.json())).needRoute, true, 'sin destino no se busca');
 
     const data = await fetch(`${base}/api/flights?origin=Madrid&destination=lis&date=2030-03-10&adults=2`).then((r) => r.json());
@@ -175,14 +175,17 @@ test('vuelos: si la aerolínea no confirma tras el pago, se avisa al titular', a
   }
 });
 
-test('vuelos: con LITEAPI_FLIGHTS=off se usan los vuelos simulados', async () => {
+test('vuelos: con LITEAPI_FLIGHTS=off y hoteles reales no se ofrecen vuelos (ni simulados)', async () => {
   process.env.LITEAPI_FLIGHTS = 'off';
   try {
-    const { server, base } = await setup({ log: [] });
+    const { server, base, post } = await setup({ log: [] });
     try {
-      assert.equal((await fetch(`${base}/api/config`).then((r) => r.json())).liveFlights, false);
-      const data = await fetch(`${base}/api/flights`).then((r) => r.json());
-      assert.ok(data.results.length > 0 && data.results[0].calendar);
+      const config = await fetch(`${base}/api/config`).then((r) => r.json());
+      assert.equal(config.liveFlights, false);
+      assert.equal(config.flights, false, 'la web oculta la pestaña de vuelos');
+      assert.equal((await fetch(`${base}/api/flights`)).status, 404);
+      const r = await post('/api/bookings', { type: 'flight', itemId: 'f1', date: '2030-03-10', units: 1, name: 'Ana', email: 'ana@test.com' });
+      assert.equal(r.status, 403, 'no se puede reservar un vuelo simulado');
     } finally {
       server.close();
     }

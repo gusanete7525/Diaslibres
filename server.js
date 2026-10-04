@@ -111,6 +111,7 @@ export function createApp({
 
   app.get('/api/flights', async (req, res) => {
     if (liveFlights) return liveFlightSearch(req.query, res);
+    if (live) return res.status(404).json({ error: 'Los vuelos todavía no están disponibles.' });
     res.json(searchFlights(await store.all(), req.query));
   });
 
@@ -333,7 +334,8 @@ export function createApp({
   });
 
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
-  app.get('/api/config', (_req, res) => res.json({ liveFlights, sandbox: live?.sandbox ?? null }));
+  // flights: false con datos reales de hoteles y los vuelos apagados (no se enseñan vuelos simulados).
+  app.get('/api/config', (_req, res) => res.json({ liveFlights, flights: liveFlights || !live, sandbox: live?.sandbox ?? null }));
   app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, flights: liveFlights, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {
@@ -449,6 +451,8 @@ export function createApp({
     const email = String(body.email || '').trim().slice(0, 120);
     if (name.length < 2) return res.status(400).json({ error: 'Indica tu nombre.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email no válido.' });
+    // Con datos reales solo se reservan hoteles reales: nada simulado.
+    if (live && !isLive(body.itemId)) return res.status(403).json({ error: 'Esta reserva no está disponible.' });
     if (isLive(body.itemId)) {
       if (livePayment === 'customer') return res.status(400).json({ error: 'Para reservar este hotel hay que pagar con tarjeta.' });
       if (!liveBookingEnabled) {
