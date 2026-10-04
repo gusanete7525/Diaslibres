@@ -462,5 +462,14 @@ export default {
  "Casas y villas en {city}": "Vakantiehuizen en villa's in {city}",
  "Hemos encontrado {n} apartamentos en {city}.": "We hebben {n} appartementen in {city} gevonden.",
  "Hemos encontrado {n} casas y villas en {city}.": "We hebben {n} vakantiehuizen en villa's in {city} gevonden.",
- "{n} son apartamentos.": "{n} daarvan zijn appartementen."
+ "{n} son apartamentos.": "{n} daarvan zijn appartementen.",
+ "Pulsa «Ver más hoteles» para buscar entre los demás.": "Tik op ‘Meer hotels bekijken’ om de rest te doorzoeken.",
+ "{n} días desde el {date}": "{n} dagen vanaf {date}",
+ "para {n} personas": "voor {n} personen",
+ "para {n} persona": "voor {n} persoon",
+ "sin plazas libres esas noches o más de {price} por noche": "niet vrij op die nachten of meer dan {price} per nacht",
+ "sin plazas libres esas noches": "niet vrij op die nachten",
+ "más de {price} por noche": "meer dan {price} per nacht",
+ "{n} oculto ({why}).": "{n} verborgen ({why}).",
+ "{n} ocultos ({why}).": "{n} verborgen ({why})."
 };

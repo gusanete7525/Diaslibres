@@ -108,6 +108,11 @@ export const STAY_TYPES = {
   hostel: [203, 208, 216, 222, 235, 247, 251, 262, 264],
 };
 const STAY_OF = new Map(Object.entries(STAY_TYPES).flatMap(([k, ids]) => ids.map((id) => [id, k])));
+// «no availability found»: ninguno de esos hoteles tiene sitio esa noche (todos en rojo), no es un fallo.
+const noAvailability = (err) => {
+  if (/no availability/i.test(err?.message || '')) return { data: [] };
+  throw err;
+};
 const STAY_ICON = { apartment: '🏢', house: '🏡', hostel: '🛏️' };
 
 export class LiteApiError extends Error {}
@@ -300,13 +305,13 @@ export class LiteApi {
     let found;
     if (board) {
       // min-rates no filtra por régimen: con régimen se piden las tarifas y se toma la más barata.
-      const { data = [] } = await this.#request('POST', `${API}/hotels/rates`, { ...body, boardType: board }, { priority: false });
+      const { data = [] } = await this.#request('POST', `${API}/hotels/rates`, { ...body, boardType: board }, { priority: false }).catch(noAvailability);
       found = new Map(data.map((r) => {
         const prices = (r.roomTypes || []).map((o) => o.offerRetailRate?.amount).filter((x) => typeof x === 'number');
         return [r.hotelId, prices.length ? Math.min(...prices) : null];
       }));
     } else {
-      const { data = [] } = await this.#request('POST', `${API}/hotels/min-rates`, body, { priority: false });
+      const { data = [] } = await this.#request('POST', `${API}/hotels/min-rates`, body, { priority: false }).catch(noAvailability);
       found = new Map(data.map((r) => [r.hotelId, r.price]));
     }
     for (const h of missing) {

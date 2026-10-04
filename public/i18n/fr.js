@@ -462,5 +462,14 @@ export default {
  "Casas y villas en {city}": "Villas et maisons de vacances à {city}",
  "Hemos encontrado {n} apartamentos en {city}.": "Nous avons trouvé {n} appartements à {city}.",
  "Hemos encontrado {n} casas y villas en {city}.": "Nous avons trouvé {n} villas et maisons de vacances à {city}.",
- "{n} son apartamentos.": "{n} sont des appartements."
+ "{n} son apartamentos.": "{n} sont des appartements.",
+ "Pulsa «Ver más hoteles» para buscar entre los demás.": "Appuyez sur « Voir plus d’hôtels » pour chercher parmi les autres.",
+ "{n} días desde el {date}": "{n} jours à partir du {date}",
+ "para {n} personas": "pour {n} personnes",
+ "para {n} persona": "pour {n} personne",
+ "sin plazas libres esas noches o más de {price} por noche": "pas libre ces nuits-là ou plus de {price} par nuit",
+ "sin plazas libres esas noches": "pas libre ces nuits-là",
+ "más de {price} por noche": "plus de {price} par nuit",
+ "{n} oculto ({why}).": "{n} masqué ({why}).",
+ "{n} ocultos ({why}).": "{n} masqués ({why})."
 };

@@ -24,7 +24,7 @@ const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
 const FILTER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'tags', 'fac', 'board', 'stay', 'stops', 'sort', 'explanation'],
+  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'adults', 'tags', 'fac', 'board', 'stay', 'stops', 'sort', 'explanation'],
   properties: {
     kind: { type: 'string', enum: ['hotel', 'flight'] },
     destination: nullable({ type: 'string' }),
@@ -33,6 +33,7 @@ const FILTER_SCHEMA = {
     nights: nullable({ type: 'integer' }),
     maxPrice: nullable({ type: 'number' }),
     minStars: nullable({ type: 'integer' }),
+    adults: nullable({ type: 'integer' }),
     tags: { type: 'array', items: { type: 'string', enum: TAGS } },
     fac: { type: 'array', items: { type: 'string', enum: Object.keys(FACILITIES) } },
     board: nullable({ type: 'string', enum: Object.keys(BOARDS) }),
@@ -51,6 +52,8 @@ Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
 - checkIn: solo si da una fecha o mes concreto (para un mes sin día, usa el primer día futuro de ese mes). Si no, null: la web enseña un calendario de disponibilidad y el usuario no está obligado a elegir fechas.
 - nights: duración de la estancia (fin de semana = 2, una semana = 7).
 - maxPrice: precio máximo por noche (hotel) o por billete (vuelo) en euros, si lo indica o si dice "barato" pon un valor razonable o deja null y usa sort "price".
+- adults: número de personas si lo dice («para 2», «somos 4»); si no, null.
+- Si da un día concreto o un intervalo («del 10 al 12»), checkIn es el primer día (si no dice mes, el próximo día con ese número) y nights las noches entre las dos fechas, salvo que diga cuántas noches.
 - tags: solo etiquetas de la lista que encajen con lo pedido.
 - fac: servicios del hotel que pida expresamente (${Object.entries(FACILITIES).map(([k, f]) => `${k} = ${f.label}`).join(', ')}).
 - board: régimen de comidas si lo pide (${Object.entries(BOARDS).map(([k, v]) => `${k} = ${v}`).join(', ')}); si no, null.
@@ -112,10 +115,11 @@ export function sanitize(f) {
     kind: f.kind === 'flight' ? 'flight' : 'hotel',
     destination: f.destination || null,
     origin: f.origin || null,
-    checkIn: isISODate(f.checkIn) && f.checkIn >= today && f.checkIn <= addDays(today, 170) ? f.checkIn : null,
+    checkIn: isISODate(f.checkIn) && f.checkIn >= today && f.checkIn <= addDays(today, 330) ? f.checkIn : null,
     nights: f.nights ? Math.max(1, Math.min(30, Math.round(f.nights))) : null,
     maxPrice: f.maxPrice > 0 ? Math.round(f.maxPrice) : null,
     minStars: f.minStars >= 1 && f.minStars <= 5 ? f.minStars : null,
+    adults: f.adults >= 1 && f.adults <= 6 ? Math.round(f.adults) : null,
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => TAGS.includes(t)) : [],
     fac: Array.isArray(f.fac) ? [...new Set(f.fac.filter((k) => k in FACILITIES))] : [],
     board: f.board in BOARDS ? f.board : null,
@@ -210,12 +214,34 @@ export function localParse(text, lang = 'es') {
   let checkIn = null;
   const today = todayISO();
   const mi = MONTHS.findIndex((m) => t.includes(m));
-  if (mi >= 0) {
+  // Día concreto: «del 10 al 12», «el 10 de diciembre», «desde el 3 hasta el 8 de mayo».
+  const range = t.match(/\b(?:del|desde el|el|dia)\s+(\d{1,2})(?:\s+de\s+[a-z]+)?\s+(?:al|hasta el|-)\s+(\d{1,2})\b/);
+  const single = !range && t.match(/\b(?:el|dia|del)\s+(\d{1,2})(?:\s+de\s+([a-z]+))?\b(?!\s*(?:noche|dia|semana|persona|adulto|euro|€|%))/);
+  const day = Number((range || single)?.[1]) || null;
+  const dateOf = (d, month) => {
+    // Sin mes: el próximo día con ese número (este mes o el siguiente).
+    let [y, m] = [Number(today.slice(0, 4)), month >= 0 ? month + 1 : Number(today.slice(5, 7))];
+    const iso = () => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (iso() < today) { if (month >= 0) y++; else if (++m > 12) { m = 1; y++; } }
+    return isISODate(iso()) ? iso() : null;
+  };
+  if (day >= 1 && day <= 31) {
+    checkIn = dateOf(day, single?.[2] && MONTHS.includes(single[2]) ? MONTHS.indexOf(single[2]) : mi);
+    const until = Number(range?.[2]);
+    if (checkIn && until && !nights) {
+      const d = new Date(checkIn + 'T00:00:00Z');
+      const out = until > day ? until - day : until + new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate() - day;
+      nights = out >= 1 && out <= 30 ? out : null;
+    }
+  } else if (mi >= 0) {
     const y = Number(today.slice(0, 4));
     let candidate = `${y}-${String(mi + 1).padStart(2, '0')}-01`;
     if (candidate.slice(0, 7) < today.slice(0, 7)) candidate = `${y + 1}-${String(mi + 1).padStart(2, '0')}-01`;
     checkIn = candidate < today ? today : candidate;
   }
+  // Personas: «para 2», «somos 4», «3 adultos».
+  const people = t.match(/\b(?:para|somos)\s+(\d|dos|tres|cuatro|cinco|seis)\b(?!\s*(?:noche|dia|semana|euro|€))/) || t.match(/\b(\d|dos|tres|cuatro|cinco|seis)\s+(?:personas|adultos)\b/);
+  const adults = people ? Number(people[1]) || NUMBERS[people[1]] : null;
 
   let maxPrice = null;
   const p = t.match(/(?:menos de|maximo|max|hasta|por debajo de|no mas de)\s*(\d+)/) || t.match(/(\d+)\s*(?:€|euros|eur)/);
@@ -268,7 +294,8 @@ export function localParse(text, lang = 'es') {
   if (destination) parts.push(x(kind === 'flight' ? 'a {place}' : 'en {place}', { place: where(destination) }));
   if (tags.length) parts.push(`(${tags.map((g) => x(g)).join(', ')})`);
   if (nights) parts.push(x(nights > 1 ? 'para {n} noches' : 'para {n} noche', { n: nights }));
-  if (checkIn) parts.push(x('a partir del {date}', { date: checkIn }));
+  if (adults) parts.push(x(adults > 1 ? 'para {n} personas' : 'para {n} persona', { n: adults }));
+  if (checkIn) parts.push(x('a partir del {date}', { date: new Date(checkIn + 'T00:00:00Z').toLocaleDateString(LANGS[lang]?.locale || 'es-ES', { day: 'numeric', month: 'long', timeZone: 'UTC' }) }));
   if (maxPrice) parts.push(x('por menos de {price} €', { price: maxPrice }));
   if (fac.length) parts.push(`(${fac.map((k) => low(x(FACILITIES[k].label))).join(', ')})`);
   if (board) parts.push(x('en {board}', { board: low(x(BOARDS[board])) }));
@@ -276,5 +303,5 @@ export function localParse(text, lang = 'es') {
   if (cheap) parts.push(x('ordenados por precio'));
   else if (best) parts.push(x('ordenados por puntuación'));
 
-  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, stay, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: x('Busco {what}.', { what: parts.join(' ') }) });
+  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, adults, board, stay, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: x('Busco {what}.', { what: parts.join(' ') }) });
 }
