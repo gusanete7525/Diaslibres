@@ -11,7 +11,7 @@ import { minify } from 'terser';
 import { renderPage, sitemap, cityFromSlug, routeFromSlug } from './src/seo.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
-import { LiteApi, PriceChangedError, PaymentPendingError, occupancy } from './src/liteapi.js';
+import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -161,8 +161,17 @@ export function createApp({
     const city = String(q.destination || '').trim() || 'Madrid';
     try {
       let hotels = await live.hotels(city);
+      // Filtros: estrellas, puntuación y servicios (todos los marcados).
+      const fac = list(q.fac).filter((k) => k in FACILITIES);
       if (q.minStars) hotels = hotels.filter((h) => (h.stars || 0) >= Number(q.minStars));
-      hotels = [...hotels].sort((a, b) => (b.stars || 0) - (a.stars || 0) || (b.rating || 0) - (a.rating || 0));
+      if (q.minRating) hotels = hotels.filter((h) => (h.rating || 0) >= Number(q.minRating));
+      if (fac.length) hotels = hotels.filter((h) => fac.every((k) => h.facilities?.includes(k)));
+      const byStars = (a, b) => (b.stars || 0) - (a.stars || 0) || (b.rating || 0) - (a.rating || 0);
+      const byRating = (a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0);
+      const byReviews = (a, b) => (b.reviewCount || 0) - (a.reviewCount || 0) || byRating(a, b);
+      // «Más baratos» se ordena en el navegador cuando llegan los precios; aquí, por puntuación.
+      hotels = [...hotels].sort({ rating: byRating, price: byRating, reviews: byReviews }[q.sort] || byStars);
+      const board = q.board in BOARDS ? q.board : null;
       const start = todayISO();
       // Se envían por páginas: la ciudad puede tener cientos de hoteles.
       const page = Math.max(0, Math.floor(Number(q.page) || 0));
@@ -175,7 +184,7 @@ export function createApp({
         summary: { freeDays: 0, minPrice: null, maxPrice: null, avgPrice: null },
         bestStay: null,
       }));
-      res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
+      res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, board, boardName: board ? BOARDS[board] : null, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudo consultar LiteAPI ahora mismo. Inténtalo de nuevo en unos segundos.' });
@@ -188,7 +197,7 @@ export function createApp({
     const start = isISODate(req.query.start) && req.query.start >= todayISO() ? req.query.start : todayISO();
     const days = Math.max(1, Math.min(7, Number(req.query.days) || 7));
     try {
-      res.json({ start, days, prices: await live.nightlyPrices(ids, start, days, { adults: req.query.adults, children: req.query.children }) });
+      res.json({ start, days, prices: await live.nightlyPrices(ids, start, days, { adults: req.query.adults, children: req.query.children }, req.query.board) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'LiteAPI no ha devuelto precios. Inténtalo de nuevo.' });
@@ -430,7 +439,11 @@ export function createApp({
 
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
   // flights: false con datos reales de hoteles y los vuelos apagados (no se enseñan vuelos simulados).
-  app.get('/api/config', (_req, res) => res.json({ liveFlights, flights: liveFlights || !live, sandbox: live?.sandbox ?? null }));
+  app.get('/api/config', (_req, res) => res.json({
+    liveFlights, flights: liveFlights || !live, sandbox: live?.sandbox ?? null,
+    facilities: Object.fromEntries(Object.entries(FACILITIES).map(([k, f]) => [k, { label: f.label, icon: f.icon }])),
+    boards: BOARDS,
+  }));
   app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, flights: liveFlights, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {

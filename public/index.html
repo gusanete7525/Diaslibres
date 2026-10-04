@@ -72,11 +72,27 @@
       <label class="hotel-only">Ordenar
         <select name="sort">
           <option value="stars">Más estrellas</option>
+          <option value="rating">Mejor puntuación</option>
+          <option value="reviews">Más opiniones</option>
           <option value="price">Más baratos</option>
         </select>
       </label>
+      <button class="btn hotel-only" type="button" id="moreFiltersBtn" aria-expanded="false" aria-controls="moreFilters">⚙️ Más filtros <span id="moreCount" class="count-badge" hidden></span></button>
+      <div id="moreFilters" class="more-filters hotel-only" hidden>
+        <div class="mf-row">
+          <label>Estrellas
+            <select name="minStars"><option value="">Cualquiera</option><option value="2">2 o más ★</option><option value="3">3 o más ★</option><option value="4">4 o más ★</option><option value="5">5 ★</option></select>
+          </label>
+          <label>Puntuación
+            <select name="minRating"><option value="">Cualquiera</option><option value="7">7 o más</option><option value="8">8 o más (muy bien)</option><option value="9">9 o más (fantástico)</option></select>
+          </label>
+          <label>Comidas
+            <select name="board"><option value="">Cualquiera</option><option value="BI">Desayuno incluido</option><option value="HB">Media pensión</option><option value="FB">Pensión completa</option><option value="AI">Todo incluido</option></select>
+          </label>
+        </div>
+        <fieldset class="mf-facilities"><legend>Servicios</legend><div id="facilityList"></div></fieldset>
+      </div>
       <input type="hidden" name="tags" />
-      <input type="hidden" name="minStars" />
       <input type="hidden" name="checkIn" />
       <button class="btn" type="button" data-send>Aplicar</button>
       <button class="btn ghost" type="button" id="clearFilters">Limpiar</button>

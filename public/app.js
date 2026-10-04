@@ -104,14 +104,15 @@ document.querySelectorAll('[data-view]').forEach((b) =>
 function filterParams() {
   const fd = new FormData(filters);
   const p = new URLSearchParams();
-  for (const [k, v] of fd) if (v) p.set(k, v);
+  for (const [k, v] of fd) if (v && k !== 'fac') p.set(k, v);
+  if (fd.getAll('fac').length) p.set('fac', fd.getAll('fac').join(','));
   p.delete('kids');
   for (const k of [...p.keys()]) if (k.startsWith('age')) p.delete(k);
   if (state.view === 'hotels') {
     const ages = [...filters.querySelectorAll('[name^="age"]')].map((s) => s.value);
     if (ages.length) p.set('children', ages.join(','));
   }
-  if (state.view === 'flights') { p.delete('nights'); p.delete('sort'); p.delete('tags'); p.delete('minStars'); p.delete('adults'); }
+  if (state.view === 'flights') { for (const k of ['nights', 'sort', 'tags', 'minStars', 'minRating', 'board', 'fac', 'adults']) p.delete(k); }
   else p.delete('origin');
   for (const k of ['date', 'returnDate', 'passengers']) p.delete(k);
   return p;
@@ -176,7 +177,7 @@ async function loadLivePrices(token, list = state.data.results) {
     try {
       const g = state.data.guests || {};
       const occ = `&adults=${g.adults || 2}${g.children?.length ? '&children=' + g.children.join(',') : ''}`;
-      res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}${occ}`);
+      res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}${occ}${state.data.board ? '&board=' + state.data.board : ''}`);
     } catch (err) {
       if (token === searchToken) toast(err.message);
       return;
@@ -195,6 +196,14 @@ async function loadLivePrices(token, list = state.data.results) {
     const loaded = Math.min(days, off + 7);
     const note = $('#livePending');
     if (note) note.textContent = loaded < days ? `Cargando precios reales… ${loaded}/${days} días` : '';
+  }
+  // «Más baratos»: con todos los precios ya cargados se reordenan las tarjetas.
+  if (token === searchToken && filters.sort.value === 'price' && state.view === 'hotels') {
+    const price = (h) => h.summary?.minPrice ?? Infinity;
+    state.data.results.sort((a, b) => price(a) - price(b));
+    renderResults();
+    const note = $('#livePending');
+    if (note) note.textContent = '';
   }
 }
 
@@ -250,9 +259,39 @@ $('#clearFilters').addEventListener('click', () => {
   filters.reset();
   renderKidAges();
   filters.tags.value = filters.minStars.value = filters.checkIn.value = '';
+  updateMoreCount();
   $('#aiExplain').hidden = true;
   search();
 });
+
+// ---------- Más filtros: servicios, régimen, estrellas y puntuación ----------
+const FACILITY_FALLBACK = {
+  mascotas: { label: 'Admite mascotas', icon: '🐾' }, aire: { label: 'Aire acondicionado', icon: '❄️' },
+  calefaccion: { label: 'Calefacción', icon: '🔥' }, piscina: { label: 'Piscina', icon: '🏊' },
+  parking: { label: 'Parking', icon: '🅿️' }, wifi: { label: 'Wifi gratis', icon: '📶' },
+};
+const facilityInfo = () => state.config.facilities || FACILITY_FALLBACK;
+function renderFacilityList() {
+  const box = $('#facilityList');
+  const checked = new Set([...box.querySelectorAll('input:checked')].map((i) => i.value));
+  box.innerHTML = Object.entries(facilityInfo()).map(([k, f]) =>
+    `<label class="check"><input type="checkbox" name="fac" value="${esc(k)}" ${checked.has(k) ? 'checked' : ''} /> <span>${f.icon} ${esc(f.label)}</span></label>`).join('');
+}
+function updateMoreCount() {
+  const n = filters.querySelectorAll('[name="fac"]:checked').length
+    + ['minStars', 'minRating', 'board'].filter((k) => filters[k].value).length;
+  const badge = $('#moreCount');
+  badge.textContent = n;
+  badge.hidden = !n;
+}
+renderFacilityList();
+$('#moreFiltersBtn').addEventListener('click', () => {
+  const panel = $('#moreFilters');
+  panel.hidden = !panel.hidden;
+  $('#moreFiltersBtn').setAttribute('aria-expanded', String(!panel.hidden));
+});
+$('#moreFilters').addEventListener('change', () => { updateMoreCount(); search(); });
+filters.sort.addEventListener('change', () => { if (state.view === 'hotels') search(); });
 
 async function aiSearchSubmit() {
   const query = $('#aiQuery').value.trim();
@@ -272,6 +311,11 @@ async function aiSearchSubmit() {
     filters.tags.value = (f.tags || []).join(',');
     filters.minStars.value = f.minStars || '';
     filters.checkIn.value = f.checkIn || '';
+    filters.board.value = f.board || '';
+    const fac = new Set(f.fac || []);
+    filters.querySelectorAll('[name="fac"]').forEach((c) => { c.checked = fac.has(c.value); });
+    if (fac.size || f.board) { $('#moreFilters').hidden = false; $('#moreFiltersBtn').setAttribute('aria-expanded', 'true'); }
+    updateMoreCount();
     const ex = $('#aiExplain');
     ex.textContent = `${f.source === 'claude' ? '✨' : '🔎'} ${f.explanation}`;
     ex.hidden = false;
@@ -310,9 +354,10 @@ function renderResults() {
   const osmNote = (osm?.count ? ` · ${osm.count} de OpenStreetMap` : '') + (ai?.count ? ` · ${ai.count} sugerido${ai.count > 1 ? 's' : ''} por IA` : '');
   const live = state.data.live;
   const liveNote = live ? ` · precios y disponibilidad reales de LiteAPI${live.sandbox ? ' (entorno de pruebas)' : ''}` : '';
+  const boardNote = state.data.boardName ? ` · precios con ${state.data.boardName.toLowerCase()}` : '';
   const city = live && !filters.destination.value.trim() ? `<p class="count">Mostrando ${esc(live.city)}. Escribe otra ciudad para ver sus hoteles.</p>` : '';
   const total = state.data.total > list.length ? `${list.length} de ${state.data.total.toLocaleString('es-ES')}` : list.length;
-  results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote} · próximos ${state.data.days} días</p>${city}${live ? '<p class="count" id="livePending">Cargando precios reales…</p>' : ''}${warnings}`;
+  results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote}${boardNote} · próximos ${state.data.days} días</p>${city}${live ? '<p class="count" id="livePending">Cargando precios reales…</p>' : ''}${warnings}`;
   setFooter(!!live);
   for (const item of list) results.append(renderCard(item));
   if (state.data.hasMore) results.append(moreHotelsButton());
@@ -378,7 +423,7 @@ function renderCard(item) {
         <h3>${esc(item.name)}</h3>
         <div class="meta">${item.stars ? `<span class="stars" aria-label="${item.stars} estrellas">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${String(item.rating).replace('.', ',')}</span>${item.reviewCount ? ` <span class="meta">(${item.reviewCount.toLocaleString('es-ES')} opiniones)</span>` : ''}` : ''}</div>
         ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">Web oficial ↗</a>` : ''}</div>` : ''}
-        <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="Ficha en OpenStreetMap">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? '<span class="tag osm" title="Datos sugeridos por IA: compruébalos antes de viajar">✨ Sugerido por IA</span>' : ''}${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+        <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="Ficha en OpenStreetMap">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? '<span class="tag osm" title="Datos sugeridos por IA: compruébalos antes de viajar">✨ Sugerido por IA</span>' : ''}${item.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}${(item.facilities || []).map((k) => facilityInfo()[k]).filter(Boolean).map((f) => `<span class="tag fac" title="${esc(f.label)}">${f.icon} ${esc(f.label)}</span>`).join('')}</div>
       </div>`;
   el.innerHTML = `
     <div>
@@ -614,7 +659,7 @@ const bookForm = $('#bookForm');
 function bookingRequest() {
   const b = state.booking;
   const g = state.data.guests || {};
-  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value, adults: g.adults, children: g.children };
+  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value, adults: g.adults, children: g.children, board: state.data.board || undefined };
   return b.isFlight ? { ...base, date: b.start } : { ...base, checkIn: b.start, checkOut: b.end };
 }
 
@@ -1274,6 +1319,7 @@ $('#mineList').addEventListener('click', async (e) => {
 const configReady = api('/api/config').then((config) => {
   state.config = config;
   if (config.liveFlights) document.body.dataset.liveFlights = '1';
+  if (config.facilities) renderFacilityList();
   // Sin vuelos (datos reales de hoteles y vuelos apagados): fuera la pestaña y el ejemplo de vuelos.
   if (config.flights === false) {
     $('.tabs [data-view="flights"]').hidden = true;

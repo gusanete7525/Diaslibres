@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { HOTELS, AIRPORTS } from './catalog.js';
 import { todayISO, addDays, isISODate } from './availability.js';
+import { FACILITIES, BOARDS } from './liteapi.js';
 
 // Búsqueda en lenguaje natural ("algo de playa barato en julio para una semana").
 // Con ANTHROPIC_API_KEY se usa Claude para convertir la frase en filtros; sin
@@ -15,7 +16,7 @@ const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
 const FILTER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'tags', 'sort', 'explanation'],
+  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'tags', 'fac', 'board', 'sort', 'explanation'],
   properties: {
     kind: { type: 'string', enum: ['hotel', 'flight'] },
     destination: nullable({ type: 'string' }),
@@ -25,7 +26,9 @@ const FILTER_SCHEMA = {
     maxPrice: nullable({ type: 'number' }),
     minStars: nullable({ type: 'integer' }),
     tags: { type: 'array', items: { type: 'string', enum: TAGS } },
-    sort: { type: 'string', enum: ['price', 'stars'] },
+    fac: { type: 'array', items: { type: 'string', enum: Object.keys(FACILITIES) } },
+    board: nullable({ type: 'string', enum: Object.keys(BOARDS) }),
+    sort: { type: 'string', enum: ['price', 'stars', 'rating'] },
     explanation: { type: 'string' },
   },
 };
@@ -39,6 +42,9 @@ Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
 - nights: duración de la estancia (fin de semana = 2, una semana = 7).
 - maxPrice: precio máximo por noche (hotel) o por billete (vuelo) en euros, si lo indica o si dice "barato" pon un valor razonable o deja null y usa sort "price".
 - tags: solo etiquetas de la lista que encajen con lo pedido.
+- fac: servicios del hotel que pida expresamente (${Object.entries(FACILITIES).map(([k, f]) => `${k} = ${f.label}`).join(', ')}).
+- board: régimen de comidas si lo pide (${Object.entries(BOARDS).map(([k, v]) => `${k} = ${v}`).join(', ')}); si no, null.
+- sort: "price" si busca barato, "rating" si pide los mejor valorados; si no, "stars".
 - explanation: una frase breve en español explicando qué vas a buscar.`;
 
 let client = null;
@@ -97,7 +103,9 @@ export function sanitize(f) {
     maxPrice: f.maxPrice > 0 ? Math.round(f.maxPrice) : null,
     minStars: f.minStars >= 1 && f.minStars <= 5 ? f.minStars : null,
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => TAGS.includes(t)) : [],
-    sort: f.sort === 'price' ? 'price' : 'stars',
+    fac: Array.isArray(f.fac) ? [...new Set(f.fac.filter((k) => k in FACILITIES))] : [],
+    board: f.board in BOARDS ? f.board : null,
+    sort: ['price', 'rating'].includes(f.sort) ? f.sort : 'stars',
     explanation: String(f.explanation || '').slice(0, 300),
   };
 }
@@ -201,6 +209,22 @@ export function localParse(text) {
     if (i >= 0 && (tags.length > 1 || destination)) tags.splice(i, 1); // "barato" ordena por precio, no excluye
   }
 
+  const FAC_WORDS = {
+    mascotas: ['mascota', 'perro', 'gato', 'pet friendly'], aire: ['aire acondicionado', 'climatiza'],
+    calefaccion: ['calefaccion'], piscina: ['piscina'], parking: ['parking', 'aparcamiento', 'garaje'],
+    wifi: ['wifi'], spa: ['spa', 'jacuzzi', 'sauna'], gimnasio: ['gimnasio', 'gym'], restaurante: ['restaurante'],
+    playa: ['primera linea', 'en la playa', 'frente al mar'], ninos: ['ninos', 'familia', 'hijos'],
+    adultos: ['solo adultos'], accesible: ['silla de ruedas', 'accesible', 'movilidad reducida'], traslado: ['traslado', 'transfer'],
+  };
+  const fac = kind === 'hotel' ? Object.keys(FAC_WORDS).filter((k) => FAC_WORDS[k].some((w) => t.includes(w))) : [];
+  const board = kind !== 'hotel' ? null
+    : /todo incluido/.test(t) ? 'AI'
+    : /pension completa/.test(t) ? 'FB'
+    : /media pension/.test(t) ? 'HB'
+    : /desayuno/.test(t) ? 'BI' : null;
+  const best = /mejor valorad|mejor puntua|mejores opiniones/.test(t);
+  for (const k of fac) if (tags.includes(k)) tags.splice(tags.indexOf(k), 1);
+
   const parts = [];
   parts.push(kind === 'flight' ? 'vuelos' : 'hoteles');
   if (origin) parts.push(`desde ${AIRPORTS[origin] || origin}`);
@@ -209,7 +233,10 @@ export function localParse(text) {
   if (nights) parts.push(`para ${nights} noche${nights > 1 ? 's' : ''}`);
   if (checkIn) parts.push(`a partir del ${checkIn}`);
   if (maxPrice) parts.push(`por menos de ${maxPrice} €`);
+  if (fac.length) parts.push(`(${fac.map((k) => FACILITIES[k].label.toLowerCase()).join(', ')})`);
+  if (board) parts.push(`en ${BOARDS[board].toLowerCase()}`);
   if (cheap) parts.push('ordenados por precio');
+  else if (best) parts.push('ordenados por puntuación');
 
-  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, sort: cheap ? 'price' : 'stars', explanation: `Busco ${parts.join(' ')}.` });
+  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: `Busco ${parts.join(' ')}.` });
 }

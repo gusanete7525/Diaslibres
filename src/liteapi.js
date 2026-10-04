@@ -56,6 +56,27 @@ export function occupancy({ adults, children } = {}) {
 }
 const occKey = (o) => `${o.adults}a${(o.children || []).join('-')}`;
 
+// Servicios del hotel (ids de /data/facilities de LiteAPI) agrupados para los filtros.
+export const FACILITIES = {
+  mascotas: { label: 'Admite mascotas', icon: '🐾', ids: [4, 217, 218, 956] },
+  aire: { label: 'Aire acondicionado', icon: '❄️', ids: [109] },
+  calefaccion: { label: 'Calefacción', icon: '🔥', ids: [80] },
+  piscina: { label: 'Piscina', icon: '🏊', ids: [301, 103, 104, 120, 122, 192, 193, 194, 195, 196, 258] },
+  parking: { label: 'Parking', icon: '🅿️', ids: [2, 46, 52, 161, 181, 628, 674, 676] },
+  wifi: { label: 'Wifi gratis', icon: '📶', ids: [107] },
+  restaurante: { label: 'Restaurante', icon: '🍽️', ids: [3, 115, 116] },
+  spa: { label: 'Spa', icon: '💆', ids: [10, 54, 63, 79, 241, 557] },
+  gimnasio: { label: 'Gimnasio', icon: '🏋️', ids: [11, 492] },
+  playa: { label: 'En la playa', icon: '🏖️', ids: [114, 146, 302, 547, 707] },
+  ninos: { label: 'Para niños', icon: '🧸', ids: [28, 56, 144, 172, 173, 258] },
+  adultos: { label: 'Solo adultos', icon: '🥂', ids: [149] },
+  accesible: { label: 'Accesible', icon: '♿', ids: [25, 185] },
+  traslado: { label: 'Traslado al aeropuerto', icon: '🚐', ids: [17, 139, 493, 689] },
+};
+// Régimen de comidas: código de LiteAPI → texto.
+export const BOARDS = { BI: 'Desayuno incluido', HB: 'Media pensión', FB: 'Pensión completa', AI: 'Todo incluido' };
+const boardOf = (b) => (b in BOARDS ? b : null);
+
 // Tasas que no van en el precio y se pagan en el hotel (p. ej. tasa turística),
 // sumadas por concepto y moneda de todas las habitaciones de la oferta.
 export function payAtHotel(rates = []) {
@@ -177,11 +198,13 @@ export class LiteApi {
 
   #toHotel(h) {
     const stars = Number.isInteger(h.stars) && h.stars >= 1 && h.stars <= 5 ? h.stars : null;
+    const ids = new Set(Array.isArray(h.facilityIds) ? h.facilityIds : []);
+    const facilities = Object.keys(FACILITIES).filter((k) => FACILITIES[k].ids.some((id) => ids.has(id)));
     const tags = [];
     if (stars >= 5) tags.push('lujo');
     if (stars && stars <= 2) tags.push('económico');
-    if (/pool|piscina/i.test(h.hotelDescription || '')) tags.push('piscina');
-    if (/\bspa\b/i.test(h.hotelDescription || '')) tags.push('spa');
+    if (!facilities.includes('piscina') && /pool|piscina/i.test(h.hotelDescription || '')) facilities.push('piscina');
+    if (!facilities.includes('spa') && /\bspa\b/i.test(h.hotelDescription || '')) facilities.push('spa');
     const hotel = {
       id: 'lite-' + h.id,
       liteId: h.id,
@@ -195,6 +218,7 @@ export class LiteApi {
       rating: typeof h.rating === 'number' && h.rating > 0 ? h.rating : null,
       reviewCount: h.reviewCount || null,
       tags,
+      facilities,
       image: '🏨',
       description: shortDescription(h.hotelDescription),
       origin: 'liteapi',
@@ -210,12 +234,13 @@ export class LiteApi {
   // ---------- Precio de cada noche (estancia de 1 noche, 2 adultos) ----------
 
   // Devuelve { [idInterno]: [{ date, price|null, available }] } para `days` noches desde `start`.
-  async nightlyPrices(ids, start, days, guests = {}) {
+  async nightlyPrices(ids, start, days, guests = {}, board = null) {
     const hotels = ids.map((id) => this.hotelsById.get(id)).filter(Boolean);
     const dates = Array.from({ length: days }, (_, i) => addDays(start, i));
     const occ = occupancy(guests);
-    const k = occKey(occ);
-    await Promise.all(dates.map((d) => this.#pricesForNight(hotels, d, occ)));
+    board = boardOf(board);
+    const k = occKey(occ) + (board ? '|' + board : '');
+    await Promise.all(dates.map((d) => this.#pricesForNight(hotels, d, occ, board)));
     const out = {};
     for (const h of hotels) {
       out[h.id] = dates.map((date) => {
@@ -226,15 +251,15 @@ export class LiteApi {
     return out;
   }
 
-  async #pricesForNight(hotels, date, occ) {
-    const k = occKey(occ);
+  async #pricesForNight(hotels, date, occ, board = null) {
+    const k = occKey(occ) + (board ? '|' + board : '');
     const now = Date.now();
     const missing = hotels.filter((h) => {
       const hit = this.prices.get(`${h.liteId}|${date}|${k}`);
       return !hit || now - hit.at > PRICE_TTL;
     });
     if (!missing.length) return;
-    const { data = [] } = await this.#request('POST', `${API}/hotels/min-rates`, {
+    const body = {
       hotelIds: missing.map((h) => h.liteId),
       checkin: date,
       checkout: addDays(date, 1),
@@ -242,8 +267,19 @@ export class LiteApi {
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 6,
-    }, { priority: false });
-    const found = new Map(data.map((r) => [r.hotelId, r.price]));
+    };
+    let found;
+    if (board) {
+      // min-rates no filtra por régimen: con régimen se piden las tarifas y se toma la más barata.
+      const { data = [] } = await this.#request('POST', `${API}/hotels/rates`, { ...body, boardType: board }, { priority: false });
+      found = new Map(data.map((r) => {
+        const prices = (r.roomTypes || []).map((o) => o.offerRetailRate?.amount).filter((x) => typeof x === 'number');
+        return [r.hotelId, prices.length ? Math.min(...prices) : null];
+      }));
+    } else {
+      const { data = [] } = await this.#request('POST', `${API}/hotels/min-rates`, body, { priority: false });
+      found = new Map(data.map((r) => [r.hotelId, r.price]));
+    }
     for (const h of missing) {
       const p = found.get(h.liteId);
       // Sin tarifa esa noche = no hay disponibilidad (día en rojo).
@@ -253,7 +289,7 @@ export class LiteApi {
 
   // ---------- Presupuesto, reserva y cancelación ----------
 
-  async quote({ itemId, checkIn, checkOut, units = 1, adults, children }) {
+  async quote({ itemId, checkIn, checkOut, units = 1, adults, children, board }) {
     const hotel = this.hotelsById.get(itemId);
     if (!hotel) throw new LiteApiError('Hotel no encontrado. Vuelve a buscar la ciudad.');
     const rooms = Math.max(1, Math.min(4, Number(units) || 1));
@@ -265,9 +301,14 @@ export class LiteApi {
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 8,
+      ...(boardOf(board) ? { boardType: boardOf(board) } : {}),
     });
     const offers = (data[0]?.roomTypes || []).filter((o) => typeof o.offerRetailRate?.amount === 'number');
-    if (!offers.length) throw new LiteApiError('Ya no quedan habitaciones para esas fechas. Elige otros días.');
+    if (!offers.length) {
+      throw new LiteApiError(boardOf(board)
+        ? `No quedan habitaciones con ${BOARDS[board].toLowerCase()} para esas fechas. Prueba otros días u otro régimen.`
+        : 'Ya no quedan habitaciones para esas fechas. Elige otros días.');
+    }
     offers.sort((a, b) => a.offerRetailRate.amount - b.offerRetailRate.amount);
     const best = offers[0];
     const rate = best.rates?.[0] || {};

@@ -15,8 +15,8 @@ function fakeLiteApi(log) {
     if (u.includes('/data/places')) return Response.json({ data: [{ placeId: 'P1', types: ['locality'] }] });
     if (u.includes('/data/hotels')) {
       return Response.json({ data: [
-        { id: 'lpA', name: 'Hotel Real Uno', city: 'Granada', country: 'es', address: 'Calle A 1', zip: '18001', stars: 4, rating: 9.1, reviewCount: 1200, thumbnail: 'https://img.test/a.jpg', hotelDescription: '<p><strong>Título</strong><br>Un hotel con piscina en la azotea y vistas a la Alhambra desde todas sus habitaciones.</p>' },
-        { id: 'lpB', name: 'Hotel Real Dos', city: 'Granada', country: 'es', stars: 2, rating: 0, thumbnail: 'javascript:x' },
+        { id: 'lpA', name: 'Hotel Real Uno', city: 'Granada', country: 'es', address: 'Calle A 1', zip: '18001', stars: 4, rating: 9.1, reviewCount: 1200, thumbnail: 'https://img.test/a.jpg', hotelDescription: '<p><strong>Título</strong><br>Un hotel con piscina en la azotea y vistas a la Alhambra desde todas sus habitaciones.</p>', facilityIds: [4, 109, 107] },
+        { id: 'lpB', name: 'Hotel Real Dos', city: 'Granada', country: 'es', stars: 2, rating: 0, reviewCount: 5000, thumbnail: 'javascript:x', facilityIds: [80] },
       ] });
     }
     if (u.endsWith('/hotels/min-rates')) {
@@ -70,7 +70,7 @@ test('hoteles, precios por noche, reserva y cancelación con LiteAPI', async () 
     assert.equal(a.address, 'Calle A 1, 18001 Granada');
     assert.equal(a.photo, 'https://img.test/a.jpg');
     assert.equal(bHotel.photo, null, 'solo fotos https');
-    assert.ok(a.tags.includes('piscina'));
+    assert.ok(a.facilities.includes('piscina'));
     assert.match(a.description, /piscina en la azotea/);
     assert.ok(a.calendar.every((d) => d.pending));
 
@@ -306,4 +306,30 @@ test('los huéspedes (adultos y edades de niños) llegan a LiteAPI y cada grupo 
   // Valores fuera de rango se acotan.
   await live.nightlyPrices([h.id], '2030-03-02', 1, { adults: 40, children: '30,-1,4,5,6,7' });
   assert.deepEqual(bodies.at(-1).occupancies, [{ adults: 6, children: [17, 0, 4, 5] }]);
+});
+
+test('hoteles: más filtros (servicios, puntuación, régimen) y orden', async () => {
+  const log = [];
+  const live = new LiteApi({ key: 'sand_test', fetchImpl: fakeLiteApi(log) });
+  const server = createApp({ store: new BookingStore(null), osm: null, live, livePayment: 'account' }).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const base = `http://localhost:${server.address().port}`;
+  const get = (q) => fetch(`${base}/api/hotels?destination=Granada&${q}`).then((r) => r.json());
+  try {
+    assert.deepEqual((await get('fac=mascotas,aire')).results.map((h) => h.name), ['Hotel Real Uno']);
+    assert.deepEqual((await get('fac=calefaccion')).results.map((h) => h.name), ['Hotel Real Dos']);
+    assert.equal((await get('fac=mascotas,calefaccion')).results.length, 0);
+    assert.deepEqual((await get('minRating=8')).results.map((h) => h.name), ['Hotel Real Uno']);
+    assert.deepEqual((await get('sort=reviews')).results.map((h) => h.name), ['Hotel Real Dos', 'Hotel Real Uno']);
+    const hb = await get('board=HB');
+    assert.equal(hb.boardName, 'Media pensión');
+    assert.equal((await get('board=XX')).board, null);
+    // Con régimen, los precios se piden a /hotels/rates con boardType.
+    const start = new Date(Date.now() + 86400000 * 3).toISOString().slice(0, 10);
+    const p = await fetch(`${base}/api/live/prices?ids=lite-lpA&start=${start}&days=1&board=HB`).then((r) => r.json());
+    assert.equal(p.prices['lite-lpA'][0].price, 242);
+    assert.ok(log.some((l) => l.endsWith('/hotels/rates')));
+  } finally {
+    server.close();
+  }
 });
