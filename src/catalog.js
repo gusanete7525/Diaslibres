@@ -36,6 +36,7 @@ export const HOTELS = [
 export const AIRPORTS = {
   MAD: 'Madrid', BCN: 'Barcelona', AGP: 'Málaga', SVQ: 'Sevilla', GRX: 'Granada',
   TFN: 'Tenerife', IBZ: 'Ibiza', VGO: 'Vigo', LIS: 'Lisboa', CDG: 'París', FCO: 'Roma', BIO: 'Bilbao',
+  VLC: 'Valencia', PMI: 'Palma de Mallorca', LHR: 'Londres', AMS: 'Ámsterdam',
 };
 
 export const FLIGHTS = [

@@ -10,6 +10,7 @@ const HOTELS_TTL = 24 * 3600 * 1000;
 const MAX_HOTELS = 15;
 const MAX_FLIGHTS = 20;
 const OFFER_TTL = 30 * 60 * 1000; // las ofertas de vuelo caducan pronto
+const SEARCH_TTL = 8 * 60 * 1000; // las ofertas de LiteAPI caducan a los ~10 minutos
 const CONCURRENCY = 3; // el entorno de pruebas responde 429 con más peticiones a la vez
 
 const norm = (s) =>
@@ -103,6 +104,7 @@ export class LiteApi {
     this.hotelsById = new Map(); // id interno -> hotel
     this.prices = new Map(); // `${liteId}|${fecha}` -> { at, price }
     this.offers = new Map(); // offerId de vuelo -> { at, trip }
+    this.flightSearches = new Map(); // ruta|fecha|vuelta|adultos -> { at, promise }
   }
 
   // ---------- Peticiones con límite de concurrencia y reintentos en 429 ----------
@@ -352,7 +354,21 @@ export class LiteApi {
     return data.flatMap((set) => set.airports || []).filter((a) => a.iata).map((a) => ({ code: a.iata, name: a.name, city: a.city, country: a.country }));
   }
 
-  async flightSearch({ origin, destination, date, returnDate, adults = 1 }) {
+  // Misma búsqueda en los últimos minutos (o en curso): se reutiliza. El calendario de
+  // precios lanza una búsqueda por día y la de la fecha elegida ya está hecha.
+  flightSearch(params, { priority = true } = {}) {
+    const key = [params.origin, params.destination, params.date, params.returnDate || '', Number(params.adults) || 1].join('|');
+    const now = Date.now();
+    for (const [k, v] of this.flightSearches) if (now - v.at > SEARCH_TTL) this.flightSearches.delete(k);
+    const hit = this.flightSearches.get(key);
+    if (hit) return hit.promise;
+    const promise = this.#flightSearch(params, priority);
+    this.flightSearches.set(key, { at: now, promise });
+    promise.catch(() => this.flightSearches.delete(key));
+    return promise;
+  }
+
+  async #flightSearch({ origin, destination, date, returnDate, adults = 1 }, priority) {
     const legs = [{ origin, destination, date, direction: 'OUTBOUND' }];
     if (returnDate) legs.push({ origin: destination, destination: origin, date: returnDate, direction: 'INBOUND' });
     const body = {
@@ -363,10 +379,10 @@ export class LiteApi {
       sort: { sortBy: 'price', sortOrder: 'asc' },
     };
     // El buscador del proveedor falla a veces con 5xx («failed to search flights»): un reintento.
-    const { data = [] } = await this.#request('POST', `${API}/flights/rates`, body).catch(async (err) => {
+    const { data = [] } = await this.#request('POST', `${API}/flights/rates`, body, { priority }).catch(async (err) => {
       if (!(err.status >= 500)) throw err;
       await sleep(1500);
-      return this.#request('POST', `${API}/flights/rates`, body);
+      return this.#request('POST', `${API}/flights/rates`, body, { priority });
     });
     const best = new Map(); // journeyKey -> viaje con su oferta más barata
     for (const set of data) {
@@ -419,6 +435,8 @@ export class LiteApi {
     const p = offer.pricing.display;
     return {
       journeyKey: j.journeyKey || offer.offerId,
+      // El mismo vuelo en otros días (mismos números de vuelo), para su calendario.
+      flightKey: segments.map((s) => s.flight).join('-'),
       offerId: offer.offerId,
       expiration: offer.expiration || null,
       total: Math.round(p.total * 100) / 100,
