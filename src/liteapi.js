@@ -455,11 +455,16 @@ export class LiteApi {
   // Reserva la tarifa con la aerolínea y crea el pago (Stripe) que hará el cliente.
   async flightPrebook({ offerId, contact, passengers }) {
     let res;
-    try {
-      res = await this.#request('POST', `${API}/flights/prebooks`, { offerId, usePaymentSdk: true, contact, passengers });
-    } catch (err) {
-      if (err.status === 404 || [45029, 45063].includes(err.code)) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
-      throw err;
+    for (let attempt = 0; !res; attempt++) {
+      try {
+        res = await this.#request('POST', `${API}/flights/prebooks`, { offerId, usePaymentSdk: true, contact, passengers });
+      } catch (err) {
+        if (err.status === 404 || [45029, 45063].includes(err.code)) throw new LiteApiError('Esa tarifa ya no está disponible. Vuelve a buscar el vuelo.');
+        // Fallos internos del proveedor (p. ej. «failed to create prebook»): se reintenta una vez.
+        if (err.status >= 500 && attempt < 1) { await sleep(1500); continue; }
+        if (err.status >= 500) throw new LiteApiError('La aerolínea no ha podido reservar esta tarifa ahora mismo. Inténtalo de nuevo o elige otro vuelo.');
+        throw err;
+      }
     }
     const d = (Array.isArray(res.data) ? res.data[0] : res.data) || {};
     if (!d.prebookId || !d.secretKey || !d.transactionId) throw new LiteApiError('No se pudo preparar el pago del vuelo. Inténtalo de nuevo.');

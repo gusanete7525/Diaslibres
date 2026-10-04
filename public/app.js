@@ -824,7 +824,7 @@ function paxFieldset(i) {
     </div>
     <div class="row">
       <label>Nacionalidad <select name="nationality" required>${countryOptions}</select></label>
-      <label>Documento <select name="documentType" required><option value="passport">Pasaporte</option><option value="id_card">DNI / documento de identidad</option></select></label>
+      <label>Documento <select name="documentType" required><option value="passport">Pasaporte</option><option value="id">DNI / documento de identidad</option></select></label>
     </div>
     <div class="row">
       <label>Número de documento <input name="documentNumber" required minlength="5" autocomplete="off" /></label>
@@ -843,6 +843,25 @@ function showFlightPay(on) {
   $('#flightFields').hidden = on;
   $('#flightPayBox').hidden = !on;
   if (!on) $('#flightPayment').innerHTML = '';
+}
+
+// Sin clave de Stripe en el prebook: la pasarela de LiteAPI (la de los hoteles) muestra la tarjeta y su propio botón de pagar.
+async function payFlightWithWrapper(co) {
+  state.flight.checkout = co;
+  await loadPaymentSdk().catch(() => { throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'); });
+  showFlightPay(true);
+  $('#flightConfirm').hidden = true;
+  $('#flightTotal').textContent = eur2(co.total);
+  $('#flightPayHint').innerHTML = `Total a pagar: <b>${eur2(co.total)}</b>${Math.abs(co.total - co.searchTotal) > 0.01 ? ` (incluye ${eur2(co.total - co.searchTotal)} de gastos de emisión del billete)` : ''} · código ${esc(co.code)}<br>El cargo lo hace Nuitée, el proveedor de los billetes, y aparecerá a su nombre en tu tarjeta.` +
+    (co.publicKey === 'sandbox' ? '<br>Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.' : '');
+  new window.LiteAPIPayment({
+    publicKey: co.publicKey,
+    appearance: { theme: 'flat' },
+    options: { business: { name: 'DíasLibres' } },
+    targetElement: '#flightPayment',
+    secretKey: co.secretKey,
+    returnUrl: co.returnUrl,
+  }).handlePayment();
 }
 
 async function openFlightBooking(trip, data) {
@@ -921,7 +940,7 @@ onSend(flightForm, async () => {
   try {
     const co = await api('/api/flights/checkout', { method: 'POST', body: JSON.stringify({ offerId: f.trip.offerId, adults: f.adults, ...flightCustomer() }) });
     store.set('dl-email', flightForm.email.value.trim());
-    if (!co.publishableKey) throw new Error('El pago con tarjeta no está disponible ahora mismo. Inténtalo más tarde.');
+    if (!co.publishableKey) return await payFlightWithWrapper(co);
     await loadStripe().catch(() => { throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'); });
     f.checkout = co;
     f.stripe = window.Stripe(co.publishableKey);
