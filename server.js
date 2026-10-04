@@ -31,6 +31,15 @@ export function createApp({
   // ---------- Buscadores y app Android ----------
   const indexHtml = readFileSync(join(root, 'public', 'index.html'), 'utf8');
   const siteUrl = (req) => (process.env.SITE_URL?.trim() || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  // Con dominio propio (SITE_URL), las demás direcciones (onrender.com, www.) redirigen a él.
+  app.use((req, res, next) => {
+    const site = process.env.SITE_URL?.trim();
+    if (!site || !['GET', 'HEAD'].includes(req.method) || req.path.startsWith('/api/') || req.path.startsWith('/.well-known/')) return next();
+    let host;
+    try { host = new URL(site).host; } catch { return next(); }
+    if (req.get('host') === host || /^localhost(:|$)|^127\./.test(req.get('host') || '')) return next();
+    res.redirect(301, site.replace(/\/$/, '') + req.originalUrl);
+  });
   const sendPage = (req, res, page) => {
     res.set('Cache-Control', 'public, max-age=300');
     res.type('html').send(renderPage(indexHtml, page, { site: siteUrl(req), verification: process.env.GOOGLE_SITE_VERIFICATION?.trim() }));
@@ -354,7 +363,7 @@ export function createApp({
         transactionId: pre.transactionId,
         createdAt: new Date().toISOString(),
       });
-      const base = (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const base = (process.env.SITE_URL?.trim() || process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
       res.status(201).json({
         checkoutId,
         code: booking.code,
@@ -475,7 +484,7 @@ export function createApp({
         transactionId: pre.transactionId,
         createdAt: new Date().toISOString(),
       });
-      const base = (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const base = (process.env.SITE_URL?.trim() || process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
       res.status(201).json({
         checkoutId,
         code: booking.code,
