@@ -112,6 +112,22 @@ export class Mailer {
     );
   }
 
+  // Enlace para entrar en la cuenta (sin contraseña). Caduca en 30 minutos.
+  loginLink({ email, url, lang = 'es' }) {
+    const t = (k, v) => tr(lang, k, v);
+    return this.#send(
+      email,
+      t('Tu enlace para entrar en DíasLibres'),
+      layout(
+        esc(t('Pulsa el botón para entrar en tu cuenta. El enlace caduca en 30 minutos y solo sirve una vez.')),
+        `<p style="margin:20px 0"><a href="${esc(url)}" style="background:#2a78d6;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:700;display:inline-block">${esc(t('Entrar en DíasLibres'))}</a></p>` +
+          `<p style="color:#52514e;font-size:13px">${esc(t('Si no lo has pedido tú, ignora este email: nadie podrá entrar sin él.'))}</p>`,
+        lang,
+        t('Este email se ha enviado porque alguien pidió entrar en DíasLibres con esta dirección.'),
+      ),
+    );
+  }
+
   // Aviso interno: el cliente pagó, pero LiteAPI no confirmó la reserva.
   paymentWithoutBooking(b) {
     if (!this.admin) {
@@ -151,10 +167,10 @@ function table(rows) {
     .join('')}</table>`;
 }
 
-function layout(title, body, lang = 'es') {
+function layout(title, body, lang = 'es', footer = tr(lang, 'Este email se ha enviado porque se hizo una reserva con esta dirección.')) {
   return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0b0b0b;max-width:560px">
   <p style="font-size:22px;font-weight:800;margin:0 0 12px">Días<span style="color:#2a78d6">Libres</span></p>
   <p style="font-size:16px">${title}</p>${body}
-  <p style="color:#75746f;font-size:12px;margin-top:24px">DíasLibres · ${esc(tr(lang, 'Este email se ha enviado porque se hizo una reserva con esta dirección.'))}</p>
+  <p style="color:#75746f;font-size:12px;margin-top:24px">DíasLibres · ${esc(footer)}</p>
 </div>`;
 }
