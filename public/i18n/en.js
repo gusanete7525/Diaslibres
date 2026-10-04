@@ -480,7 +480,7 @@ export default {
  "Entrada desde las {time}": "Check-in from {time}",
  "Salida hasta las {time}": "Check-out until {time}",
  "Información importante": "Important information",
- "Ver en el mapa": "View on map",
+ "Ver en Google Maps": "View on Google Maps",
  "Cerrar": "Close",
  "Ver fechas y precios": "See dates and prices",
  "Esa habitación ya no está disponible. Elige otra.": "That room is no longer available. Please choose another.",

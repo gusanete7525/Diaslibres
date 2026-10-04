@@ -480,7 +480,7 @@ export default {
  "Entrada desde las {time}": "Check-in dalle {time}",
  "Salida hasta las {time}": "Check-out entro le {time}",
  "Información importante": "Informazioni importanti",
- "Ver en el mapa": "Vedi sulla mappa",
+ "Ver en Google Maps": "Vedi su Google Maps",
  "Cerrar": "Chiudi",
  "Ver fechas y precios": "Vedi date e prezzi",
  "Esa habitación ya no está disponible. Elige otra.": "Questa camera non è più disponibile. Scegline un’altra.",
