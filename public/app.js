@@ -24,6 +24,7 @@ const state = {
   items: new Map(), // id -> item
   ui: new Map(), // id -> { month, start, end, picking }
   booking: null,
+  config: {}, // { liveFlights, sandbox } del servidor
 };
 
 const results = $('#results');
@@ -43,12 +44,12 @@ $('#themeToggle').addEventListener('click', () => {
 
 // ---------- Utilidades UI ----------
 let toastTimer;
-function toast(msg) {
+function toast(msg, ms = 3500) {
   const t = $('#toast');
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), 3500);
+  toastTimer = setTimeout(() => (t.hidden = true), ms);
 }
 function showTip(html, x, y) {
   tooltip.innerHTML = html;
@@ -69,7 +70,7 @@ function setFooter(live) {
   const el = $('#footerNote');
   if (!el) return;
   el.textContent = live
-    ? 'Hoteles, precios y disponibilidad de LiteAPI' + (state.data?.live?.sandbox ? ' (entorno de pruebas: las reservas son de prueba y no se cobran)' : '') + '. Los vuelos son simulados.'
+    ? 'Hoteles, precios y disponibilidad de LiteAPI' + (state.data?.live?.sandbox ? ' (entorno de pruebas: las reservas son de prueba y no se cobran)' : '') + (state.config.liveFlights ? '. Vuelos de LiteAPI (Nuitée).' : '. Los vuelos son simulados.')
     : el.dataset.default;
 }
 
@@ -85,6 +86,7 @@ function setView(view) {
   if (view === 'flights') filters.destination.setAttribute('list', 'destList');
   else filters.destination.removeAttribute('list');
   filters.destination.placeholder = view === 'flights' ? 'Ciudad o aeropuerto' : 'Escribe cualquier ciudad';
+  filters.origin.placeholder = state.config.liveFlights ? 'Ciudad o código (MAD)' : 'Cualquiera';
   if (view === 'mine') {
     const email = store.get('dl-email');
     if (email) { $('#mineForm').email.value = email; loadMine(email); }
@@ -111,12 +113,14 @@ function filterParams() {
   }
   if (state.view === 'flights') { p.delete('nights'); p.delete('sort'); p.delete('tags'); p.delete('minStars'); p.delete('adults'); }
   else p.delete('origin');
+  for (const k of ['date', 'returnDate', 'passengers']) p.delete(k);
   return p;
 }
 
 let searchToken = 0;
 async function search() {
   const token = ++searchToken;
+  if (state.view === 'flights' && state.config.liveFlights) return searchLiveFlights(token);
   results.classList.add('loading');
   if (state.view === 'hotels' && filters.destination.value.trim()) {
     results.innerHTML = `<p class="count">Buscando hoteles en ${esc(filters.destination.value.trim())}…</p>`;
@@ -715,6 +719,235 @@ const noRefund = (b) =>
   b.provider === 'liteapi' &&
   (!b.refundable || (b.freeCancellationUntil && Date.now() > Date.parse(b.freeCancellationUntil.replace(' ', 'T') + 'Z')));
 
+// ---------- Vuelos reales (LiteAPI) ----------
+const hhmm = (iso) => String(iso || '').slice(11, 16);
+const dur = (m) => (m == null ? '' : `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}`);
+const stopsText = (n) => (n === 0 ? 'directo' : `${n} escala${n > 1 ? 's' : ''}`);
+function legText(leg) {
+  if (!leg) return '';
+  return `${hhmm(leg.departure)} ${esc(leg.from)} → ${hhmm(leg.arrival)} ${esc(leg.to)}${leg.dayChange ? ` (+${leg.dayChange})` : ''} · ${stopsText(leg.stops)}`;
+}
+
+async function searchLiveFlights(token) {
+  results.classList.add('loading');
+  const origin = filters.origin.value.trim();
+  const destination = filters.destination.value.trim();
+  if (origin && destination) results.innerHTML = `<p class="count">Buscando vuelos de ${esc(origin)} a ${esc(destination)}…</p>`;
+  try {
+    const p = new URLSearchParams({ origin, destination, adults: filters.passengers.value });
+    for (const k of ['date', 'returnDate', 'maxPrice']) if (filters[k].value) p.set(k, filters[k].value);
+    const data = await api(`/api/flights?${p}`);
+    if (token !== searchToken) return;
+    state.data = data;
+    if (!filters.date.value) filters.date.value = data.date;
+    renderFlightResults(data);
+  } catch (err) {
+    if (token === searchToken) results.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+  } finally {
+    results.classList.remove('loading');
+  }
+}
+
+function renderFlightResults(data) {
+  setFooter(true);
+  if (data.needRoute) {
+    results.innerHTML = '<p class="empty">Escribe el origen y el destino (ciudad o código de aeropuerto, por ejemplo MAD) y la fecha de ida para ver vuelos reales.</p>';
+    return;
+  }
+  const route = `${esc(data.origin.name)} (${esc(data.origin.code)}) → ${esc(data.destination.name)} (${esc(data.destination.code)})`;
+  const when = `${fmtDay.format(toDate(data.date))}${data.returnDate ? ' → ' + fmtDay.format(toDate(data.returnDate)) : ' · solo ida'}`;
+  const note = data.live.sandbox ? ' · entorno de pruebas de LiteAPI (precios no reales)' : '';
+  if (!data.results.length) {
+    results.innerHTML = `<p class="count">${route} · ${when}</p><p class="empty">No hay vuelos para esas fechas. Prueba otro día u otro aeropuerto.</p>`;
+    return;
+  }
+  results.innerHTML = `<p class="count">${data.results.length} vuelo${data.results.length > 1 ? 's' : ''} · ${route} · ${when} · ${data.adults} pasajero${data.adults > 1 ? 's' : ''}${note}</p>`;
+  for (const trip of data.results) results.append(flightCard(trip, data));
+}
+
+function flightLegHtml(leg, segments, dir) {
+  if (!leg) return '';
+  const seg = segments.find((x) => x.direction === dir);
+  return `<div class="fl-leg">
+      <div class="fl-time">${hhmm(leg.departure)}<small>${esc(leg.from)}</small></div>
+      <div class="fl-mid">${dur(leg.minutes)}<div class="line"></div>${stopsText(leg.stops)}</div>
+      <div class="fl-time">${hhmm(leg.arrival)}<small>${esc(leg.to)}${leg.dayChange ? ` +${leg.dayChange}` : ''}</small></div>
+    </div>
+    <div class="fl-air">${seg?.logo ? `<img src="${esc(seg.logo)}" alt="" loading="lazy" onerror="this.remove()">` : '✈️'} ${dir === 'INBOUND' ? 'Vuelta · ' : ''}${esc(leg.airlines.join(', '))}${seg ? ' · ' + esc(seg.flight) : ''}</div>`;
+}
+
+function flightCard(trip, data) {
+  const el = document.createElement('article');
+  el.className = 'card flight-card';
+  const tags = [
+    trip.checkedBag ? '🧳 maleta facturada' : trip.carryOn ? '🎒 equipaje de mano' : 'sin maleta incluida',
+    trip.refundable ? 'reembolsable' : 'no reembolsable',
+    trip.fare,
+    trip.seatsRemaining != null && trip.seatsRemaining <= 5 ? `quedan ${trip.seatsRemaining} plazas` : '',
+  ].filter(Boolean);
+  el.innerHTML = `
+    <div>${flightLegHtml(trip.outbound, trip.segments, 'OUTBOUND')}${flightLegHtml(trip.inbound, trip.segments, 'INBOUND')}</div>
+    <div class="fl-side">
+      <div><div class="price">${eur2(trip.total)}</div><div class="meta">total${data.adults > 1 ? ` · ${data.adults} pasajeros` : ''}</div></div>
+      <div class="tags">${tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <button class="btn primary" type="button">Reservar</button>
+    </div>`;
+  $('button', el).addEventListener('click', () => openFlightBooking(trip, data));
+  return el;
+}
+
+// Nacionalidades más habituales; el resto se escribe con su código (FR, US…).
+const COUNTRIES = ['ES', 'PT', 'FR', 'IT', 'DE', 'GB', 'IE', 'NL', 'BE', 'CH', 'AT', 'PL', 'RO', 'SE', 'NO', 'DK', 'FI', 'GR', 'US', 'CA', 'MX', 'AR', 'CO', 'CL', 'PE', 'VE', 'EC', 'BR', 'UY', 'MA', 'CN', 'JP'];
+const countryName = (() => { try { const dn = new Intl.DisplayNames(['es'], { type: 'region' }); return (c) => dn.of(c); } catch { return (c) => c; } })();
+const countryOptions = COUNTRIES.map((c) => [c, countryName(c)]).sort((a, b) => (a[0] === 'ES' ? -1 : b[0] === 'ES' ? 1 : a[1].localeCompare(b[1], 'es')))
+  .map(([c, n]) => `<option value="${c}">${esc(n)}</option>`).join('');
+
+function paxFieldset(i) {
+  return `<fieldset data-pax="${i}">
+    <legend>Pasajero ${i + 1}${i === 0 ? ' (titular)' : ''}</legend>
+    <div class="row">
+      <label>Nombre <input name="firstName" required autocomplete="${i === 0 ? 'given-name' : 'off'}" /></label>
+      <label>Apellidos <input name="lastName" required minlength="2" autocomplete="${i === 0 ? 'family-name' : 'off'}" /></label>
+    </div>
+    <div class="row">
+      <label>Fecha de nacimiento <input name="birthday" type="date" required /></label>
+      <label>Sexo (como en el documento) <select name="gender" required><option value="">—</option><option value="F">Mujer</option><option value="M">Hombre</option></select></label>
+    </div>
+    <div class="row">
+      <label>Nacionalidad <select name="nationality" required>${countryOptions}</select></label>
+      <label>Documento <select name="documentType" required><option value="passport">Pasaporte</option><option value="id_card">DNI / documento de identidad</option></select></label>
+    </div>
+    <div class="row">
+      <label>Número de documento <input name="documentNumber" required minlength="5" autocomplete="off" /></label>
+      <label>Caduca el <input name="documentExpiry" type="date" required /></label>
+    </div>
+  </fieldset>`;
+}
+
+const flightDialog = $('#flightDialog');
+const flightForm = $('#flightForm');
+function flightError(msg) {
+  $('#flightError').textContent = msg || '';
+  $('#flightError').hidden = !msg;
+}
+function showFlightPay(on) {
+  $('#flightFields').hidden = on;
+  $('#flightPayBox').hidden = !on;
+  if (!on) $('#flightPayment').innerHTML = '';
+}
+
+async function openFlightBooking(trip, data) {
+  state.flight = { trip, adults: data.adults, stripe: null, elements: null, checkout: null };
+  $('#flightSummary').innerHTML = `<b>${esc(data.origin.name)} → ${esc(data.destination.name)}</b><br>Ida ${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))} · ${legText(trip.outbound)}${trip.inbound ? `<br>Vuelta ${fmtDay.format(toDate(trip.inbound.departure.slice(0, 10)))} · ${legText(trip.inbound)}` : ''}<br>${data.adults} pasajero${data.adults > 1 ? 's' : ''} · ${esc(trip.outbound.airlines.join(', '))}`;
+  $('#paxList').innerHTML = Array.from({ length: data.adults }, (_, i) => paxFieldset(i)).join('');
+  for (const d of flightForm.querySelectorAll('[name="birthday"]')) d.max = new Date().toISOString().slice(0, 10);
+  for (const d of flightForm.querySelectorAll('[name="documentExpiry"]')) d.min = trip.outbound.departure.slice(0, 10);
+  flightForm.email.value ||= store.get('dl-email') || '';
+  flightForm.terms.checked = false;
+  $('#flightTotal').textContent = '…';
+  $('#flightExtra').hidden = true;
+  flightError('');
+  showFlightPay(false);
+  const btn = $('#flightConfirm');
+  btn.hidden = false;
+  btn.disabled = true;
+  btn.textContent = 'Continuar al pago';
+  flightDialog.showModal();
+  try {
+    const v = await api('/api/flights/quote', { method: 'POST', body: JSON.stringify({ offerId: trip.offerId }) });
+    state.flight.total = v.total;
+    $('#flightTotal').textContent = eur2(v.total);
+    const extra = [
+      v.changed ? `El precio ha cambiado desde la búsqueda (antes ${eur2(trip.total)}).` : '',
+      trip.refundable ? 'Tarifa reembolsable según las condiciones de la aerolínea.' : 'Tarifa no reembolsable.',
+      trip.checkedBag ? 'Incluye maleta facturada.' : trip.carryOn ? 'Incluye equipaje de mano; maleta facturada no incluida.' : 'No incluye maleta.',
+      data.live.sandbox ? 'Entorno de pruebas: no es un billete real.' : '',
+    ].filter(Boolean).join(' ');
+    $('#flightExtra').textContent = extra;
+    $('#flightExtra').hidden = !extra;
+    btn.disabled = false;
+  } catch (err) {
+    $('#flightTotal').textContent = '—';
+    flightError(err.message);
+  }
+}
+$('#flightCancel').addEventListener('click', () => flightDialog.close());
+
+function flightCustomer() {
+  const passengers = [...flightForm.querySelectorAll('[data-pax]')].map((fs) => {
+    const v = (n) => fs.querySelector(`[name="${n}"]`).value.trim();
+    return { firstName: v('firstName'), lastName: v('lastName'), birthday: v('birthday'), gender: v('gender'), nationality: v('nationality'), documentType: v('documentType'), documentNumber: v('documentNumber'), documentExpiry: v('documentExpiry') };
+  });
+  return { email: flightForm.email.value.trim(), phoneCountryCode: flightForm.phoneCountryCode.value, phoneNumber: flightForm.phoneNumber.value, passengers };
+}
+
+let stripePromise;
+function loadStripe() {
+  stripePromise ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://js.stripe.com/v3/';
+    s.onload = () => (window.Stripe ? resolve() : reject(new Error('stripe')));
+    s.onerror = () => reject(new Error('stripe'));
+    document.head.append(s);
+  }).catch((e) => { stripePromise = null; throw e; });
+  return stripePromise;
+}
+
+onSend(flightForm, async () => {
+  const f = state.flight;
+  const btn = $('#flightConfirm');
+  flightError('');
+  btn.disabled = true;
+  // Paso 2: pagar con la tarjeta (Stripe lleva al cliente de vuelta a /?vuelo=<id>).
+  if (f.checkout) {
+    btn.textContent = 'Procesando el pago…';
+    const { error } = await f.stripe.confirmPayment({ elements: f.elements, confirmParams: { return_url: f.checkout.returnUrl } });
+    flightError(error?.message || 'No se pudo completar el pago.');
+    btn.disabled = false;
+    btn.textContent = `Pagar ${eur2(f.checkout.total)}`;
+    return;
+  }
+  // Paso 1: bloquear la tarifa con los datos de los pasajeros y preparar el pago.
+  btn.textContent = 'Reservando la tarifa…';
+  try {
+    const co = await api('/api/flights/checkout', { method: 'POST', body: JSON.stringify({ offerId: f.trip.offerId, adults: f.adults, ...flightCustomer() }) });
+    store.set('dl-email', flightForm.email.value.trim());
+    if (!co.publishableKey) throw new Error('El pago con tarjeta no está disponible ahora mismo. Inténtalo más tarde.');
+    await loadStripe().catch(() => { throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'); });
+    f.checkout = co;
+    f.stripe = window.Stripe(co.publishableKey);
+    const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    f.elements = f.stripe.elements({ clientSecret: co.secretKey, appearance: { theme: dark ? 'night' : 'stripe' }, locale: 'es' });
+    showFlightPay(true);
+    f.elements.create('payment').mount('#flightPayment');
+    $('#flightTotal').textContent = eur2(co.total);
+    $('#flightPayHint').innerHTML = `Total a pagar: <b>${eur2(co.total)}</b>${Math.abs(co.total - co.searchTotal) > 0.01 ? ` (incluye ${eur2(co.total - co.searchTotal)} de gastos de emisión del billete)` : ''} · código ${esc(co.code)}<br>El cargo lo hace Nuitée, el proveedor de los billetes, y aparecerá a su nombre en tu tarjeta.` +
+      (state.data?.live?.sandbox ? '<br>Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.' : '');
+    btn.textContent = `Pagar ${eur2(co.total)}`;
+  } catch (err) {
+    flightError(err.message);
+    btn.textContent = 'Continuar al pago';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Al volver de pagar: /?vuelo=<id> → confirmar el billete con la aerolínea.
+async function finishFlightPayment(id, redirectStatus) {
+  history.replaceState(null, '', location.pathname);
+  setView('mine');
+  if (redirectStatus === 'failed') { toast('El pago no se ha completado. No se ha hecho ningún cargo.'); return; }
+  toast('Confirmando tu billete con la aerolínea…');
+  try {
+    const b = await api(`/api/flights/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
+    toast(`✅ ${b.sandbox ? 'Reserva de prueba confirmada' : 'Vuelo reservado'} · código ${b.code}${b.pnr ? ' · localizador ' + b.pnr : ''}`, 8000);
+    $('#mineForm').email.value = b.email;
+    loadMine(b.email);
+  } catch (err) {
+    toast(err.message, 15000);
+  }
+}
+
 // ---------- Mis reservas ----------
 async function loadMine(email) {
   const list = $('#mineList');
@@ -725,13 +958,15 @@ async function loadMine(email) {
       <div class="booking">
         <div>
           <div><b>${esc(b.itemName)}</b></div>
-          <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${b.units} hab.` : `${fmtDay.format(toDate(b.date))} · ${b.units} pasajero${b.units > 1 ? 's' : ''}`} · ${eur(b.total)}</div>
+          <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${b.units} hab.` : `${fmtDay.format(toDate(b.date))}${b.returnDate ? ' → ' + fmtDay.format(toDate(b.returnDate)) : ''} · ${b.units} pasajero${b.units > 1 ? 's' : ''}`} · ${eur(b.total)}</div>
+          ${b.type === 'flight' && b.flight ? `<div class="meta">${legText(b.flight.outbound)}${b.flight.inbound ? ' · vuelta ' + legText(b.flight.inbound) : ''}</div>` : ''}
+          ${b.passengers?.length ? `<div class="meta">${esc(b.passengers.join(', '))}</div>` : ''}
           ${b.guests ? `<div class="meta">${guestsText(b.guests)} por habitación</div>` : ''}
-          ${b.provider === 'liteapi' ? `<div class="meta">LiteAPI${b.sandbox ? ' (prueba)' : ''} · ref. ${esc(b.providerBookingId)}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
+          ${b.provider === 'liteapi' ? `<div class="meta">LiteAPI${b.sandbox ? ' (prueba)' : ''} · ref. ${esc(b.bookingRef || b.providerBookingId)}${b.pnr ? ' · localizador ' + esc(b.pnr) : ''}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.type === 'flight' ? (b.refundable ? 'tarifa reembolsable' : 'no reembolsable') : b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
           ${b.payAtHotel?.length ? `<div class="meta">A pagar en el hotel: ${esc(payAtHotelText(b.payAtHotel))}</div>` : ''}
-          <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : '✖'} ${esc(b.status)}</span></div>
+          <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : b.status === 'cancelacion_solicitada' ? '…' : '✖'} ${esc(b.status === 'cancelacion_solicitada' ? 'cancelación solicitada' : b.status)}</span></div>
         </div>
-        ${b.status === 'confirmada' ? `<button class="btn" data-cancel="${esc(b.code)}"${noRefund(b) ? ' data-norefund="1"' : ''}>Cancelar</button>` : ''}
+        ${b.status === 'confirmada' ? `<button class="btn" data-cancel="${esc(b.code)}"${b.type === 'flight' && b.provider === 'liteapi' ? ' data-flight="1"' : noRefund(b) ? ' data-norefund="1"' : ''}>Cancelar</button>` : ''}
       </div>`).join('');
   } catch (err) {
     list.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
@@ -747,6 +982,23 @@ $('#mineList').addEventListener('click', async (e) => {
   if (!btn) return;
   const code = btn.dataset.cancel;
   // Confirmación en dos pasos dentro de la página (sin diálogos del navegador).
+  if (!btn.dataset.armed && btn.dataset.flight) {
+    // Vuelos: antes de cancelar se pide a la aerolínea cuánto se devolvería.
+    btn.disabled = true;
+    btn.textContent = 'Consultando el reembolso…';
+    try {
+      const q = await api(`/api/bookings/${encodeURIComponent(code)}/cancel-quote?email=${encodeURIComponent($('#mineForm').email.value.trim())}`);
+      btn.textContent = q.refund > 0 ? `Reembolso estimado ${eur2(q.refund)} (no garantizado). ¿Cancelar?` : 'Sin reembolso. ¿Cancelar igualmente?';
+      btn.dataset.armed = '1';
+      setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'Cancelar'; } }, 15000);
+    } catch (err) {
+      btn.textContent = 'Cancelar';
+      toast(err.message);
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
   if (!btn.dataset.armed) {
     btn.dataset.armed = '1';
     btn.textContent = btn.dataset.norefund ? 'Sin reembolso. ¿Cancelar igualmente?' : '¿Seguro? Pulsa otra vez';
@@ -755,8 +1007,8 @@ $('#mineList').addEventListener('click', async (e) => {
   }
   const email = $('#mineForm').email.value.trim();
   try {
-    await api(`/api/bookings/${encodeURIComponent(code)}/cancel`, { method: 'POST', body: JSON.stringify({ email }) });
-    toast('Reserva cancelada. Los días vuelven a estar libres.');
+    const done = await api(`/api/bookings/${encodeURIComponent(code)}/cancel`, { method: 'POST', body: JSON.stringify({ email }) });
+    toast(done.status === 'cancelacion_solicitada' ? 'Cancelación solicitada. La aerolínea la confirmará en breve.' : 'Reserva cancelada.');
     loadMine(email);
   } catch (err) {
     toast(err.message);
@@ -770,8 +1022,14 @@ $('#mineList').addEventListener('click', async (e) => {
     const cities = new Set([...Object.values(airports), 'Benasque']);
     $('#destList').innerHTML = [...cities].sort().map((c) => `<option value="${esc(c)}">`).join('');
   } catch { /* datalist opcional */ }
-  const pago = new URLSearchParams(location.search).get('pago');
-  if (pago) return finishPayment(pago);
+  try {
+    state.config = await api('/api/config');
+    if (state.config.liveFlights) document.body.dataset.liveFlights = '1';
+    filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
+  } catch { /* sin vuelos reales */ }
+  const params = new URLSearchParams(location.search);
+  if (params.get('pago')) return finishPayment(params.get('pago'));
+  if (params.get('vuelo')) return finishFlightPayment(params.get('vuelo'), params.get('redirect_status'));
   setView('hotels');
   search();
 })();

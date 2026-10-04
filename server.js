@@ -49,6 +49,7 @@ export function createApp({
   const LIVE_DAYS = 30;
   // Si paga el cliente, se puede reservar siempre. Si se carga a la cuenta del titular,
   // con la clave real solo con ALLOW_REAL_BOOKINGS=1 (si no, cualquiera reservaría a su costa).
+  const liveFlights = !!live && process.env.LITEAPI_FLIGHTS !== 'off';
   const liveBookingEnabled = !!live && (livePayment === 'customer' || live.sandbox || process.env.ALLOW_REAL_BOOKINGS === '1');
   // Datos internos de la reserva que no salen al navegador.
   const publicBooking = (b) => {
@@ -109,11 +110,175 @@ export function createApp({
   });
 
   app.get('/api/flights', async (req, res) => {
+    if (liveFlights) return liveFlightSearch(req.query, res);
     res.json(searchFlights(await store.all(), req.query));
   });
 
+  // ---------- Vuelos reales con LiteAPI (si hay LITEAPI_KEY y no LITEAPI_FLIGHTS=off) ----------
+  const norm = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  // «MAD», «Madrid» o cualquier ciudad con aeropuerto → código IATA.
+  async function airportCode(q) {
+    const text = String(q || '').trim();
+    if (/^[a-z]{3}$/i.test(text)) return { code: text.toUpperCase(), name: AIRPORTS[text.toUpperCase()] || text.toUpperCase() };
+    const known = Object.entries(AIRPORTS).find(([, city]) => norm(city) === norm(text));
+    if (known) return { code: known[0], name: known[1] };
+    if (text.length < 2) return null;
+    const [first] = await live.airports(text);
+    return first ? { code: first.code, name: first.city || first.name } : null;
+  }
+
+  async function liveFlightSearch(q, res) {
+    const adults = Math.max(1, Math.min(6, Number(q.adults) || 1));
+    const date = isISODate(q.date) && q.date > todayISO() ? q.date : addDays(todayISO(), 14);
+    const returnDate = isISODate(q.returnDate) && q.returnDate >= date ? q.returnDate : null;
+    const base = { live: { sandbox: live.sandbox, flights: true }, date, returnDate, adults, results: [] };
+    if (!String(q.origin || '').trim() || !String(q.destination || '').trim()) {
+      return res.json({ ...base, needRoute: true });
+    }
+    try {
+      const [from, to] = await Promise.all([airportCode(q.origin), airportCode(q.destination)]);
+      if (!from || !to) return res.status(400).json({ error: `No encontramos el aeropuerto de ${!from ? q.origin : q.destination}. Prueba con su código, por ejemplo MAD.` });
+      if (from.code === to.code) return res.status(400).json({ error: 'El origen y el destino son el mismo aeropuerto.' });
+      let trips = await live.flightSearch({ origin: from.code, destination: to.code, date, returnDate, adults });
+      if (q.maxPrice) trips = trips.filter((t) => t.total <= Number(q.maxPrice));
+      res.json({ ...base, origin: from, destination: to, results: trips });
+    } catch (err) {
+      console.error('[liteapi vuelos]', err.message);
+      res.status(502).json({ error: 'No se pudieron consultar los vuelos ahora mismo. Inténtalo de nuevo en unos segundos.' });
+    }
+  }
+
+  // Precio actual de una oferta antes de pedir los datos de los pasajeros.
+  app.post('/api/flights/quote', async (req, res) => {
+    if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
+    try {
+      const v = await live.flightVerify(String(req.body?.offerId || ''));
+      res.json(v);
+    } catch (err) {
+      console.error('[liteapi vuelos]', err.message);
+      res.status(409).json({ error: err.message });
+    }
+  });
+
+  const DOC_TYPES = ['passport', 'id_card'];
+  function validFlightCustomer(body, adults, flightDate) {
+    const email = String(body.email || '').trim().slice(0, 120);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Email no válido.' };
+    const phoneCountryCode = String(body.phoneCountryCode || '34').replace(/\D/g, '').slice(0, 4);
+    const phoneNumber = String(body.phoneNumber || '').replace(/\D/g, '').slice(0, 15);
+    if (!phoneCountryCode || phoneNumber.length < 6) return { error: 'Indica un teléfono de contacto.' };
+    const list = Array.isArray(body.passengers) ? body.passengers.slice(0, 6) : [];
+    if (list.length !== adults) return { error: `Faltan los datos de ${adults === 1 ? 'el pasajero' : 'los ' + adults + ' pasajeros'}.` };
+    const passengers = [];
+    for (const [i, p] of list.entries()) {
+      const who = `Pasajero ${i + 1}`;
+      const firstName = String(p.firstName || '').trim().slice(0, 40);
+      const lastName = String(p.lastName || '').trim().slice(0, 60);
+      if (firstName.length < 1 || lastName.length < 2) return { error: `${who}: escribe nombre y apellidos como en el documento.` };
+      if (!isISODate(p.birthday)) return { error: `${who}: fecha de nacimiento no válida.` };
+      const age = (Date.parse(flightDate) - Date.parse(p.birthday)) / (365.25 * 86400000);
+      if (age < 12 || age > 120) return { error: `${who}: por ahora solo se pueden reservar pasajeros de 12 años o más.` };
+      if (!['M', 'F'].includes(p.gender)) return { error: `${who}: indica el sexo que figura en el documento.` };
+      const nationality = String(p.nationality || '').toUpperCase();
+      if (!/^[A-Z]{2}$/.test(nationality)) return { error: `${who}: indica la nacionalidad.` };
+      if (!DOC_TYPES.includes(p.documentType)) return { error: `${who}: elige el tipo de documento.` };
+      const documentNumber = String(p.documentNumber || '').replace(/\s/g, '').toUpperCase().slice(0, 20);
+      if (documentNumber.length < 5) return { error: `${who}: número de documento no válido.` };
+      if (!isISODate(p.documentExpiry) || p.documentExpiry <= flightDate) return { error: `${who}: el documento debe estar en vigor el día del vuelo.` };
+      const documentIssueCountry = /^[A-Z]{2}$/i.test(p.documentIssueCountry || '') ? p.documentIssueCountry.toUpperCase() : nationality;
+      passengers.push({ firstName, lastName, birthday: p.birthday, gender: p.gender, nationality, documentType: p.documentType, documentNumber, documentExpiry: p.documentExpiry, documentIssueCountry, passengerType: 0 });
+    }
+    const contact = { email, firstName: passengers[0].firstName, lastName: passengers[0].lastName, phoneCountryCode, phoneNumber };
+    return { email, contact, passengers };
+  }
+
+  // 1) Bloquea la tarifa y crea el pago; 2) el cliente paga con Stripe y vuelve a
+  // /?vuelo=<id>; 3) se confirma la reserva con la aerolínea.
+  app.post('/api/flights/checkout', async (req, res) => {
+    if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
+    const body = req.body || {};
+    const trip = live.flightOffer(String(body.offerId || ''));
+    if (!trip) return res.status(409).json({ error: 'Esa tarifa ha caducado. Vuelve a buscar el vuelo.' });
+    const adults = trip.adults || Math.max(1, Math.min(6, Number(body.adults) || 1));
+    const flightDate = trip.outbound.departure.slice(0, 10);
+    const who = validFlightCustomer(body, adults, flightDate);
+    if (who.error) return res.status(400).json({ error: who.error });
+    try {
+      const pre = await live.flightPrebook({ offerId: trip.offerId, contact: who.contact, passengers: who.passengers });
+      const checkoutId = randomBytes(16).toString('hex');
+      const booking = await store.add({
+        code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        type: 'flight',
+        itemId: 'lite-flight',
+        itemName: `${trip.outbound.from} → ${trip.outbound.to}${trip.inbound ? ' (ida y vuelta)' : ''} · ${trip.outbound.airlines.join(', ')}`,
+        date: flightDate,
+        returnDate: trip.inbound ? trip.inbound.departure.slice(0, 10) : undefined,
+        flight: { outbound: trip.outbound, inbound: trip.inbound, fare: trip.fare },
+        units: adults,
+        total: pre.price ?? trip.total,
+        name: `${who.contact.firstName} ${who.contact.lastName}`,
+        email: who.email,
+        passengers: who.passengers.map((p) => `${p.firstName} ${p.lastName}`),
+        status: 'pendiente_pago',
+        provider: 'liteapi',
+        sandbox: live.sandbox,
+        refundable: trip.refundable,
+        checkoutId,
+        prebookId: pre.prebookId,
+        transactionId: pre.transactionId,
+        createdAt: new Date().toISOString(),
+      });
+      const base = (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      res.status(201).json({
+        checkoutId,
+        code: booking.code,
+        total: booking.total,
+        currency: pre.currency,
+        searchTotal: trip.total,
+        secretKey: pre.secretKey,
+        publishableKey: pre.publishableKey,
+        returnUrl: `${base}/?vuelo=${checkoutId}`,
+      });
+    } catch (err) {
+      console.error('[liteapi vuelos]', err.message);
+      res.status(409).json({ error: err.message });
+    }
+  });
+
+  const confirmingFlights = new Set();
+  app.post('/api/flights/checkout/:id/confirm', async (req, res) => {
+    const id = String(req.params.id);
+    const b = await store.findByCheckout(id);
+    if (!b || b.type !== 'flight') return res.status(404).json({ error: 'No encontramos ese pago.' });
+    if (b.status !== 'pendiente_pago') return res.json(publicBooking(b));
+    if (!liveFlights) return res.status(503).json({ error: 'No se puede confirmar ahora: falta la conexión con LiteAPI.' });
+    if (confirmingFlights.has(id)) return res.status(409).json({ error: 'Estamos confirmando tu reserva. Espera unos segundos.' });
+    confirmingFlights.add(id);
+    try {
+      const r = await live.flightBook({ prebookId: b.prebookId, transactionId: b.transactionId });
+      const done = await store.update(b.code, {
+        status: 'confirmada',
+        providerBookingId: r.bookingId,
+        bookingRef: r.bookingRef,
+        pnr: r.pnr,
+        total: r.total ?? b.total,
+        paidAt: new Date().toISOString(),
+      });
+      notify('bookingConfirmed', done);
+      res.json(publicBooking(done));
+    } catch (err) {
+      console.error('[liteapi vuelos]', err.message);
+      if (err instanceof PaymentPendingError) return res.status(402).json({ error: 'El pago no se ha completado. No se ha hecho ningún cargo ni reserva.' });
+      notify('paymentWithoutBooking', { ...b, error: err.message });
+      res.status(502).json({ error: 'Hemos recibido el pago, pero la aerolínea aún no ha confirmado el billete. Lo revisamos y te escribimos; tu código es ' + b.code + '.' });
+    } finally {
+      confirmingFlights.delete(id);
+    }
+  });
+
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
-  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
+  app.get('/api/config', (_req, res) => res.json({ liveFlights, sandbox: live?.sandbox ?? null }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, flights: liveFlights, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {
     try {
@@ -299,6 +464,20 @@ export function createApp({
     res.json((await store.listByEmail(email)).filter((b) => b.status !== 'pendiente_pago').map(publicBooking));
   });
 
+  // Cuánto se devolvería al cancelar un vuelo (estimación de la aerolínea).
+  app.get('/api/bookings/:code/cancel-quote', async (req, res) => {
+    const email = String(req.query.email || '').toLowerCase();
+    const found = await store.get(req.params.code);
+    if (!found || found.email.toLowerCase() !== email || found.status !== 'confirmada') return res.status(404).json({ error: 'Reserva no encontrada.' });
+    if (found.type !== 'flight' || found.provider !== 'liteapi' || !live) return res.json({ refundable: !!found.refundable, refund: null });
+    try {
+      res.json(await live.flightCancelQuote(found.providerBookingId));
+    } catch (err) {
+      console.error('[liteapi vuelos]', err.message);
+      res.status(502).json({ error: 'No se pudo consultar el reembolso ahora mismo. Inténtalo de nuevo.' });
+    }
+  });
+
   app.post('/api/bookings/:code/cancel', async (req, res) => {
     const email = String(req.body?.email || '').toLowerCase();
     const found = await store.get(req.params.code);
@@ -307,9 +486,14 @@ export function createApp({
     if (found.provider === 'liteapi') {
       if (!live) return res.status(503).json({ error: 'No se puede cancelar ahora: falta la conexión con LiteAPI.' });
       try {
-        cancellation = await live.cancel(found.providerBookingId);
+        cancellation = found.type === 'flight' ? await live.flightCancel(found.providerBookingId) : await live.cancel(found.providerBookingId);
       } catch (err) {
-        return res.status(502).json({ error: 'LiteAPI no ha aceptado la cancelación: ' + err.message });
+        return res.status(502).json({ error: (found.type === 'flight' ? 'La aerolínea' : 'LiteAPI') + ' no ha aceptado la cancelación: ' + err.message });
+      }
+      // La aerolínea a veces confirma la cancelación más tarde.
+      if (cancellation.pending) {
+        const b = await store.update(found.code, { status: 'cancelacion_solicitada', cancellation });
+        return res.json(publicBooking(b));
       }
     }
     const b = await store.cancel(req.params.code, req.body?.email);
