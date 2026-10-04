@@ -53,6 +53,23 @@ export function occupancy({ adults, children } = {}) {
 }
 const occKey = (o) => `${o.adults}a${(o.children || []).join('-')}`;
 
+// Tasas que no van en el precio y se pagan en el hotel (p. ej. tasa turística),
+// sumadas por concepto y moneda de todas las habitaciones de la oferta.
+export function payAtHotel(rates = []) {
+  const sum = new Map();
+  for (const r of rates) {
+    for (const t of r?.retailRate?.taxesAndFees || []) {
+      const amount = Number(t?.amount);
+      if (t?.included !== false || !Number.isFinite(amount) || amount <= 0) continue;
+      const currency = String(t.currency || 'EUR').toUpperCase();
+      const description = String(t.description || 'Tasas').slice(0, 80);
+      const k = `${description}|${currency}`;
+      sum.set(k, { description, currency, amount: (sum.get(k)?.amount || 0) + amount });
+    }
+  }
+  return [...sum.values()].map((t) => ({ ...t, amount: Math.round(t.amount * 100) / 100 }));
+}
+
 export class LiteApiError extends Error {}
 
 export class PaymentPendingError extends LiteApiError {
@@ -258,6 +275,7 @@ export class LiteApi {
       board: rate.boardName || '',
       refundable,
       freeCancellationUntil: refundable ? deadline : null,
+      payAtHotel: payAtHotel(best.rates),
     };
   }
 

@@ -69,3 +69,22 @@ test('/api/health dice si el email está activo y su último error, con pista pa
     server.close();
   }
 });
+
+test('tasas a pagar en el hotel, cancelación sin reembolso y aviso al titular', async () => {
+  const sent = [];
+  const fetchImpl = async (_url, opts) => { sent.push(JSON.parse(opts.body)); return new Response('{}'); };
+  const m = new Mailer({ apiKey: 're_test', admin: 'yo@diaslibres.es', fetchImpl });
+  assert.equal(m.status.admin, true);
+  await m.bookingConfirmed({ code: 'DL-1', email: 'a@b.c', name: 'A', itemName: 'X', total: 100, provider: 'liteapi', payAtHotel: [{ description: 'Tasa turística', amount: 4.4, currency: 'EUR' }] });
+  assert.match(sent[0].html, /A pagar en el hotel: Tasa turística/);
+  assert.match(sent[0].html, /4,40/);
+  await m.bookingCancelled({ code: 'DL-1', email: 'a@b.c', name: 'A', itemName: 'X', cancellation: { refund: 0 } });
+  assert.match(sent[1].html, /Sin reembolso/);
+  await m.paymentWithoutBooking({ code: 'DL-2', email: 'c@d.e', name: 'C', itemName: 'Y', total: 50, transactionId: 'tr_9', error: 'supplier error' });
+  assert.deepEqual(sent[2].to, ['yo@diaslibres.es']);
+  assert.match(sent[2].subject, /Pago sin reserva DL-2/);
+  assert.match(sent[2].html, /tr_9/);
+  const noAdmin = new Mailer({ apiKey: 're_test', admin: '', fetchImpl });
+  assert.deepEqual(await noAdmin.paymentWithoutBooking({ code: 'DL-3' }), { sent: false });
+  assert.equal(sent.length, 3);
+});

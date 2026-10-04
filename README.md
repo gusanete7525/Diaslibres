@@ -56,7 +56,7 @@ Los **24 hoteles son reales** (2 por ciudad): nombre, categoría, dirección, we
 - **Pago del cliente (por defecto con LiteAPI):** «Pagar y reservar» bloquea la habitación al precio mostrado (`/api/checkout`), muestra el formulario de tarjeta de la pasarela de LiteAPI y, al pagar, el cliente vuelve a `/?pago=<id>`, donde la reserva se confirma con el pago (`/api/checkout/:id/confirm`). Sin pago completado no hay reserva ni cargo. En el entorno de pruebas se paga con la tarjeta `4242 4242 4242 4242`, cualquier fecha futura y cualquier CVC.
 - `LITEAPI_PAYMENT=account` vuelve al modo anterior (se carga a la cuenta de LiteAPI del titular); con la clave real solo funciona con `ALLOW_REAL_BOOKINGS=1`.
 - `PUBLIC_URL` (opcional): dirección pública de la web para la vuelta del pago, si no se deduce bien de la petición.
-- **Emails al cliente:** confirmación y cancelación con [Resend](https://resend.com) si defines `RESEND_API_KEY`. `MAIL_FROM` es el remitente (por ejemplo `DíasLibres <reservas@tudominio.es>`, con el dominio verificado en Resend); sin dominio propio, Resend solo deja enviar a tu propio email desde `onboarding@resend.dev`. Un fallo del email nunca anula la reserva.
+- **Emails al cliente:** confirmación y cancelación con [Resend](https://resend.com) si defines `RESEND_API_KEY`. `MAIL_FROM` es el remitente (por ejemplo `DíasLibres <reservas@tudominio.es>`, con el dominio verificado en Resend); sin dominio propio, Resend solo deja enviar a tu propio email desde `onboarding@resend.dev`. Un fallo del email nunca anula la reserva. `ADMIN_EMAIL` recibe un aviso si un cliente paga y el hotel no confirma la reserva (hay que devolver el pago o rehacerla en el panel de LiteAPI).
 - **Reservas guardadas:** en PostgreSQL si hay `DATABASE_URL` (Render la crea con `render.yaml`); si no, en `data/bookings.json`.
 
 ## Publicar en internet (Render)
@@ -82,3 +82,12 @@ Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la prim
 ## Información legal
 
 `public/legal.html` es una **plantilla** de aviso legal, condiciones de reserva, privacidad y cookies. Complétala con los datos marcados entre corchetes y revísala con un asesor antes de vender. Al reservar, el cliente debe aceptar las condiciones y la política de privacidad.
+
+## Paso a la clave real de LiteAPI
+
+1. Rellena los datos marcados en `public/legal.html` y quita el aviso de borrador.
+2. En el panel de LiteAPI: margen (comisión) y datos de cobro de la cuenta.
+3. En Render → Environment: `ADMIN_EMAIL` con tu email y `LITEAPI_KEY` con la clave de producción (sin `sand_`). No definas `LITEAPI_PAYMENT=account` ni `ALLOW_REAL_BOOKINGS`.
+4. Comprueba `/api/health`: `"sandbox": false`, `"payment": "customer"` y `"mail": { "enabled": true, "admin": true }`.
+
+Las tasas que no van en el precio (p. ej. tasa turística) se muestran al reservar, en «Mis reservas» y en el email como «a pagar en el hotel». Cancelar una tarifa no reembolsable, o pasado el plazo gratuito, avisa de que no hay reembolso.
