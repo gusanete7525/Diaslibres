@@ -120,6 +120,8 @@ function filterParams() {
 let searchToken = 0;
 async function search() {
   const token = ++searchToken;
+  if (state.view === 'flights') await configReady;
+  if (token !== searchToken) return;
   if (state.view === 'flights' && state.config.liveFlights) return searchLiveFlights(token);
   results.classList.add('loading');
   if (state.view === 'hotels' && filters.destination.value.trim()) {
@@ -128,6 +130,13 @@ async function search() {
   try {
     const p = filterParams();
     const data = await api(`/api/${state.view === 'flights' ? 'flights' : 'hotels'}?${p}`);
+    if (token !== searchToken) return;
+    // El servidor ya da vuelos reales aunque no se pudiera leer /api/config: se repite con su buscador.
+    if (data.live?.flights) {
+      state.config = { ...state.config, liveFlights: true };
+      document.body.dataset.liveFlights = '1';
+      return searchLiveFlights(token);
+    }
     state.data = data;
     state.items = new Map(data.results.map((x) => [x.id, x]));
     state.ui = new Map();
@@ -1016,20 +1025,22 @@ $('#mineList').addEventListener('click', async (e) => {
 });
 
 // ---------- Inicio ----------
+// Se pide antes que nada: si alguien pulsa «Vuelos» mientras carga, la búsqueda espera a saber si los vuelos son reales.
+const configReady = api('/api/config').then((config) => {
+  state.config = config;
+  if (config.liveFlights) document.body.dataset.liveFlights = '1';
+  filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
+}).catch(() => { /* sin vuelos reales */ });
 (async () => {
   try {
     const airports = await api('/api/airports');
     const cities = new Set([...Object.values(airports), 'Benasque']);
     $('#destList').innerHTML = [...cities].sort().map((c) => `<option value="${esc(c)}">`).join('');
   } catch { /* datalist opcional */ }
-  try {
-    state.config = await api('/api/config');
-    if (state.config.liveFlights) document.body.dataset.liveFlights = '1';
-    filters.date.min = filters.returnDate.min = addDays(new Date().toISOString().slice(0, 10), 1);
-  } catch { /* sin vuelos reales */ }
+  await configReady;
   const params = new URLSearchParams(location.search);
   if (params.get('pago')) return finishPayment(params.get('pago'));
   if (params.get('vuelo')) return finishFlightPayment(params.get('vuelo'), params.get('redirect_status'));
-  setView('hotels');
-  search();
+  // Si ya se pulsó una pestaña mientras cargaba, no se le cambia.
+  if (state.view === 'hotels') { setView('hotels'); search(); }
 })();
