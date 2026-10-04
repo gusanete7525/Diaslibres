@@ -124,6 +124,12 @@ const TAG_WORDS = {
   fiesta: ['fiesta', 'discoteca', 'marcha'],
   'todo incluido': ['todo incluido'],
 };
+// Palabras que pueden ir tras «en»/«a» y no son un sitio.
+const STOP = new Set(['la', 'el', 'los', 'las', 'lo', 'mi', 'tu', 'su', 'este', 'esta', 'ese', 'esa', 'otro', 'otra', 'algun', 'alguna', 'cualquier', 'cualquiera', 'todo', 'toda', 'pleno', 'plena',
+  'semana', 'semanas', 'finde', 'fin', 'verano', 'invierno', 'primavera', 'otono', 'navidad', 'navidades', 'pascua', 'puente', 'principios', 'mediados', 'finales', 'hotel', 'hoteles',
+  'casa', 'apartamento', 'pareja', 'familia', 'solas', 'solo', 'sola', 'buen', 'buena', 'precio', 'oferta', 'ver', 'dormir', 'descansar', 'pasar', 'menos', 'partir', 'poder', 'ser',
+  'mitad', 'centro', 'zona', 'sitio', 'lugar', 'algo', 'donde', 'nuestro', 'nuestra', 'vacaciones', 'hora', 'dia', 'dias', 'noche', 'noches', 'mes', 'ano', 'lunes', 'martes',
+  'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'manana', 'hoy', 'pasado', 'proximo', 'proxima', 'cuanto', 'cuantos', 'unos', 'unas', 'poco', 'mucho']);
 const REGION = { canarias: 'Tenerife', andalucia: 'Sevilla', galicia: 'Vigo', portugal: 'Lisboa', francia: 'París', italia: 'Roma', cataluna: 'Barcelona', baleares: 'Ibiza' };
 
 export function localParse(text) {
@@ -147,6 +153,16 @@ export function localParse(text) {
   if (!destination && kind === 'hotel') {
     const m = text.match(/\b(?:en|a|de)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)(?:\s+(?:de\s+|del\s+|la\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)*)/u);
     if (m && !MONTHS.includes(norm(m[1]))) destination = m[1];
+  }
+  // También en minúsculas («algo en gandía»), si la palabra no es un mes, una época u otra cosa conocida.
+  if (!destination && kind === 'hotel') {
+    for (const m of text.matchAll(/\b(?:en|a)\s+([a-záéíóúñüç][\wáéíóúñüç'-]+(?:\s+(?:de|del|la)\s+[a-záéíóúñüç][\wáéíóúñüç'-]+)?)/giu)) {
+      const first = norm(m[1].split(/\s+/)[0]);
+      const tagWord = Object.values(TAG_WORDS).flat().some((w) => first.startsWith(w));
+      if (MONTHS.includes(first) || STOP.has(first) || first in NUMBERS || tagWord || /^\d/.test(first)) continue;
+      destination = m[1].replace(/(^|\s)(\p{L})/gu, (x, sp, c) => sp + c.toUpperCase()).replace(/ (De|Del|La) /g, (x) => x.toLowerCase());
+      break;
+    }
   }
 
   let nights = null;
