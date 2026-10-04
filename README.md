@@ -51,6 +51,14 @@ Tests: `npm test`
 
 Los **24 hoteles son reales** (2 por ciudad): nombre, categoría, dirección, web oficial y una fuente pública de verificación están en `src/catalog.js`. Lo que **no** es real es el inventario: precios y ocupación de «otros clientes» se generan de forma determinista según temporada y fin de semana, y se suman las reservas reales hechas en la web. Las reservas no se envían al hotel y no hay pasarela de pago; para producción haría falta una base de datos, pagos y conexión a proveedores reales (channel manager / GDS).
 
+## Pago y reservas
+
+- **Pago del cliente (por defecto con LiteAPI):** «Pagar y reservar» bloquea la habitación al precio mostrado (`/api/checkout`), muestra el formulario de tarjeta de la pasarela de LiteAPI y, al pagar, el cliente vuelve a `/?pago=<id>`, donde la reserva se confirma con el pago (`/api/checkout/:id/confirm`). Sin pago completado no hay reserva ni cargo. En el entorno de pruebas se paga con la tarjeta `4242 4242 4242 4242`, cualquier fecha futura y cualquier CVC.
+- `LITEAPI_PAYMENT=account` vuelve al modo anterior (se carga a la cuenta de LiteAPI del titular); con la clave real solo funciona con `ALLOW_REAL_BOOKINGS=1`.
+- `PUBLIC_URL` (opcional): dirección pública de la web para la vuelta del pago, si no se deduce bien de la petición.
+- **Emails al cliente:** confirmación y cancelación con [Resend](https://resend.com) si defines `RESEND_API_KEY`. `MAIL_FROM` es el remitente (por ejemplo `DíasLibres <reservas@tudominio.es>`, con el dominio verificado en Resend); sin dominio propio, Resend solo deja enviar a tu propio email desde `onboarding@resend.dev`. Un fallo del email nunca anula la reserva.
+- **Reservas guardadas:** en PostgreSQL si hay `DATABASE_URL` (Render la crea con `render.yaml`); si no, en `data/bookings.json`.
+
 ## Publicar en internet (Render)
 
 El repositorio incluye `render.yaml` para desplegar en [Render](https://render.com) con su plan gratuito:
@@ -60,6 +68,17 @@ El repositorio incluye `render.yaml` para desplegar en [Render](https://render.c
 3. Render pedirá los valores de `LITEAPI_KEY` (y opcionalmente `ANTHROPIC_API_KEY`). No se guardan en el repositorio.
 4. Al terminar, la web queda en `https://diaslibres.onrender.com` (o un nombre parecido).
 
-Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la primera visita tarda ~1 min en despertar) y el disco no es permanente, así que las reservas de `data/bookings.json` se pierden al reiniciar.
+Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la primera visita tarda ~1 min en despertar). Las reservas se guardan en la base de datos PostgreSQL que crea `render.yaml`; consulta en Render los límites de su plan gratuito de bases de datos.
 
-**Clave real de LiteAPI:** con una clave que no empieza por `sand_` los precios y la disponibilidad son los reales, y cada reserva sería real y se cargaría a la cuenta de LiteAPI del titular. Por eso, con esa clave, las reservas están **desactivadas** salvo que definas `ALLOW_REAL_BOOKINGS=1`. Para cobrar a los clientes haría falta además integrar el pago de LiteAPI.
+**Clave real de LiteAPI:** con una clave que no empieza por `sand_` los precios, la disponibilidad y los cobros son reales: el cliente paga con su tarjeta en la pasarela de LiteAPI y la reserva se hace en el hotel.
+
+## Dominio propio y plan
+
+1. En Render, cambia el servicio al plan **Starter** (de pago) para que la web no se duerma. En `render.yaml` sería `plan: starter`.
+2. Compra el dominio (por ejemplo `diaslibres.es`) en un registrador.
+3. En Render → servicio → **Settings → Custom Domains**, añade el dominio y crea en tu registrador los registros DNS que te indique. Render pone el certificado HTTPS solo.
+4. Define `PUBLIC_URL=https://tudominio.es` para que la vuelta del pago use el dominio.
+
+## Información legal
+
+`public/legal.html` es una **plantilla** de aviso legal, condiciones de reserva, privacidad y cookies. Complétala con los datos marcados entre corchetes y revísala con un asesor antes de vender. Al reservar, el cliente debe aceptar las condiciones y la política de privacidad.

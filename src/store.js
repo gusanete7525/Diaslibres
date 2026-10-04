@@ -1,8 +1,14 @@
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-// Almacén de reservas en un fichero JSON. Suficiente para una demo de un solo
-// proceso; para producción conviene sustituirlo por una base de datos.
+// Almacenes de reservas con la misma interfaz (todo asíncrono):
+//   all(), add(b), get(code), findByCheckout(id), update(code, patch),
+//   listByEmail(email), cancel(code, email)
+// - BookingStore: fichero JSON (o memoria si file es null). Para pruebas y demos.
+// - PgBookingStore: PostgreSQL (DATABASE_URL). Las reservas sobreviven a reinicios.
+
+const sameEmail = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+
 export class BookingStore {
   constructor(file) {
     this.file = file;
@@ -13,20 +19,38 @@ export class BookingStore {
     }
   }
 
-  all() {
+  async all() {
     return this.bookings;
   }
 
-  add(booking) {
+  async add(booking) {
     this.bookings.push(booking);
     this.#save();
     return booking;
   }
 
-  cancel(code, email) {
-    const b = this.bookings.find(
-      (x) => x.code === code && x.email.toLowerCase() === String(email).toLowerCase() && x.status === 'confirmada',
-    );
+  async get(code) {
+    return this.bookings.find((b) => b.code === code) || null;
+  }
+
+  async findByCheckout(checkoutId) {
+    return this.bookings.find((b) => b.checkoutId && b.checkoutId === checkoutId) || null;
+  }
+
+  async update(code, patch) {
+    const b = this.bookings.find((x) => x.code === code);
+    if (!b) return null;
+    Object.assign(b, patch);
+    this.#save();
+    return b;
+  }
+
+  async listByEmail(email) {
+    return this.bookings.filter((b) => sameEmail(b.email, email)).reverse();
+  }
+
+  async cancel(code, email) {
+    const b = this.bookings.find((x) => x.code === code && sameEmail(x.email, email) && x.status === 'confirmada');
     if (!b) return null;
     b.status = 'cancelada';
     this.#save();
@@ -40,4 +64,83 @@ export class BookingStore {
     writeFileSync(tmp, JSON.stringify(this.bookings, null, 2));
     renameSync(tmp, this.file);
   }
+}
+
+// Una fila por reserva: columnas para buscar y el resto en `data` (jsonb).
+export class PgBookingStore {
+  constructor(pool) {
+    this.pool = pool;
+    this.ready = null;
+  }
+
+  async #init() {
+    this.ready ??= this.pool.query(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        code text PRIMARY KEY,
+        email text NOT NULL,
+        status text NOT NULL,
+        checkout_id text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        data jsonb NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS bookings_email ON bookings (lower(email));
+      CREATE INDEX IF NOT EXISTS bookings_checkout ON bookings (checkout_id);
+    `);
+    await this.ready;
+  }
+
+  async #q(sql, params) {
+    await this.#init();
+    return (await this.pool.query(sql, params)).rows.map((r) => r.data);
+  }
+
+  async all() {
+    return this.#q('SELECT data FROM bookings ORDER BY created_at');
+  }
+
+  async add(b) {
+    await this.#q('INSERT INTO bookings (code, email, status, checkout_id, data) VALUES ($1, $2, $3, $4, $5) RETURNING data', [
+      b.code,
+      b.email,
+      b.status,
+      b.checkoutId || null,
+      JSON.stringify(b),
+    ]);
+    return b;
+  }
+
+  async get(code) {
+    return (await this.#q('SELECT data FROM bookings WHERE code = $1', [code]))[0] || null;
+  }
+
+  async findByCheckout(checkoutId) {
+    return (await this.#q('SELECT data FROM bookings WHERE checkout_id = $1', [checkoutId]))[0] || null;
+  }
+
+  async update(code, patch) {
+    const current = await this.get(code);
+    if (!current) return null;
+    const next = { ...current, ...patch };
+    await this.#q('UPDATE bookings SET status = $2, data = $3 WHERE code = $1 RETURNING data', [code, next.status, JSON.stringify(next)]);
+    return next;
+  }
+
+  async listByEmail(email) {
+    return this.#q('SELECT data FROM bookings WHERE lower(email) = lower($1) ORDER BY created_at DESC', [email]);
+  }
+
+  async cancel(code, email) {
+    const b = await this.get(code);
+    if (!b || !sameEmail(b.email, email) || b.status !== 'confirmada') return null;
+    return this.update(code, { status: 'cancelada' });
+  }
+}
+
+// Elige el almacén: PostgreSQL si hay DATABASE_URL, si no el fichero.
+export async function createStore({ databaseUrl = process.env.DATABASE_URL, file } = {}) {
+  if (!databaseUrl) return new BookingStore(file);
+  const { default: pg } = await import('pg');
+  const local = /localhost|127\.0\.0\.1/.test(databaseUrl);
+  const pool = new pg.Pool({ connectionString: databaseUrl, ssl: local ? false : { rejectUnauthorized: false }, max: 5 });
+  return new PgBookingStore(pool);
 }

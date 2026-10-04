@@ -2,12 +2,13 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { BookingStore } from './src/store.js';
+import { BookingStore, PgBookingStore, createStore } from './src/store.js';
 import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from './src/availability.js';
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { OsmHotels } from './src/osm.js';
-import { LiteApi, PriceChangedError } from './src/liteapi.js';
+import { Mailer } from './src/mail.js';
+import { LiteApi, PriceChangedError, PaymentPendingError, occupancy } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -15,8 +16,15 @@ export function createApp({
   store = new BookingStore(join(root, 'data', 'bookings.json')),
   osm = process.env.DIASLIBRES_OSM === 'off' ? null : new OsmHotels({ file: join(root, 'data', 'osm-cache.json') }),
   live = process.env.LITEAPI_KEY?.trim() ? new LiteApi({ key: process.env.LITEAPI_KEY }) : null,
+  // 'customer': paga el cliente con su tarjeta (pasarela de LiteAPI). 'account': se
+  // carga a la cuenta de LiteAPI del titular de la clave.
+  livePayment = process.env.LITEAPI_PAYMENT === 'account' ? 'account' : 'customer',
+  mailer = new Mailer(),
 } = {}) {
+  // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
+  const notify = (fn, b) => { if (b && mailer?.enabled) Promise.resolve(mailer[fn](b)).catch(() => {}); };
   const app = express();
+  app.set('trust proxy', true); // https correcto detrás del proxy de Render
   app.use(express.json({ limit: '20kb' }));
   app.use(express.static(join(root, 'public')));
 
@@ -39,9 +47,22 @@ export function createApp({
 
   // ---------- Hoteles con datos reales de LiteAPI (si hay LITEAPI_KEY) ----------
   const LIVE_DAYS = 30;
-  // Con la clave real de LiteAPI cada reserva es real y se carga a la cuenta del
-  // titular de la clave: en una web pública se desactivan salvo ALLOW_REAL_BOOKINGS=1.
-  const liveBookingEnabled = !!live && (live.sandbox || process.env.ALLOW_REAL_BOOKINGS === '1');
+  // Si paga el cliente, se puede reservar siempre. Si se carga a la cuenta del titular,
+  // con la clave real solo con ALLOW_REAL_BOOKINGS=1 (si no, cualquiera reservaría a su costa).
+  const liveBookingEnabled = !!live && (livePayment === 'customer' || live.sandbox || process.env.ALLOW_REAL_BOOKINGS === '1');
+  // Datos internos de la reserva que no salen al navegador.
+  const publicBooking = (b) => {
+    if (!b) return b;
+    const { prebookId, transactionId, checkoutId, ...rest } = b;
+    return rest;
+  };
+  const validCustomer = (body) => {
+    const name = String(body.name || '').trim().slice(0, 80);
+    const email = String(body.email || '').trim().slice(0, 120);
+    if (name.length < 2) return { error: 'Indica tu nombre.' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Email no válido.' };
+    return { name, email };
+  };
   const isLive = (id) => !!live && String(id || '').startsWith('lite-');
 
   async function liveHotels(q, res) {
@@ -58,7 +79,7 @@ export function createApp({
         summary: { freeDays: 0, minPrice: null, maxPrice: null, avgPrice: null },
         bestStay: null,
       }));
-      res.json({ start, days: LIVE_DAYS, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled } });
+      res.json({ start, days: LIVE_DAYS, nights: Math.max(1, Math.min(30, Number(q.nights) || 3)), results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudo consultar LiteAPI ahora mismo. Inténtalo de nuevo en unos segundos.' });
@@ -71,7 +92,7 @@ export function createApp({
     const start = isISODate(req.query.start) && req.query.start >= todayISO() ? req.query.start : todayISO();
     const days = Math.max(1, Math.min(7, Number(req.query.days) || 7));
     try {
-      res.json({ start, days, prices: await live.nightlyPrices(ids, start, days) });
+      res.json({ start, days, prices: await live.nightlyPrices(ids, start, days, { adults: req.query.adults, children: req.query.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'LiteAPI no ha devuelto precios. Inténtalo de nuevo.' });
@@ -82,17 +103,17 @@ export function createApp({
     const q = req.query;
     if (live) return liveHotels(q, res);
     const extra = await osmHotels(q.destination);
-    const data = searchHotels(store.all(), { ...q, tags: list(q.tags) }, extra.hotels);
+    const data = searchHotels(await store.all(), { ...q, tags: list(q.tags) }, extra.hotels);
     data.osm = { count: data.results.filter((h) => h.origin === 'osm').length, error: extra.error };
     res.json(data);
   });
 
-  app.get('/api/flights', (req, res) => {
-    res.json(searchFlights(store.all(), req.query));
+  app.get('/api/flights', async (req, res) => {
+    res.json(searchFlights(await store.all(), req.query));
   });
 
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
-  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, lastLiteApiError: live?.lastError ?? null }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, lastLiteApiError: live?.lastError ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {
     try {
@@ -114,10 +135,87 @@ export function createApp({
       }
     }
     try {
-      const q = quote(store.all(), req.body || {}, osm?.known());
+      const q = quote(await store.all(), req.body || {}, osm?.known());
       res.json({ total: q.total, units: q.units, nights: q.nights, perNight: q.perNight });
     } catch (err) {
       res.status(400).json({ error: err.message });
+    }
+  });
+
+  // ---------- Pago del cliente (pasarela de LiteAPI) ----------
+  // 1) /api/checkout bloquea la habitación al precio visto y devuelve la clave del pago.
+  // 2) El navegador muestra el formulario de tarjeta; al pagar vuelve a /?pago=<id>.
+  // 3) /api/checkout/:id/confirm confirma la reserva en LiteAPI con el pago hecho.
+  app.post('/api/checkout', async (req, res) => {
+    const body = req.body || {};
+    if (!isLive(body.itemId) || livePayment !== 'customer') return res.status(400).json({ error: 'Este alojamiento no admite pago con tarjeta.' });
+    const who = validCustomer(body);
+    if (who.error) return res.status(400).json({ error: who.error });
+    const seen = Number(body.expectedTotal);
+    if (!Number.isFinite(seen) || seen <= 0) return res.status(400).json({ error: 'Falta el precio del presupuesto. Vuelve a abrir la reserva.' });
+    try {
+      const q = await live.quote(body);
+      if (q.total > seen + 0.01) throw new PriceChangedError(q.total);
+      const pre = await live.prebook({ offerId: q.offerId, maxTotal: seen, customerPays: true });
+      const checkoutId = randomBytes(16).toString('hex');
+      const booking = await store.add({
+        code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        type: 'hotel',
+        itemId: q.item.id,
+        itemName: `${q.item.name} (${q.item.city})`,
+        checkIn: body.checkIn,
+        checkOut: body.checkOut,
+        units: q.units,
+        total: pre.price ?? q.total,
+        name: who.name,
+        email: who.email,
+        guests: occupancy(body),
+        status: 'pendiente_pago',
+        provider: 'liteapi',
+        sandbox: live.sandbox,
+        refundable: q.refundable,
+        freeCancellationUntil: q.freeCancellationUntil,
+        roomName: q.roomName,
+        checkoutId,
+        prebookId: pre.prebookId,
+        transactionId: pre.transactionId,
+        createdAt: new Date().toISOString(),
+      });
+      const base = (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      res.status(201).json({
+        checkoutId,
+        code: booking.code,
+        total: booking.total,
+        secretKey: pre.secretKey,
+        publicKey: live.sandbox ? 'sandbox' : 'live',
+        returnUrl: `${base}/?pago=${checkoutId}`,
+      });
+    } catch (err) {
+      console.error('[liteapi]', err.message);
+      res.status(409).json({ error: err.message, ...(err instanceof PriceChangedError ? { newTotal: err.total } : {}) });
+    }
+  });
+
+  const confirming = new Set(); // evita confirmar dos veces el mismo pago a la vez
+  app.post('/api/checkout/:id/confirm', async (req, res) => {
+    const id = String(req.params.id);
+    const b = await store.findByCheckout(id);
+    if (!b) return res.status(404).json({ error: 'No encontramos ese pago.' });
+    if (b.status === 'confirmada' || b.status === 'cancelada') return res.json(publicBooking(b));
+    if (b.status !== 'pendiente_pago') return res.status(409).json({ error: 'Esta reserva no se puede confirmar.' });
+    if (confirming.has(id)) return res.status(409).json({ error: 'Estamos confirmando tu reserva. Espera unos segundos.' });
+    confirming.add(id);
+    try {
+      const r = await live.confirm({ prebookId: b.prebookId, name: b.name, email: b.email, units: b.units, transactionId: b.transactionId });
+      const done = await store.update(b.code, { status: 'confirmada', providerBookingId: r.bookingId, total: r.total ?? b.total, paidAt: new Date().toISOString() });
+      notify('bookingConfirmed', done);
+      res.json(publicBooking(done));
+    } catch (err) {
+      console.error('[liteapi]', err.message);
+      if (err instanceof PaymentPendingError) return res.status(402).json({ error: 'El pago no se ha completado. No se ha hecho ningún cargo ni reserva.' });
+      res.status(502).json({ error: 'El pago se recibió, pero el hotel no confirmó la reserva: ' + err.message + ' Escríbenos con tu código ' + b.code + '.' });
+    } finally {
+      confirming.delete(id);
     }
   });
 
@@ -128,6 +226,7 @@ export function createApp({
     if (name.length < 2) return res.status(400).json({ error: 'Indica tu nombre.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email no válido.' });
     if (isLive(body.itemId)) {
+      if (livePayment === 'customer') return res.status(400).json({ error: 'Para reservar este hotel hay que pagar con tarjeta.' });
       if (!liveBookingEnabled) {
         return res.status(403).json({ error: 'En esta web de demostración las reservas reales están desactivadas: puedes ver precios y disponibilidad reales, pero no reservar.' });
       }
@@ -138,7 +237,7 @@ export function createApp({
         const q = await live.quote(body);
         if (q.total > seen + 0.01) throw new PriceChangedError(q.total);
         const b = await live.book({ offerId: q.offerId, name, email, units: q.units, maxTotal: seen });
-        const booking = store.add({
+        const booking = await store.add({
           code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
           type: 'hotel',
           itemId: q.item.id,
@@ -149,6 +248,7 @@ export function createApp({
           total: b.total ?? q.total,
           name,
           email,
+          guests: occupancy(body),
           status: 'confirmada',
           provider: 'liteapi',
           providerBookingId: b.bookingId,
@@ -158,15 +258,16 @@ export function createApp({
           roomName: q.roomName,
           createdAt: new Date().toISOString(),
         });
-        return res.status(201).json(booking);
+        notify('bookingConfirmed', booking);
+        return res.status(201).json(publicBooking(booking));
       } catch (err) {
         console.error('[liteapi]', err.message);
         return res.status(409).json({ error: err.message, ...(err instanceof PriceChangedError ? { newTotal: err.total } : {}) });
       }
     }
     try {
-      const q = quote(store.all(), body, osm?.known());
-      const booking = store.add({
+      const q = quote(await store.all(), body, osm?.known());
+      const booking = await store.add({
         code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
         type: body.type,
         itemId: q.item.id,
@@ -181,33 +282,37 @@ export function createApp({
         status: 'confirmada',
         createdAt: new Date().toISOString(),
       });
-      res.status(201).json(booking);
+      notify('bookingConfirmed', booking);
+      res.status(201).json(publicBooking(booking));
     } catch (err) {
       res.status(409).json({ error: err.message });
     }
   });
 
-  app.get('/api/bookings', (req, res) => {
+  app.get('/api/bookings', async (req, res) => {
     const email = String(req.query.email || '').toLowerCase();
     if (!email) return res.status(400).json({ error: 'Indica tu email.' });
-    res.json(store.all().filter((b) => b.email.toLowerCase() === email).reverse());
+    res.json((await store.listByEmail(email)).filter((b) => b.status !== 'pendiente_pago').map(publicBooking));
   });
 
   app.post('/api/bookings/:code/cancel', async (req, res) => {
     const email = String(req.body?.email || '').toLowerCase();
-    const found = store.all().find((x) => x.code === req.params.code && x.email.toLowerCase() === email && x.status === 'confirmada');
-    if (found?.provider === 'liteapi') {
+    const found = await store.get(req.params.code);
+    if (!found || found.email.toLowerCase() !== email || found.status !== 'confirmada') return res.status(404).json({ error: 'Reserva no encontrada.' });
+    let cancellation;
+    if (found.provider === 'liteapi') {
       if (!live) return res.status(503).json({ error: 'No se puede cancelar ahora: falta la conexión con LiteAPI.' });
       try {
-        const r = await live.cancel(found.providerBookingId);
-        found.cancellation = r;
+        cancellation = await live.cancel(found.providerBookingId);
       } catch (err) {
         return res.status(502).json({ error: 'LiteAPI no ha aceptado la cancelación: ' + err.message });
       }
     }
-    const b = store.cancel(req.params.code, req.body?.email);
+    const b = await store.cancel(req.params.code, req.body?.email);
     if (!b) return res.status(404).json({ error: 'Reserva no encontrada.' });
-    res.json(b);
+    const cancelled = cancellation ? await store.update(b.code, { cancellation }) : b;
+    notify('bookingCancelled', cancelled);
+    res.json(publicBooking(cancelled));
   });
 
   return app;
@@ -215,7 +320,9 @@ export function createApp({
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 3000;
-  createApp().listen(port, () => {
+  const store = await createStore({ file: join(root, 'data', 'bookings.json') });
+  createApp({ store }).listen(port, () => {
+    console.log(process.env.DATABASE_URL ? 'Reservas en PostgreSQL.' : 'Reservas en data/bookings.json (se pierden si el disco no es permanente).');
     console.log(`DíasLibres en http://localhost:${port}`);
     if (!process.env.ANTHROPIC_API_KEY) console.log('Sin ANTHROPIC_API_KEY: la búsqueda con IA usa el intérprete local.');
     if (process.env.LITEAPI_KEY?.trim()) console.log(`Hoteles con datos reales de LiteAPI${process.env.LITEAPI_KEY.trim().replace(/^["']/, '').startsWith('sand_') ? ' (entorno de pruebas)' : ''}.`);

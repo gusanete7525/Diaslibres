@@ -47,6 +47,13 @@
       <label class="hotel-only">Noches
         <input name="nights" type="number" min="1" max="30" value="3" />
       </label>
+      <label class="hotel-only">Adultos
+        <select name="adults"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+      </label>
+      <label class="hotel-only">Niños
+        <select name="kids"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      </label>
+      <span id="kidAges" class="hotel-only kid-ages"></span>
       <label>Precio máx.
         <input name="maxPrice" type="number" min="0" step="10" placeholder="€" />
       </label>
@@ -84,9 +91,14 @@
       </label>
       <label>Nombre completo <input name="name" required minlength="2" autocomplete="name" /></label>
       <label>Email <input name="email" type="email" required autocomplete="email" /></label>
+      <label class="check"><input name="terms" type="checkbox" required /> <span>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a> y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
       <p class="total">Total: <strong id="bookTotal">—</strong></p>
       <p id="bookExtra" class="meta" hidden></p>
-      <p class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
+      <p id="bookNote" class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
+      <div id="payBox" class="paybox" hidden>
+        <p class="meta" id="payHint"></p>
+        <div id="paymentElement"></div>
+      </div>
       <p id="bookError" class="error" role="alert" hidden></p>
       <div class="actions">
         <button type="button" id="bookCancel" class="btn ghost">Cancelar</button>
@@ -98,7 +110,7 @@
   <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
 
-  <footer class="footer">DíasLibres · <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL).</footer>
+  <footer class="footer">DíasLibres · <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL). · <a href="/legal.html">Información legal</a></footer>
 
   <script type="module" src="app.js"></script>
 </body>

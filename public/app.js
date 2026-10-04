@@ -6,6 +6,8 @@ const fmtDay = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeri
 const fmtShort = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const fmtMonth = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const eur = (n) => `${Math.round(n).toLocaleString('es-ES')} €`;
+// Importes a pagar: con céntimos.
+const eur2 = (n) => Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' });
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const toDate = (iso) => new Date(iso + 'T00:00:00Z');
 const addDays = (iso, n) => { const d = toDate(iso); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -101,7 +103,13 @@ function filterParams() {
   const fd = new FormData(filters);
   const p = new URLSearchParams();
   for (const [k, v] of fd) if (v) p.set(k, v);
-  if (state.view === 'flights') { p.delete('nights'); p.delete('sort'); p.delete('tags'); p.delete('minStars'); }
+  p.delete('kids');
+  for (const k of [...p.keys()]) if (k.startsWith('age')) p.delete(k);
+  if (state.view === 'hotels') {
+    const ages = [...filters.querySelectorAll('[name^="age"]')].map((s) => s.value);
+    if (ages.length) p.set('children', ages.join(','));
+  }
+  if (state.view === 'flights') { p.delete('nights'); p.delete('sort'); p.delete('tags'); p.delete('minStars'); p.delete('adults'); }
   else p.delete('origin');
   return p;
 }
@@ -130,6 +138,21 @@ async function search() {
   }
 }
 
+// Edad de cada niño (LiteAPI la necesita para el precio).
+function renderKidAges() {
+  const box = $('#kidAges');
+  const n = Number(filters.kids.value) || 0;
+  const prev = [...box.querySelectorAll('select')].map((s) => s.value);
+  box.innerHTML = Array.from({ length: n }, (_, i) => `<label>Edad niño ${i + 1}<select name="age${i}">${Array.from({ length: 18 }, (_, a) => `<option ${String(a) === (prev[i] ?? '8') ? 'selected' : ''}>${a}</option>`).join('')}</select></label>`).join('');
+}
+filters.kids.addEventListener('change', renderKidAges);
+
+function guestsText(g) {
+  if (!g) return '';
+  const kids = g.children?.length || 0;
+  return `${g.adults} adulto${g.adults > 1 ? 's' : ''}${kids ? ` y ${kids} niño${kids > 1 ? 's' : ''} (${g.children.join(', ')} años)` : ''}`;
+}
+
 // ---------- Precios reales (LiteAPI): se cargan por semanas y rellenan el calendario ----------
 async function loadLivePrices(token) {
   const { start, days, results: list } = state.data;
@@ -138,7 +161,9 @@ async function loadLivePrices(token) {
     if (token !== searchToken) return; // hay una búsqueda más nueva
     let res;
     try {
-      res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}`);
+      const g = state.data.guests || {};
+      const occ = `&adults=${g.adults || 2}${g.children?.length ? '&children=' + g.children.join(',') : ''}`;
+      res = await api(`/api/live/prices?ids=${encodeURIComponent(ids)}&start=${addDays(start, off)}&days=${Math.min(7, days - off)}${occ}`);
     } catch (err) {
       if (token === searchToken) toast(err.message);
       return;
@@ -210,6 +235,7 @@ function onSend(form, handler) {
 onSend(filters, search);
 $('#clearFilters').addEventListener('click', () => {
   filters.reset();
+  renderKidAges();
   filters.tags.value = filters.minStars.value = filters.checkIn.value = '';
   $('#aiExplain').hidden = true;
   search();
@@ -224,6 +250,7 @@ async function aiSearchSubmit() {
   try {
     const f = await api('/api/ai-search', { method: 'POST', body: JSON.stringify({ query }) });
     filters.reset();
+    renderKidAges();
     filters.destination.value = f.destination || '';
     filters.origin.value = f.origin || '';
     filters.maxPrice.value = f.maxPrice || '';
@@ -519,7 +546,8 @@ const bookForm = $('#bookForm');
 
 function bookingRequest() {
   const b = state.booking;
-  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value };
+  const g = state.data.guests || {};
+  const base = { type: b.isFlight ? 'flight' : 'hotel', itemId: b.item.id, units: bookForm.units.value, adults: g.adults, children: g.children };
   return b.isFlight ? { ...base, date: b.start } : { ...base, checkIn: b.start, checkOut: b.end };
 }
 
@@ -528,7 +556,7 @@ async function refreshQuote() {
   const btn = $('#bookConfirm');
   try {
     const q = await api('/api/quote', { method: 'POST', body: JSON.stringify(bookingRequest()) });
-    $('#bookTotal').textContent = eur(q.total);
+    $('#bookTotal').textContent = eur2(q.total);
     state.booking.total = q.total;
     const extra = $('#bookExtra');
     extra.textContent = q.roomName
@@ -551,14 +579,23 @@ function openBooking(item, ui, isFlight) {
   $('#unitsLabel').textContent = isFlight ? 'Pasajeros' : 'Habitaciones';
   $('#bookSummary').innerHTML = isFlight
     ? `<b>${esc(item.airline)}</b> ${esc(item.originCity)} → ${esc(item.destinationCity)}<br>${fmtDay.format(toDate(ui.start))} · sale ${esc(item.departure)}`
-    : `<b>${esc(item.name)}</b> · ${esc(item.city)}<br>${fmtDay.format(toDate(ui.start))} → ${fmtDay.format(toDate(ui.end))} (${diffDays(ui.start, ui.end)} noches)`;
+    : `<b>${esc(item.name)}</b> · ${esc(item.city)}<br>${fmtDay.format(toDate(ui.start))} → ${fmtDay.format(toDate(ui.end))} (${diffDays(ui.start, ui.end)} noches)${item.origin === 'liteapi' && state.data.guests ? `<br>${guestsText(state.data.guests)} por habitación` : ''}`;
   bookForm.units.value = '1';
+  bookForm.terms.checked = false;
   bookForm.email.value ||= store.get('dl-email') || '';
   $('#bookError').hidden = true;
   $('#bookTotal').textContent = '…';
   $('#bookExtra').hidden = true;
   state.bookingBlocked = !isFlight && item.origin === 'liteapi' && state.data.live?.bookingEnabled === false;
+  state.booking.pays = !isFlight && item.origin === 'liteapi' && state.data.live?.payment === 'customer';
   $('#bookConfirm').hidden = state.bookingBlocked;
+  $('#bookConfirm').textContent = state.booking.pays ? 'Pagar y reservar' : 'Confirmar reserva';
+  $('#bookNote').textContent = item.origin !== 'liteapi'
+    ? 'Reserva de prueba: no se envía al hotel ni a la aerolínea.'
+    : state.data.live?.sandbox
+      ? 'Entorno de pruebas de LiteAPI: la reserva es de prueba y no se cobra nada.'
+      : 'Pago seguro con tarjeta a través de LiteAPI. La reserva se confirma al completar el pago.';
+  showPayForm(false);
   if (state.bookingBlocked) {
     $('#bookSummary').insertAdjacentHTML('beforeend', '<br><span class="meta">Precio real de hoy. En esta demostración no se puede reservar.</span>');
   }
@@ -568,10 +605,86 @@ function openBooking(item, ui, isFlight) {
 bookForm.units.addEventListener('change', refreshQuote);
 
 $('#bookCancel').addEventListener('click', () => dialog.close());
+// ---------- Pago con tarjeta (pasarela de LiteAPI) ----------
+const PAYMENT_SDK = 'https://payment-wrapper.liteapi.travel/dist/liteAPIPayment.js?v=a1';
+let sdkPromise;
+function loadPaymentSdk() {
+  sdkPromise ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = PAYMENT_SDK;
+    s.onload = () => (window.LiteAPIPayment ? resolve() : reject(new Error('sdk')));
+    s.onerror = () => reject(new Error('sdk'));
+    document.head.append(s);
+  }).catch((e) => { sdkPromise = null; throw e; });
+  return sdkPromise;
+}
+
+// Oculta los datos del cliente y muestra el formulario de tarjeta (o al revés).
+function showPayForm(on) {
+  for (const el of bookForm.querySelectorAll('label, #bookNote')) el.hidden = on;
+  $('#payBox').hidden = !on;
+  $('#bookConfirm').hidden = on || state.bookingBlocked;
+  if (!on) $('#paymentElement').innerHTML = '';
+}
+
+async function startPayment() {
+  const co = await api('/api/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ ...bookingRequest(), expectedTotal: state.booking.total, name: bookForm.name.value, email: bookForm.email.value }),
+  });
+  store.set('dl-email', bookForm.email.value.trim());
+  $('#payHint').innerHTML = `Total a pagar: <b>${eur2(co.total)}</b> · código ${esc(co.code)}` +
+    (co.publicKey === 'sandbox' ? '<br>Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.' : '');
+  showPayForm(true);
+  try {
+    await loadPaymentSdk();
+  } catch {
+    showPayForm(false);
+    throw new Error('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.');
+  }
+  // La pasarela muestra el formulario de tarjeta y, al pagar, vuelve a returnUrl.
+  new window.LiteAPIPayment({
+    publicKey: co.publicKey,
+    appearance: { theme: 'flat' },
+    options: { business: { name: 'DíasLibres' } },
+    targetElement: '#paymentElement',
+    secretKey: co.secretKey,
+    returnUrl: co.returnUrl,
+  }).handlePayment();
+}
+
+// Al volver de pagar: /?pago=<id> → confirmar la reserva.
+async function finishPayment(id) {
+  history.replaceState(null, '', location.pathname);
+  toast('Confirmando tu reserva…');
+  try {
+    const b = await api(`/api/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
+    toast(`✅ Pago recibido. ${b.sandbox ? 'Reserva de prueba confirmada' : 'Reserva confirmada'} · código ${b.code} · ${eur2(b.total)}`);
+    setView('mine');
+    $('#mineForm').email.value = b.email;
+    loadMine(b.email);
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
 onSend(bookForm, async () => {
   const btn = $('#bookConfirm');
   btn.disabled = true;
-  btn.textContent = 'Reservando…';
+  btn.textContent = state.booking.pays ? 'Preparando el pago…' : 'Reservando…';
+  if (state.booking.pays) {
+    try {
+      await startPayment();
+    } catch (err) {
+      if (/precio ha cambiado/.test(err.message)) await refreshQuote();
+      $('#bookError').textContent = err.message;
+      $('#bookError').hidden = false;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Pagar y reservar';
+    }
+    return;
+  }
   try {
     const booking = await api('/api/bookings', {
       method: 'POST',
@@ -603,6 +716,7 @@ async function loadMine(email) {
         <div>
           <div><b>${esc(b.itemName)}</b></div>
           <div class="meta">${b.type === 'hotel' ? `${fmtDay.format(toDate(b.checkIn))} → ${fmtDay.format(toDate(b.checkOut))} · ${b.units} hab.` : `${fmtDay.format(toDate(b.date))} · ${b.units} pasajero${b.units > 1 ? 's' : ''}`} · ${eur(b.total)}</div>
+          ${b.guests ? `<div class="meta">${guestsText(b.guests)} por habitación</div>` : ''}
           ${b.provider === 'liteapi' ? `<div class="meta">LiteAPI${b.sandbox ? ' (prueba)' : ''} · ref. ${esc(b.providerBookingId)}${b.roomName ? ' · ' + esc(b.roomName) : ''} · ${b.refundable ? 'cancelación gratuita' : 'no reembolsable'}${b.cancellation ? ` · reembolso ${eur(b.cancellation.refund ?? 0)}` : ''}</div>` : ''}
           <div class="meta">Código <b>${esc(b.code)}</b> · <span class="status ${b.status === 'confirmada' ? 'ok' : 'ko'}">${b.status === 'confirmada' ? '✔' : '✖'} ${esc(b.status)}</span></div>
         </div>
@@ -645,6 +759,8 @@ $('#mineList').addEventListener('click', async (e) => {
     const cities = new Set([...Object.values(airports), 'Benasque']);
     $('#destList').innerHTML = [...cities].sort().map((c) => `<option value="${esc(c)}">`).join('');
   } catch { /* datalist opcional */ }
+  const pago = new URLSearchParams(location.search).get('pago');
+  if (pago) return finishPayment(pago);
   setView('hotels');
   search();
 })();

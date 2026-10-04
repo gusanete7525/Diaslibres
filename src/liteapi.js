@@ -41,7 +41,25 @@ function shortDescription(html) {
   return first.length > 220 ? first.slice(0, 217).replace(/\s+\S*$/, '') + '…' : first;
 }
 
+// Ocupación de una habitación: adultos (1-6) y edades de los niños (0-17, máx. 4).
+export function occupancy({ adults, children } = {}) {
+  const a = Math.max(1, Math.min(6, Math.round(Number(adults) || 2)));
+  const list = (Array.isArray(children) ? children : String(children ?? '').split(','))
+    .filter((x) => String(x).trim() !== '')
+    .map((x) => Math.max(0, Math.min(17, Math.round(Number(x)))))
+    .filter((x) => Number.isFinite(x))
+    .slice(0, 4);
+  return list.length ? { adults: a, children: list } : { adults: a };
+}
+const occKey = (o) => `${o.adults}a${(o.children || []).join('-')}`;
+
 export class LiteApiError extends Error {}
+
+export class PaymentPendingError extends LiteApiError {
+  constructor() {
+    super('El pago todavía no se ha completado.');
+  }
+}
 
 export class PriceChangedError extends LiteApiError {
   constructor(total) {
@@ -167,24 +185,27 @@ export class LiteApi {
   // ---------- Precio de cada noche (estancia de 1 noche, 2 adultos) ----------
 
   // Devuelve { [idInterno]: [{ date, price|null, available }] } para `days` noches desde `start`.
-  async nightlyPrices(ids, start, days) {
+  async nightlyPrices(ids, start, days, guests = {}) {
     const hotels = ids.map((id) => this.hotelsById.get(id)).filter(Boolean);
     const dates = Array.from({ length: days }, (_, i) => addDays(start, i));
-    await Promise.all(dates.map((d) => this.#pricesForNight(hotels, d)));
+    const occ = occupancy(guests);
+    const k = occKey(occ);
+    await Promise.all(dates.map((d) => this.#pricesForNight(hotels, d, occ)));
     const out = {};
     for (const h of hotels) {
       out[h.id] = dates.map((date) => {
-        const price = this.prices.get(`${h.liteId}|${date}`)?.price ?? null;
+        const price = this.prices.get(`${h.liteId}|${date}|${k}`)?.price ?? null;
         return { date, price, available: price !== null, left: null };
       });
     }
     return out;
   }
 
-  async #pricesForNight(hotels, date) {
+  async #pricesForNight(hotels, date, occ) {
+    const k = occKey(occ);
     const now = Date.now();
     const missing = hotels.filter((h) => {
-      const hit = this.prices.get(`${h.liteId}|${date}`);
+      const hit = this.prices.get(`${h.liteId}|${date}|${k}`);
       return !hit || now - hit.at > PRICE_TTL;
     });
     if (!missing.length) return;
@@ -192,7 +213,7 @@ export class LiteApi {
       hotelIds: missing.map((h) => h.liteId),
       checkin: date,
       checkout: addDays(date, 1),
-      occupancies: [{ adults: 2 }],
+      occupancies: [occ],
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 6,
@@ -201,13 +222,13 @@ export class LiteApi {
     for (const h of missing) {
       const p = found.get(h.liteId);
       // Sin tarifa esa noche = no hay disponibilidad (día en rojo).
-      this.prices.set(`${h.liteId}|${date}`, { at: now, price: typeof p === 'number' ? Math.round(p) : null });
+      this.prices.set(`${h.liteId}|${date}|${k}`, { at: now, price: typeof p === 'number' ? Math.round(p) : null });
     }
   }
 
   // ---------- Presupuesto, reserva y cancelación ----------
 
-  async quote({ itemId, checkIn, checkOut, units = 1 }) {
+  async quote({ itemId, checkIn, checkOut, units = 1, adults, children }) {
     const hotel = this.hotelsById.get(itemId);
     if (!hotel) throw new LiteApiError('Hotel no encontrado. Vuelve a buscar la ciudad.');
     const rooms = Math.max(1, Math.min(4, Number(units) || 1));
@@ -215,7 +236,7 @@ export class LiteApi {
       hotelIds: [hotel.liteId],
       checkin: checkIn,
       checkout: checkOut,
-      occupancies: Array.from({ length: rooms }, () => ({ adults: 2 })),
+      occupancies: Array.from({ length: rooms }, () => occupancy({ adults, children })),
       currency: 'EUR',
       guestNationality: 'ES',
       timeout: 8,
@@ -240,36 +261,56 @@ export class LiteApi {
     };
   }
 
-  // `maxTotal`: el precio que vio el cliente. Si al bloquear la habitación sale más
-  // caro, no se reserva y se avisa con el precio nuevo.
-  async book({ offerId, name, email, units, maxTotal }) {
+  // Bloquea la habitación (prebook). Con `customerPays`, LiteAPI devuelve además
+  // `secretKey` y `transactionId` para que el cliente pague con su tarjeta.
+  // `maxTotal`: el precio que vio el cliente; si sale más caro no se sigue.
+  async prebook({ offerId, maxTotal, customerPays = false }) {
     let pre;
     try {
-      pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: false });
+      pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: customerPays });
     } catch (err) {
       if (/availability|not available|sold out/i.test(err.message)) {
         throw new LiteApiError('Esa habitación se acaba de agotar. Elige otras fechas u otro hotel.');
       }
       throw err;
     }
-    const prebookId = pre.data?.prebookId;
-    if (!prebookId) throw new LiteApiError('No se pudo bloquear la habitación. Inténtalo de nuevo.');
-    const price = Number(pre.data?.price);
+    const d = pre.data || {};
+    if (!d.prebookId) throw new LiteApiError('No se pudo bloquear la habitación. Inténtalo de nuevo.');
+    const price = Number(d.price);
     if (maxTotal != null && Number.isFinite(price) && price > maxTotal + 0.01) {
       throw new PriceChangedError(price);
     }
+    if (customerPays && (!d.secretKey || !d.transactionId)) throw new LiteApiError('No se pudo preparar el pago. Inténtalo de nuevo.');
+    return { prebookId: d.prebookId, price: Number.isFinite(price) ? price : null, secretKey: d.secretKey || null, transactionId: d.transactionId || null };
+  }
+
+  // Confirma la reserva. `transactionId`: pago hecho por el cliente; sin él se
+  // carga a la cuenta de LiteAPI del titular de la clave (ACC_CREDIT_CARD).
+  async confirm({ prebookId, name, email, units, transactionId = null }) {
     const [firstName, ...rest] = String(name).trim().split(/\s+/);
     const lastName = rest.join(' ') || firstName;
     const guests = Array.from({ length: Math.max(1, Number(units) || 1) }, (_, i) => ({ occupancyNumber: i + 1, firstName, lastName, email }));
-    const res = await this.#request('POST', `${BOOK}/rates/book`, {
-      prebookId,
-      holder: { firstName, lastName, email },
-      payment: { method: 'ACC_CREDIT_CARD' },
-      guests,
-    });
+    let res;
+    try {
+      res = await this.#request('POST', `${BOOK}/rates/book`, {
+        prebookId,
+        holder: { firstName, lastName, email },
+        payment: transactionId ? { method: 'TRANSACTION_ID', transactionId } : { method: 'ACC_CREDIT_CARD' },
+        guests,
+      });
+    } catch (err) {
+      if (/payment not completed/i.test(err.message)) throw new PaymentPendingError();
+      throw err;
+    }
     const b = res.data || {};
     if (b.status !== 'CONFIRMED') throw new LiteApiError('El hotel no ha confirmado la reserva.');
     return { bookingId: b.bookingId, total: b.price, hotelConfirmationCode: b.hotelConfirmationCode || null };
+  }
+
+  // Reserva pagada con la cuenta del titular (entorno de pruebas o ALLOW_REAL_BOOKINGS).
+  async book({ offerId, name, email, units, maxTotal }) {
+    const { prebookId } = await this.prebook({ offerId, maxTotal });
+    return this.confirm({ prebookId, name, email, units });
   }
 
   async cancel(bookingId) {
