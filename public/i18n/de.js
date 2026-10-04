@@ -485,5 +485,7 @@ export default {
  "Ver fechas y precios": "Termine und Preise ansehen",
  "Esa habitación ya no está disponible. Elige otra.": "Dieses Zimmer ist nicht mehr verfügbar. Bitte wähle ein anderes.",
  "No se pudo cargar la ficha del hotel. Inténtalo de nuevo.": "Die Hoteldetails konnten nicht geladen werden. Bitte versuche es erneut.",
- "Solo alojamiento": "Nur Übernachtung"
+ "Solo alojamiento": "Nur Übernachtung",
+ "Comprobando disponibilidad…": "Verfügbarkeit wird geprüft…",
+ "Comprobando disponibilidad de {n} más…": "Verfügbarkeit von {n} weiteren wird geprüft…"
 };

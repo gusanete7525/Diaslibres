@@ -60,13 +60,16 @@
       <label class="flight-only live-only f-half f-pax">Pasajeros
         <select name="passengers"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
       </label>
-      <label class="hotel-only f-third">Noches
+      <label class="hotel-only f-date">Entrada
+        <input name="checkIn" type="date" />
+      </label>
+      <label class="hotel-only f-third f-guests">Noches
         <input name="nights" type="number" min="1" max="30" value="3" />
       </label>
-      <label class="hotel-only f-third">Adultos
+      <label class="hotel-only f-third f-guests">Adultos
         <select name="adults"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
       </label>
-      <label class="hotel-only f-third">Niños
+      <label class="hotel-only f-third f-guests">Niños
         <select name="kids"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
       </label>
       <span id="kidAges" class="hotel-only kid-ages"></span>
@@ -103,7 +106,6 @@
         <fieldset class="mf-facilities"><legend>Servicios</legend><div id="facilityList"></div></fieldset>
       </div>
       <input type="hidden" name="tags" />
-      <input type="hidden" name="checkIn" />
       <button class="btn primary f-btn" type="button" data-send>Aplicar</button>
       <button class="btn ghost f-btn" type="button" id="clearFilters">Limpiar</button>
     </form>
