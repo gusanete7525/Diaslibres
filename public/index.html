@@ -86,7 +86,11 @@
       <label>Email <input name="email" type="email" required autocomplete="email" /></label>
       <p class="total">Total: <strong id="bookTotal">—</strong></p>
       <p id="bookExtra" class="meta" hidden></p>
-      <p class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
+      <p id="bookNote" class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
+      <div id="payBox" class="paybox" hidden>
+        <p class="meta" id="payHint"></p>
+        <div id="paymentElement"></div>
+      </div>
       <p id="bookError" class="error" role="alert" hidden></p>
       <div class="actions">
         <button type="button" id="bookCancel" class="btn ghost">Cancelar</button>

@@ -230,3 +230,5 @@ body[data-view="hotels"] .flight-only, body[data-view="flights"] .hotel-only { d
 .day.pending { background: var(--surface-2); color: var(--text-3); cursor: progress; }
 @media (prefers-reduced-motion: no-preference) { .day.pending small { animation: pulse 1.2s ease-in-out infinite; } }
 @keyframes pulse { 50% { opacity: 0.3; } }
+.paybox { display: grid; gap: 8px; }
+#paymentElement { min-height: 120px; }

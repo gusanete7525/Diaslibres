@@ -43,6 +43,12 @@ function shortDescription(html) {
 
 export class LiteApiError extends Error {}
 
+export class PaymentPendingError extends LiteApiError {
+  constructor() {
+    super('El pago todavía no se ha completado.');
+  }
+}
+
 export class PriceChangedError extends LiteApiError {
   constructor(total) {
     super(`El precio ha cambiado a ${total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}. Revisa el nuevo total y confirma otra vez.`);
@@ -240,36 +246,56 @@ export class LiteApi {
     };
   }
 
-  // `maxTotal`: el precio que vio el cliente. Si al bloquear la habitación sale más
-  // caro, no se reserva y se avisa con el precio nuevo.
-  async book({ offerId, name, email, units, maxTotal }) {
+  // Bloquea la habitación (prebook). Con `customerPays`, LiteAPI devuelve además
+  // `secretKey` y `transactionId` para que el cliente pague con su tarjeta.
+  // `maxTotal`: el precio que vio el cliente; si sale más caro no se sigue.
+  async prebook({ offerId, maxTotal, customerPays = false }) {
     let pre;
     try {
-      pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: false });
+      pre = await this.#request('POST', `${BOOK}/rates/prebook`, { offerId, usePaymentSdk: customerPays });
     } catch (err) {
       if (/availability|not available|sold out/i.test(err.message)) {
         throw new LiteApiError('Esa habitación se acaba de agotar. Elige otras fechas u otro hotel.');
       }
       throw err;
     }
-    const prebookId = pre.data?.prebookId;
-    if (!prebookId) throw new LiteApiError('No se pudo bloquear la habitación. Inténtalo de nuevo.');
-    const price = Number(pre.data?.price);
+    const d = pre.data || {};
+    if (!d.prebookId) throw new LiteApiError('No se pudo bloquear la habitación. Inténtalo de nuevo.');
+    const price = Number(d.price);
     if (maxTotal != null && Number.isFinite(price) && price > maxTotal + 0.01) {
       throw new PriceChangedError(price);
     }
+    if (customerPays && (!d.secretKey || !d.transactionId)) throw new LiteApiError('No se pudo preparar el pago. Inténtalo de nuevo.');
+    return { prebookId: d.prebookId, price: Number.isFinite(price) ? price : null, secretKey: d.secretKey || null, transactionId: d.transactionId || null };
+  }
+
+  // Confirma la reserva. `transactionId`: pago hecho por el cliente; sin él se
+  // carga a la cuenta de LiteAPI del titular de la clave (ACC_CREDIT_CARD).
+  async confirm({ prebookId, name, email, units, transactionId = null }) {
     const [firstName, ...rest] = String(name).trim().split(/\s+/);
     const lastName = rest.join(' ') || firstName;
     const guests = Array.from({ length: Math.max(1, Number(units) || 1) }, (_, i) => ({ occupancyNumber: i + 1, firstName, lastName, email }));
-    const res = await this.#request('POST', `${BOOK}/rates/book`, {
-      prebookId,
-      holder: { firstName, lastName, email },
-      payment: { method: 'ACC_CREDIT_CARD' },
-      guests,
-    });
+    let res;
+    try {
+      res = await this.#request('POST', `${BOOK}/rates/book`, {
+        prebookId,
+        holder: { firstName, lastName, email },
+        payment: transactionId ? { method: 'TRANSACTION_ID', transactionId } : { method: 'ACC_CREDIT_CARD' },
+        guests,
+      });
+    } catch (err) {
+      if (/payment not completed/i.test(err.message)) throw new PaymentPendingError();
+      throw err;
+    }
     const b = res.data || {};
     if (b.status !== 'CONFIRMED') throw new LiteApiError('El hotel no ha confirmado la reserva.');
     return { bookingId: b.bookingId, total: b.price, hotelConfirmationCode: b.hotelConfirmationCode || null };
+  }
+
+  // Reserva pagada con la cuenta del titular (entorno de pruebas o ALLOW_REAL_BOOKINGS).
+  async book({ offerId, name, email, units, maxTotal }) {
+    const { prebookId } = await this.prebook({ offerId, maxTotal });
+    return this.confirm({ prebookId, name, email, units });
   }
 
   async cancel(bookingId) {
