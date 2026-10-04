@@ -1292,5 +1292,10 @@ const configReady = api('/api/config').then((config) => {
   if (params.get('pago')) return finishPayment(params.get('pago'));
   if (params.get('vuelo')) return finishFlightPayment(params.get('vuelo'), params.get('redirect_status'));
   // Si ya se pulsó una pestaña mientras cargaba, no se le cambia.
-  if (state.view === 'hotels') { setView('hotels'); search(); }
+  // Las páginas /vuelos/<ruta> abren directamente la búsqueda de vuelos.
+  const start = document.body.dataset.startView === 'flights' && state.config.flights !== false ? 'flights' : 'hotels';
+  if (state.view === 'hotels') { setView(start); search(); }
 })();
+
+// App instalable (Android, escritorio): funciona sin conexión con la última versión vista.
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

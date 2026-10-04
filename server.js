@@ -6,6 +6,8 @@ import { BookingStore, PgBookingStore, createStore } from './src/store.js';
 import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from './src/availability.js';
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
+import { readFileSync } from 'node:fs';
+import { renderPage, sitemap, cityFromSlug, routeFromSlug } from './src/seo.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
 import { LiteApi, PriceChangedError, PaymentPendingError, occupancy } from './src/liteapi.js';
@@ -26,7 +28,70 @@ export function createApp({
   const app = express();
   app.set('trust proxy', true); // https correcto detrás del proxy de Render
   app.use(express.json({ limit: '20kb' }));
-  app.use(express.static(join(root, 'public')));
+  // ---------- Buscadores y app Android ----------
+  const indexHtml = readFileSync(join(root, 'public', 'index.html'), 'utf8');
+  const siteUrl = (req) => (process.env.SITE_URL?.trim() || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  const sendPage = (req, res, page) => {
+    res.set('Cache-Control', 'public, max-age=300');
+    res.type('html').send(renderPage(indexHtml, page, { site: siteUrl(req), verification: process.env.GOOGLE_SITE_VERIFICATION?.trim() }));
+  };
+  app.get(['/', '/index.html'], (req, res) => sendPage(req, res, {
+    path: '/',
+    title: 'DíasLibres · Hoteles y vuelos baratos con calendario de días libres',
+    description: 'Reserva hoteles y vuelos de todo el mundo viendo de un vistazo qué días están libres y cuándo es más barato. Precios reales y pago seguro.',
+    // Las vueltas del pago (?pago=, ?vuelo=) no son páginas para Google.
+    noindex: Object.keys(req.query).length > 0,
+  }));
+  app.get('/hoteles/:slug', async (req, res) => {
+    const city = cityFromSlug(req.params.slug);
+    if (!city) return res.redirect(301, '/');
+    let list = [];
+    if (live) {
+      const hotels = await Promise.race([live.hotels(city).catch(() => []), new Promise((r) => setTimeout(() => r([]), 3500))]);
+      list = [...hotels].sort((a, b) => (b.stars || 0) - (a.stars || 0) || (b.rating || 0) - (a.rating || 0)).slice(0, 15)
+        .map((h) => `${h.name}${h.stars ? ' ' + '★'.repeat(h.stars) : ''}${h.address ? ' · ' + h.address : ''}`);
+    }
+    sendPage(req, res, {
+      path: `/hoteles/${req.params.slug}`,
+      title: `Hoteles en ${city} · Precios por día y disponibilidad | DíasLibres`,
+      description: `Hoteles en ${city} con calendario de días libres y precio de cada noche. Compara, elige las fechas más baratas y reserva con pago seguro.`,
+      h1: `Hoteles en ${city}: mira qué días están libres y cuándo es más barato`,
+      sub: `Todos los hoteles de ${city} con su calendario de disponibilidad y el precio de cada noche de los próximos 30 días.`,
+      crumb: `Hoteles en ${city}`,
+      view: 'hotels',
+      destination: city,
+      list,
+    });
+  });
+  app.get('/vuelos/:slug', (req, res) => {
+    const route = routeFromSlug(req.params.slug);
+    if (!route) return res.redirect(301, '/');
+    sendPage(req, res, {
+      path: `/vuelos/${req.params.slug}`,
+      title: `Vuelos baratos de ${route.origin} a ${route.destination} | DíasLibres`,
+      description: `Vuelos de ${route.origin} a ${route.destination}: precio de cada día de las próximas dos semanas, gráfica de precios y reserva con pago seguro.`,
+      h1: `Vuelos de ${route.origin} a ${route.destination}: el día más barato de un vistazo`,
+      sub: `Compara el precio de los vuelos de ${route.origin} a ${route.destination} día a día y reserva el más barato.`,
+      crumb: `Vuelos ${route.origin} – ${route.destination}`,
+      view: 'flights',
+      origin: route.origin,
+      destination: route.destination,
+    });
+  });
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${siteUrl(req)}/sitemap.xml\n`);
+  });
+  app.get('/sitemap.xml', (req, res) => res.type('application/xml').send(sitemap(siteUrl(req))));
+  // App Android (Trusted Web Activity): Google Play comprueba que la web y la app son del mismo dueño.
+  app.get('/.well-known/assetlinks.json', (_req, res) => {
+    const pkg = process.env.ANDROID_PACKAGE?.trim();
+    const prints = String(process.env.ANDROID_SHA256 || '').split(',').map((x) => x.trim()).filter(Boolean);
+    res.json(pkg && prints.length ? [{
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: { namespace: 'android_app', package_name: pkg, sha256_cert_fingerprints: prints },
+    }] : []);
+  });
+  app.use(express.static(join(root, 'public'), { index: false }));
 
   const list = (v) => (Array.isArray(v) ? v : v ? String(v).split(',') : []);
 

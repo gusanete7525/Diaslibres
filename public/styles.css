@@ -275,3 +275,10 @@ body:not([data-live-flights]) .live-only { display: none; }
 .dialog .row:has(.code) { grid-template-columns: 90px 1fr; }
 .flight-fields { display: grid; gap: 12px; }
 #paxList { display: grid; gap: 12px; }
+
+/* Texto para buscadores en /hoteles/<ciudad> (lo sustituyen los resultados) y enlaces a destinos */
+.seo-intro { max-width: 900px; margin: 0 auto; color: var(--text-2); }
+.seo-intro ul { columns: 2 280px; padding-left: 18px; }
+.popular { max-width: 1100px; margin: 24px auto 0; padding: 0 16px; font-size: 14px; line-height: 1.8; text-align: center; color: var(--text-2); }
+.popular p { margin: 4px 0; }
+.popular a { color: inherit; }

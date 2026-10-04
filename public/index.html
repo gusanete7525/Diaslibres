@@ -5,12 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DíasLibres · Hoteles y vuelos</title>
   <meta name="description" content="Reserva hoteles y vuelos viendo de un vistazo qué días están libres y cuándo es más barato." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" type="image/png" href="/icon-192.png" />
+  <meta name="theme-color" content="#2a78d6" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <a class="logo" href="#" data-view="hotels">Días<span>Libres</span></a>
+    <a class="logo" href="/" data-view="hotels">Días<span>Libres</span></a>
     <nav class="tabs" role="tablist">
       <button role="tab" data-view="hotels" aria-selected="true">🏨 Hoteles</button>
       <button role="tab" data-view="flights" aria-selected="false">✈️ Vuelos</button>
@@ -150,8 +153,12 @@
   <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
   <div id="toast" class="toast" role="status" hidden></div>
 
+  <nav class="popular" aria-label="Destinos populares">
+    <p><strong>Hoteles:</strong> <a href="/hoteles/madrid">Madrid</a> · <a href="/hoteles/barcelona">Barcelona</a> · <a href="/hoteles/valencia">Valencia</a> · <a href="/hoteles/sevilla">Sevilla</a> · <a href="/hoteles/malaga">Málaga</a> · <a href="/hoteles/gandia">Gandía</a> · <a href="/hoteles/benidorm">Benidorm</a> · <a href="/hoteles/palma-de-mallorca">Palma de Mallorca</a> · <a href="/hoteles/tenerife">Tenerife</a> · <a href="/hoteles/lisboa">Lisboa</a> · <a href="/hoteles/paris">París</a> · <a href="/hoteles/roma">Roma</a> · <a href="/hoteles/londres">Londres</a> · <a href="/hoteles/nueva-york">Nueva York</a></p>
+    <p><strong>Vuelos:</strong> <a href="/vuelos/madrid-barcelona">Madrid – Barcelona</a> · <a href="/vuelos/madrid-lisboa">Madrid – Lisboa</a> · <a href="/vuelos/madrid-paris">Madrid – París</a> · <a href="/vuelos/madrid-roma">Madrid – Roma</a> · <a href="/vuelos/madrid-tenerife">Madrid – Tenerife</a> · <a href="/vuelos/valencia-palma-de-mallorca">Valencia – Palma de Mallorca</a></p>
+  </nav>
   <footer class="footer">DíasLibres · <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL). · <a href="/legal.html">Información legal</a></footer>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
