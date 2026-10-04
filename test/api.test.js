@@ -90,4 +90,8 @@ test('búsqueda IA (intérprete local) entiende frases en español', async () =>
   assert.equal(fl.origin, 'MAD');
   assert.equal(fl.destination, 'FCO');
   assert.equal(fl.maxPrice, 120);
+
+  assert.equal(localParse('algo en gandía este finde').destination, 'Gandía');
+  assert.equal(localParse('hoteles en santiago de compostela').destination, 'Santiago de Compostela');
+  assert.equal(localParse('escapada a la playa en julio').destination ?? null, null);
 });
