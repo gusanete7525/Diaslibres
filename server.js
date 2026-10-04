@@ -2,7 +2,7 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { BookingStore } from './src/store.js';
+import { BookingStore, PgBookingStore, createStore } from './src/store.js';
 import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from './src/availability.js';
 import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
@@ -82,17 +82,17 @@ export function createApp({
     const q = req.query;
     if (live) return liveHotels(q, res);
     const extra = await osmHotels(q.destination);
-    const data = searchHotels(store.all(), { ...q, tags: list(q.tags) }, extra.hotels);
+    const data = searchHotels(await store.all(), { ...q, tags: list(q.tags) }, extra.hotels);
     data.osm = { count: data.results.filter((h) => h.origin === 'osm').length, error: extra.error };
     res.json(data);
   });
 
-  app.get('/api/flights', (req, res) => {
-    res.json(searchFlights(store.all(), req.query));
+  app.get('/api/flights', async (req, res) => {
+    res.json(searchFlights(await store.all(), req.query));
   });
 
   app.get('/api/airports', (_req, res) => res.json(AIRPORTS));
-  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, lastLiteApiError: live?.lastError ?? null }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', lastLiteApiError: live?.lastError ?? null }));
 
   app.post('/api/ai-search', async (req, res) => {
     try {
@@ -114,7 +114,7 @@ export function createApp({
       }
     }
     try {
-      const q = quote(store.all(), req.body || {}, osm?.known());
+      const q = quote(await store.all(), req.body || {}, osm?.known());
       res.json({ total: q.total, units: q.units, nights: q.nights, perNight: q.perNight });
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -138,7 +138,7 @@ export function createApp({
         const q = await live.quote(body);
         if (q.total > seen + 0.01) throw new PriceChangedError(q.total);
         const b = await live.book({ offerId: q.offerId, name, email, units: q.units, maxTotal: seen });
-        const booking = store.add({
+        const booking = await store.add({
           code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
           type: 'hotel',
           itemId: q.item.id,
@@ -165,8 +165,8 @@ export function createApp({
       }
     }
     try {
-      const q = quote(store.all(), body, osm?.known());
-      const booking = store.add({
+      const q = quote(await store.all(), body, osm?.known());
+      const booking = await store.add({
         code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
         type: body.type,
         itemId: q.item.id,
@@ -187,27 +187,28 @@ export function createApp({
     }
   });
 
-  app.get('/api/bookings', (req, res) => {
+  app.get('/api/bookings', async (req, res) => {
     const email = String(req.query.email || '').toLowerCase();
     if (!email) return res.status(400).json({ error: 'Indica tu email.' });
-    res.json(store.all().filter((b) => b.email.toLowerCase() === email).reverse());
+    res.json((await store.listByEmail(email)).filter((b) => b.status !== 'pendiente_pago'));
   });
 
   app.post('/api/bookings/:code/cancel', async (req, res) => {
     const email = String(req.body?.email || '').toLowerCase();
-    const found = store.all().find((x) => x.code === req.params.code && x.email.toLowerCase() === email && x.status === 'confirmada');
-    if (found?.provider === 'liteapi') {
+    const found = await store.get(req.params.code);
+    if (!found || found.email.toLowerCase() !== email || found.status !== 'confirmada') return res.status(404).json({ error: 'Reserva no encontrada.' });
+    let cancellation;
+    if (found.provider === 'liteapi') {
       if (!live) return res.status(503).json({ error: 'No se puede cancelar ahora: falta la conexión con LiteAPI.' });
       try {
-        const r = await live.cancel(found.providerBookingId);
-        found.cancellation = r;
+        cancellation = await live.cancel(found.providerBookingId);
       } catch (err) {
         return res.status(502).json({ error: 'LiteAPI no ha aceptado la cancelación: ' + err.message });
       }
     }
-    const b = store.cancel(req.params.code, req.body?.email);
+    const b = await store.cancel(req.params.code, req.body?.email);
     if (!b) return res.status(404).json({ error: 'Reserva no encontrada.' });
-    res.json(b);
+    res.json(cancellation ? await store.update(b.code, { cancellation }) : b);
   });
 
   return app;
@@ -215,7 +216,9 @@ export function createApp({
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT) || 3000;
-  createApp().listen(port, () => {
+  const store = await createStore({ file: join(root, 'data', 'bookings.json') });
+  createApp({ store }).listen(port, () => {
+    console.log(process.env.DATABASE_URL ? 'Reservas en PostgreSQL.' : 'Reservas en data/bookings.json (se pierden si el disco no es permanente).');
     console.log(`DíasLibres en http://localhost:${port}`);
     if (!process.env.ANTHROPIC_API_KEY) console.log('Sin ANTHROPIC_API_KEY: la búsqueda con IA usa el intérprete local.');
     if (process.env.LITEAPI_KEY?.trim()) console.log(`Hoteles con datos reales de LiteAPI${process.env.LITEAPI_KEY.trim().replace(/^["']/, '').startsWith('sand_') ? ' (entorno de pruebas)' : ''}.`);
