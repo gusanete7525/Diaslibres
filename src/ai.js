@@ -15,6 +15,8 @@ const TAGS = [...new Set(HOTELS.flatMap((h) => h.tags))];
 const CITIES = [...new Set(HOTELS.map((h) => h.city))];
 
 // Escalas de un vuelo (filtro «Escalas»).
+// Tipo de alojamiento: la palabra con la que se busca («Busco apartamentos en…»).
+export const STAYS = { hotel: 'hoteles', apartment: 'apartamentos', house: 'casas y villas', hostel: 'hostales y pensiones' };
 export const STOPS = { 0: 'solo vuelos directos', 1: 'como máximo una escala', many: 'con escalas o transbordos' };
 
 const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
@@ -22,7 +24,7 @@ const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
 const FILTER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'tags', 'fac', 'board', 'stops', 'sort', 'explanation'],
+  required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'tags', 'fac', 'board', 'stay', 'stops', 'sort', 'explanation'],
   properties: {
     kind: { type: 'string', enum: ['hotel', 'flight'] },
     destination: nullable({ type: 'string' }),
@@ -34,6 +36,7 @@ const FILTER_SCHEMA = {
     tags: { type: 'array', items: { type: 'string', enum: TAGS } },
     fac: { type: 'array', items: { type: 'string', enum: Object.keys(FACILITIES) } },
     board: nullable({ type: 'string', enum: Object.keys(BOARDS) }),
+    stay: nullable({ type: 'string', enum: Object.keys(STAYS) }),
     stops: nullable({ type: 'string', enum: Object.keys(STOPS) }),
     sort: { type: 'string', enum: ['price', 'stars', 'rating'] },
     explanation: { type: 'string' },
@@ -51,6 +54,7 @@ Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
 - tags: solo etiquetas de la lista que encajen con lo pedido.
 - fac: servicios del hotel que pida expresamente (${Object.entries(FACILITIES).map(([k, f]) => `${k} = ${f.label}`).join(', ')}).
 - board: régimen de comidas si lo pide (${Object.entries(BOARDS).map(([k, v]) => `${k} = ${v}`).join(', ')}); si no, null.
+- stay: tipo de alojamiento, solo si lo pide: "apartment" (apartamento, piso, estudio, alquiler vacacional), "house" (casa rural, villa, chalet, casa de vacaciones), "hostel" (hostal, albergue, pensión), "hotel" si dice que quiere un hotel y no un apartamento; si no, null.
 - stops: solo para vuelos: "0" si pide vuelos directos o sin escalas, "1" si acepta como máximo una escala, "many" si pide vuelos con escalas o transbordos (uno o varios); si no lo dice, null.
 - sort: "price" si busca barato, "rating" si pide los mejor valorados; si no, "stars".
 - explanation: una frase breve en {LANGUAGE} explicando qué vas a buscar.`;
@@ -115,6 +119,7 @@ export function sanitize(f) {
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => TAGS.includes(t)) : [],
     fac: Array.isArray(f.fac) ? [...new Set(f.fac.filter((k) => k in FACILITIES))] : [],
     board: f.board in BOARDS ? f.board : null,
+    stay: f.kind !== 'flight' && f.stay in STAYS ? f.stay : null,
     stops: f.kind === 'flight' && f.stops in STOPS ? f.stops : null,
     sort: ['price', 'rating'].includes(f.sort) ? f.sort : 'stars',
     explanation: String(f.explanation || '').slice(0, 300),
@@ -243,6 +248,10 @@ export function localParse(text, lang = 'es') {
     : /pension completa/.test(t) ? 'FB'
     : /media pension/.test(t) ? 'HB'
     : /desayuno/.test(t) ? 'BI' : null;
+  const stay = kind !== 'hotel' ? null
+    : /\b(apartamentos?|apartotel|aparthotel|pisos?|estudios?|alquiler vacacional|alquileres vacacionales)\b/.test(t) ? 'apartment'
+    : /\b(casas? rural(es)?|villas?|chalets?|casas? de vacaciones|cabanas?|cortijos?|masias?)\b/.test(t) ? 'house'
+    : /\b(hostal(es)?|albergues?|hostels?)\b|(?<!media )\bpension(es)?\b(?! completa)/.test(t) ? 'hostel' : null;
   const best = /mejor valorad|mejor puntua|mejores opiniones/.test(t);
   const stops = kind !== 'flight' ? null
     : /\b(directo|directos|sin escala|sin transbordo)/.test(t) ? '0'
@@ -254,7 +263,7 @@ export function localParse(text, lang = 'es') {
   const x = (k, v) => tr(lang, k, v);
   const low = (w) => (lang === 'de' ? w : w.toLowerCase());
   const where = (code) => (kind === 'flight' ? placeName(code, lang, AIRPORTS[code] || code) : code);
-  const parts = [x(kind === 'flight' ? 'vuelos' : 'hoteles')];
+  const parts = [x(kind === 'flight' ? 'vuelos' : STAYS[stay] || 'hoteles')];
   if (origin) parts.push(x('desde {place}', { place: where(origin) }));
   if (destination) parts.push(x(kind === 'flight' ? 'a {place}' : 'en {place}', { place: where(destination) }));
   if (tags.length) parts.push(`(${tags.map((g) => x(g)).join(', ')})`);
@@ -267,5 +276,5 @@ export function localParse(text, lang = 'es') {
   if (cheap) parts.push(x('ordenados por precio'));
   else if (best) parts.push(x('ordenados por puntuación'));
 
-  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: x('Busco {what}.', { what: parts.join(' ') }) });
+  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, board, stay, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: x('Busco {what}.', { what: parts.join(' ') }) });
 }

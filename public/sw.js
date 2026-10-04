@@ -1,6 +1,6 @@
 // DíasLibres: la web se puede instalar como app. Siempre se pide la versión nueva y,
 // sin conexión, se muestra la última guardada. Los precios y reservas (/api) nunca se guardan.
-const CACHE = 'diaslibres-v5';
+const CACHE = 'diaslibres-v6';
 const SHELL = ['/', '/styles.css', '/app.js', '/manifest.webmanifest', '/icon-192.png'];
 
 self.addEventListener('install', (e) => {

@@ -12,7 +12,7 @@ import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterF
 import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
-import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS } from './src/liteapi.js';
+import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS, STAY_TYPES } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -55,7 +55,8 @@ export function createApp({
   const statsOf = (city) => seoStats.get(cityKey(city)) || null;
   const statsQueue = [];
   const statsLoaded = Promise.resolve(store.kvList?.('seo:') || []).then((rows) => {
-    for (const [k, v] of rows) seoStats.set(k.slice(4), v);
+    // Los datos de antes de contar los apartamentos se vuelven a calcular.
+    for (const [k, v] of rows) if (v?.stay) seoStats.set(k.slice(4), v);
   }).catch((err) => console.error('[seo]', err.message));
   // Pide los datos de una ciudad (las que se visitan van primero).
   const wantStats = (city) => {
@@ -224,6 +225,9 @@ export function createApp({
       if (q.minStars) hotels = hotels.filter((h) => (h.stars || 0) >= Number(q.minStars));
       if (q.minRating) hotels = hotels.filter((h) => (h.rating || 0) >= Number(q.minRating));
       if (fac.length) hotels = hotels.filter((h) => fac.every((k) => h.facilities?.includes(k)));
+      // Tipo de alojamiento: hoteles, apartamentos, casas o hostales (uno o varios).
+      const stay = list(q.stay).filter((k) => k in STAY_TYPES);
+      if (stay.length) hotels = hotels.filter((h) => stay.includes(h.stay || 'hotel'));
       const byStars = (a, b) => (b.stars || 0) - (a.stars || 0) || (b.rating || 0) - (a.rating || 0);
       const byRating = (a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0);
       const byReviews = (a, b) => (b.reviewCount || 0) - (a.reviewCount || 0) || byRating(a, b);

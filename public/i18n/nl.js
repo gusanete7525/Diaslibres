@@ -447,5 +447,20 @@ export default {
  "Respuesta vacía de la IA.": "Leeg antwoord van de AI.",
  "Pasajero {v1}": "Passagier {v1}",
  "confirmada": "bevestigd",
- "cancelada": "geannuleerd"
+ "cancelada": "geannuleerd",
+ "Todos": "Alle",
+ "Apartamentos": "Appartementen",
+ "Casas y villas": "Vakantiehuizen en villa's",
+ "Hostales y pensiones": "Hostels en pensions",
+ "Apartamento": "Appartement",
+ "Casa o villa": "Huis of villa",
+ "Hostal": "Hostel",
+ "apartamentos": "appartementen",
+ "casas y villas": "vakantiehuizen en villa's",
+ "hostales y pensiones": "hostels en pensions",
+ "Apartamentos en {city}": "Appartementen in {city}",
+ "Casas y villas en {city}": "Vakantiehuizen en villa's in {city}",
+ "Hemos encontrado {n} apartamentos en {city}.": "We hebben {n} appartementen in {city} gevonden.",
+ "Hemos encontrado {n} casas y villas en {city}.": "We hebben {n} vakantiehuizen en villa's in {city} gevonden.",
+ "{n} son apartamentos.": "{n} daarvan zijn appartementen."
 };

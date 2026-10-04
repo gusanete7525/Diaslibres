@@ -99,6 +99,17 @@ export function payAtHotel(rates = []) {
   return [...sum.values()].map((t) => ({ ...t, amount: Math.round(t.amount * 100) / 100 }));
 }
 
+// Tipo de alojamiento (hotelTypeId del catálogo): hoteles, apartamentos, casas y villas, hostales.
+// Lo que no encaja (campings, barcos…) cuenta como hotel.
+export const STAY_TYPES = {
+  hotel: [204, 205, 206, 209, 218, 225, 226, 227, 231, 233, 274, 276, 278],
+  apartment: [201, 207, 219, 229],
+  house: [210, 213, 220, 221, 223, 228, 230, 232, 243, 250, 252, 257, 268, 271],
+  hostel: [203, 208, 216, 222, 235, 247, 251, 262, 264],
+};
+const STAY_OF = new Map(Object.entries(STAY_TYPES).flatMap(([k, ids]) => ids.map((id) => [id, k])));
+const STAY_ICON = { apartment: '🏢', house: '🏡', hostel: '🛏️' };
+
 export class LiteApiError extends Error {}
 
 export class PaymentPendingError extends LiteApiError {
@@ -209,6 +220,7 @@ export class LiteApi {
   }
 
   #toHotel(h, lang = 'es', keep = true) {
+    const stay = STAY_OF.get(h.hotelTypeId) || 'hotel';
     const stars = Number.isInteger(h.stars) && h.stars >= 1 && h.stars <= 5 ? h.stars : null;
     const ids = new Set(Array.isArray(h.facilityIds) ? h.facilityIds : []);
     const facilities = Object.keys(FACILITIES).filter((k) => FACILITIES[k].ids.some((id) => ids.has(id)));
@@ -231,7 +243,8 @@ export class LiteApi {
       reviewCount: h.reviewCount || null,
       tags,
       facilities,
-      image: '🏨',
+      stay,
+      image: STAY_ICON[stay] || '🏨',
       description: shortDescription(h.hotelDescription),
       origin: 'liteapi',
     };

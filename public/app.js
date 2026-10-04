@@ -20,6 +20,8 @@ const fmtMonth = new Intl.DateTimeFormat(LOCALE, { month: 'long', year: 'numeric
 const eur = (n) => `${Math.round(n).toLocaleString(LOCALE)} €`;
 // Importes a pagar: con céntimos.
 const eur2 = (n) => Number(n).toLocaleString(LOCALE, { style: 'currency', currency: 'EUR' });
+// Lo que no es un hotel se dice en la ficha.
+const STAY_LABEL = { apartment: 'Apartamento', house: 'Casa o villa', hostel: 'Hostal' };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const toDate = (iso) => new Date(iso + 'T00:00:00Z');
 const addDays = (iso, n) => { const d = toDate(iso); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -124,7 +126,7 @@ function filterParams() {
     const ages = [...filters.querySelectorAll('[name^="age"]')].map((s) => s.value);
     if (ages.length) p.set('children', ages.join(','));
   }
-  if (state.view === 'flights') { for (const k of ['nights', 'sort', 'tags', 'minStars', 'minRating', 'board', 'fac', 'adults']) p.delete(k); }
+  if (state.view === 'flights') { for (const k of ['nights', 'sort', 'tags', 'minStars', 'minRating', 'board', 'stay', 'fac', 'adults']) p.delete(k); }
   else p.delete('origin');
   for (const k of ['date', 'returnDate', 'passengers', 'stops']) p.delete(k);
   return p;
@@ -292,7 +294,7 @@ function renderFacilityList() {
 }
 function updateMoreCount() {
   const n = filters.querySelectorAll('[name="fac"]:checked').length
-    + ['minStars', 'minRating', 'board'].filter((k) => filters[k].value).length;
+    + ['stay', 'minStars', 'minRating', 'board'].filter((k) => filters[k].value).length;
   const badge = $('#moreCount');
   badge.textContent = n;
   badge.hidden = !n;
@@ -325,10 +327,11 @@ async function aiSearchSubmit() {
     filters.minStars.value = f.minStars || '';
     filters.checkIn.value = f.checkIn || '';
     filters.board.value = f.board || '';
+    filters.stay.value = f.stay || '';
     filters.stops.value = f.stops || '';
     const fac = new Set(f.fac || []);
     filters.querySelectorAll('[name="fac"]').forEach((c) => { c.checked = fac.has(c.value); });
-    if (fac.size || f.board) { $('#moreFilters').hidden = false; $('#moreFiltersBtn').setAttribute('aria-expanded', 'true'); }
+    if (fac.size || f.board || f.stay) { $('#moreFilters').hidden = false; $('#moreFiltersBtn').setAttribute('aria-expanded', 'true'); }
     updateMoreCount();
     const ex = $('#aiExplain');
     ex.textContent = `${f.source === 'claude' ? '✨' : '🔎'} ${f.explanation}`;
@@ -364,7 +367,8 @@ function renderResults() {
     return;
   }
   const one = list.length === 1;
-  const kind = state.view === 'flights' ? (one ? t('vuelo') : t('vuelos')) : one ? t('hotel') : t('hoteles');
+  const stayWord = { apartment: 'apartamentos', house: 'casas y villas', hostel: 'hostales y pensiones' }[filters.stay.value];
+  const kind = state.view === 'flights' ? (one ? t('vuelo') : t('vuelos')) : one ? t('hotel') : t(stayWord || 'hoteles');
   const osmNote = (osm?.count ? ' · ' + t('{n} de OpenStreetMap', { n: osm.count }) : '') + (ai?.count ? ' · ' + tn(ai.count, '{n} sugerido por IA', '{n} sugeridos por IA') : '');
   const live = state.data.live;
   const liveNote = live ? ' · ' + t('precios y disponibilidad en tiempo real') + (live.sandbox ? ' ' + t('(entorno de pruebas)') : '') : '';
@@ -435,7 +439,7 @@ function renderCard(item) {
       </div>`
     : `${item.photo ? `<img class="thumb photo" src="${esc(item.photo)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;thumb&quot;>🏨</div>'">` : `<div class="thumb">${item.image}</div>`}<div>
         <h3>${esc(item.name)}</h3>
-        <div class="meta">${item.stars ? `<span class="stars" aria-label="${t('{n} estrellas', { n: item.stars })}">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${item.rating.toLocaleString(LOCALE)}</span>${item.reviewCount ? ` <span class="meta">(${tn(item.reviewCount, '{n} opinión', '{n} opiniones', { n: item.reviewCount.toLocaleString(LOCALE) })})</span>` : ''}` : ''}</div>
+        <div class="meta">${STAY_LABEL[item.stay] ? `<span class="stay-type">${t(STAY_LABEL[item.stay])}</span> · ` : ''}${item.stars ? `<span class="stars" aria-label="${t('{n} estrellas', { n: item.stars })}">${'★'.repeat(item.stars)}</span> · ` : ''}${esc(item.city)}, ${esc(item.country)}${item.rating ? ` · <span class="rating">${item.rating.toLocaleString(LOCALE)}</span>${item.reviewCount ? ` <span class="meta">(${tn(item.reviewCount, '{n} opinión', '{n} opiniones', { n: item.reviewCount.toLocaleString(LOCALE) })})</span>` : ''}` : ''}</div>
         ${item.address ? `<div class="meta">📍 ${esc(item.address)}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${t('Web oficial')} ↗</a>` : ''}</div>` : ''}
         <div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="${t('Ficha en OpenStreetMap')}">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? `<span class="tag osm" title="${t('Datos sugeridos por IA: compruébalos antes de viajar')}">✨ ${t('Sugerido por IA')}</span>` : ''}${item.tags.map((x) => `<span class="tag">${esc(t(x))}</span>`).join('')}${(item.facilities || []).map((k) => facilityInfo()[k]).filter(Boolean).map((f) => `<span class="tag fac" title="${esc(t(f.label))}">${f.icon} ${esc(t(f.label))}</span>`).join('')}</div>
       </div>`;
@@ -1373,9 +1377,10 @@ const configReady = api('/api/config').then((config) => {
       const fac = new Set(f.fac || []);
       filters.querySelectorAll('[name="fac"]').forEach((c) => { c.checked = fac.has(c.value); });
       if (f.board) filters.board.value = f.board;
+      if (f.stay) filters.stay.value = f.stay;
       if (f.minStars) filters.minStars.value = f.minStars;
       if (f.sort) filters.sort.value = f.sort;
-      if (fac.size || f.board || f.minStars) { $('#moreFilters').hidden = false; $('#moreFiltersBtn').setAttribute('aria-expanded', 'true'); }
+      if (fac.size || f.board || f.minStars || f.stay) { $('#moreFilters').hidden = false; $('#moreFiltersBtn').setAttribute('aria-expanded', 'true'); }
       updateMoreCount();
     }
   } catch { /* sin filtros */ }

@@ -213,3 +213,21 @@ test('IndexNow: clave publicada y envío de todas las páginas', async () => {
     delete process.env.SITE_URL;
   }
 });
+
+test('apartamentos y casas: IA, filtro y páginas', async () => {
+  assert.equal(localParse('apartamento en Benidorm para una semana').stay, 'apartment');
+  assert.equal(localParse('alquiler vacacional en Málaga').stay, 'apartment');
+  assert.equal(localParse('casa rural en Asturias').stay, 'house');
+  assert.equal(localParse('hostal barato en Madrid').stay, 'hostel');
+  assert.equal(localParse('hotel con media pensión en Benidorm').stay, null);
+  assert.equal(localParse('Ferienwohnung in Málaga mit Pool', 'de').stay, 'apartment');
+  assert.equal(localParse('holiday home in Mallorca', 'en').stay, 'house');
+  const { cityStats } = await import('../src/seo.js');
+  const s = cityStats([{ name: 'A', stay: 'apartment' }, { name: 'B' }, { name: 'C', stay: 'apartment' }]);
+  assert.equal(s.stay.apartment, 2);
+  assert.equal(s.filters.apartamentos.count, 2);
+  const page = await fetch(base + '/hoteles/benidorm/apartamentos').then((r) => r.text());
+  assert.match(page, /<title>Apartamentos en Benidorm/);
+  assert.match(page, /data-start-filters="[^"]*apartment/);
+  assert.match(await fetch(base + '/en/hotels/benidorm/apartments').then((r) => r.text()), /<title>Apartments in Benidorm/);
+});
