@@ -243,3 +243,39 @@ test('Facebook: el token tiene que ser de esta app y traer email', async () => {
     server.close();
   }
 });
+
+test('«Mis reservas»: solo con la cuenta o con email + código; nadie ve ni cancela reservas ajenas', async () => {
+  const { server, call, sent, store } = await start();
+  try {
+    const b = { code: 'DL-ABC123', type: 'hotel', itemId: 'x', itemName: 'Hotel', email: 'ana@example.com', name: 'Ana', status: 'confirmada', total: 100, units: 1, checkIn: '2030-01-01', checkOut: '2030-01-02' };
+    await store.add(b);
+    // Solo con el email: no se ve nada, ni se puede cancelar.
+    assert.equal((await call('GET', '/api/bookings?email=ana@example.com')).status, 401);
+    assert.equal((await call('GET', '/api/bookings?email=ana@example.com&code=DL-000000')).status, 404);
+    assert.equal((await call('POST', `/api/bookings/${b.code}/cancel`, { email: 'otro@example.com' })).status, 404);
+    // Con email + código (en minúsculas también) sí.
+    const mine = await call('GET', '/api/bookings?email=Ana@example.com&code=dl-abc123');
+    assert.equal(mine.status, 200);
+    assert.equal(mine.body[0].code, 'DL-ABC123');
+    // Con la cuenta de Ana, sin escribir nada.
+    await call('POST', '/api/auth/email', { email: 'ana@example.com' });
+    await call('POST', '/api/auth/verify', { token: new URL(sent[0].url).searchParams.get('login') });
+    assert.equal((await call('GET', '/api/bookings')).body.length, 1);
+    // Con la cuenta abierta, no se ven las de otro email sin su código.
+    assert.equal((await call('GET', '/api/bookings?email=luis@example.com')).status, 401);
+    const c = await call('POST', `/api/bookings/${b.code}/cancel`, {});
+    assert.equal(c.body.status, 'cancelada');
+  } finally {
+    server.close();
+  }
+});
+
+test('«Mis reservas»: muchos intentos fallidos se bloquean', async () => {
+  const { server, call } = await start();
+  try {
+    for (let i = 0; i < 20; i++) assert.equal((await call('GET', `/api/bookings?email=a@b.com&code=DL-${String(i).padStart(6, '0')}`)).status, 404);
+    assert.equal((await call('GET', '/api/bookings?email=a@b.com&code=DL-999999')).status, 429);
+  } finally {
+    server.close();
+  }
+});

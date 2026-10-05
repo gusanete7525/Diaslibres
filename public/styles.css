@@ -256,6 +256,8 @@ body:not([data-live-flights]) .live-only { display: none; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 .mine { max-width: 1180px; margin: 0 auto; padding: 24px 16px 40px; }
+#mineForm { flex-wrap: wrap; }
+@media (max-width: 760px) { #mineForm > .btn { grid-column: 1 / -1; width: 100%; } }
 .booking { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 10px 0; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
 .booking .status { font-weight: 700; font-size: 12px; text-transform: uppercase; }
 .booking .status.ok { color: var(--good-ink); }

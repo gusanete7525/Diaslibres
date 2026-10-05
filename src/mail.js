@@ -87,7 +87,7 @@ export class Mailer {
         esc(t('Hola {name}, tu reserva está confirmada.', { name: b.name })),
         table(rows) +
           (test ? `<p style="color:#8c1f1f">${esc(t('Es una reserva de prueba: no se ha cobrado nada y no es válida para viajar ni en el hotel.'))}</p>` : '') +
-          `<p>${esc(t('Puedes consultarla o cancelarla en «Mis reservas» con este email.'))}</p>`,
+          `<p>${esc(t('Puedes consultarla o cancelarla en «Mis reservas» con este email y el código {code}.', { code: b.code }))}</p>`,
         l,
       ),
     );

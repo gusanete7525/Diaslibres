@@ -545,5 +545,10 @@ export default {
  "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Je Facebook-account heeft geen bevestigd e-mailadres. Log in met je e-mail.",
  "Permite las ventanas emergentes para entrar con Microsoft.": "Sta pop-ups toe om in te loggen met Microsoft.",
  "Cargando Facebook… vuelve a pulsar en un momento.": "Facebook wordt geladen… tik zo nog een keer.",
- "Para unir tu cuenta de Microsoft, confirma que este email es tuyo.": "Bevestig dat dit e-mailadres van jou is om je Microsoft-account te koppelen."
+ "Para unir tu cuenta de Microsoft, confirma que este email es tuyo.": "Bevestig dat dit e-mailadres van jou is om je Microsoft-account te koppelen.",
+ "Código de reserva": "Boekingscode",
+ "Escribe el código de una de tus reservas (DL-…), que te enviamos por email, o entra con tu cuenta.": "Vul de code van een van je boekingen in (DL-…), die we je per e-mail stuurden, of log in met je account.",
+ "Escribe también el código de una de tus reservas (DL-…), que te enviamos por email, o entra con tu cuenta.": "Vul ook de code van een van je boekingen in (DL-…), die we je per e-mail stuurden, of log in met je account.",
+ "No hay ninguna reserva con ese email y ese código.": "Er is geen boeking met dit e-mailadres en deze code.",
+ "Puedes consultarla o cancelarla en «Mis reservas» con este email y el código {code}.": "Je kunt hem bekijken of annuleren bij ‘Mijn boekingen’ met dit e-mailadres en de code {code}."
 };

@@ -545,5 +545,10 @@ export default {
  "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Your Facebook account has no confirmed email. Sign in with your email instead.",
  "Permite las ventanas emergentes para entrar con Microsoft.": "Allow pop-ups to sign in with Microsoft.",
  "Cargando Facebook… vuelve a pulsar en un momento.": "Loading Facebook… tap again in a moment.",
- "Para unir tu cuenta de Microsoft, confirma que este email es tuyo.": "To link your Microsoft account, confirm that this email is yours."
+ "Para unir tu cuenta de Microsoft, confirma que este email es tuyo.": "To link your Microsoft account, confirm that this email is yours.",
+ "Código de reserva": "Booking code",
+ "Escribe el código de una de tus reservas (DL-…), que te enviamos por email, o entra con tu cuenta.": "Enter the code of one of your bookings (DL-…), which we sent you by email, or sign in to your account.",
+ "Escribe también el código de una de tus reservas (DL-…), que te enviamos por email, o entra con tu cuenta.": "Also enter the code of one of your bookings (DL-…), which we sent you by email, or sign in to your account.",
+ "No hay ninguna reserva con ese email y ese código.": "There is no booking with that email and code.",
+ "Puedes consultarla o cancelarla en «Mis reservas» con este email y el código {code}.": "You can view or cancel it in “My bookings” using this email address and the code {code}."
 };
