@@ -544,5 +544,6 @@ export default {
  "No se pudo comprobar tu cuenta de Facebook.": "Dein Facebook-Konto konnte nicht überprüft werden.",
  "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Dein Facebook-Konto hat keine bestätigte E-Mail. Melde dich mit deiner E-Mail an.",
  "Permite las ventanas emergentes para entrar con Microsoft.": "Erlaube Pop-ups, um dich mit Microsoft anzumelden.",
- "Cargando Facebook… vuelve a pulsar en un momento.": "Facebook wird geladen … tippe gleich noch einmal."
+ "Cargando Facebook… vuelve a pulsar en un momento.": "Facebook wird geladen … tippe gleich noch einmal.",
+ "Para unir tu cuenta de Microsoft, confirma que este email es tuyo.": "Um dein Microsoft-Konto zu verknüpfen, bestätige, dass diese E-Mail dir gehört."
 };

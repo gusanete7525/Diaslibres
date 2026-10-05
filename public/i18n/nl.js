@@ -544,5 +544,6 @@ export default {
  "No se pudo comprobar tu cuenta de Facebook.": "Je Facebook-account kon niet worden gecontroleerd.",
  "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Je Facebook-account heeft geen bevestigd e-mailadres. Log in met je e-mail.",
  "Permite las ventanas emergentes para entrar con Microsoft.": "Sta pop-ups toe om in te loggen met Microsoft.",
- "Cargando Facebook… vuelve a pulsar en un momento.": "Facebook wordt geladen… tik zo nog een keer."
+ "Cargando Facebook… vuelve a pulsar en un momento.": "Facebook wordt geladen… tik zo nog een keer.",
+ "Para unir tu cuenta de Microsoft, confirma que este email es tuyo.": "Bevestig dat dit e-mailadres van jou is om je Microsoft-account te koppelen."
 };

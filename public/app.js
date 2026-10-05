@@ -1758,9 +1758,17 @@ async function appleSignIn() {
 
 // «Continuar con Microsoft»: ventana emergente de Microsoft que vuelve a /auth-callback.html
 // con un id_token; el servidor lo comprueba (firma, cuenta personal y nonce).
+let msLogin = null; // intento en curso: { popup, onMessage, timer }
+function stopMicrosoft() {
+  if (!msLogin) return;
+  window.removeEventListener('message', msLogin.onMessage);
+  clearInterval(msLogin.timer);
+  msLogin = null;
+}
 function microsoftSignIn() {
   const id = state.config.microsoftClientId;
   if (!id) return;
+  stopMicrosoft();
   const nonce = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
   const q = new URLSearchParams({
     client_id: id, response_type: 'id_token', response_mode: 'fragment', scope: 'openid email profile',
@@ -1769,8 +1777,8 @@ function microsoftSignIn() {
   const popup = window.open('https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?' + q, 'ms-login', 'width=480,height=640');
   if (!popup) return toast(t('Permite las ventanas emergentes para entrar con Microsoft.'));
   const onMessage = async (e) => {
-    if (e.origin !== location.origin || typeof e.data?.authHash !== 'string') return;
-    window.removeEventListener('message', onMessage);
+    if (e.origin !== location.origin || e.source !== popup || typeof e.data?.authHash !== 'string') return;
+    stopMicrosoft();
     const r = new URLSearchParams(e.data.authHash.replace(/^#/, ''));
     if (!r.get('id_token')) {
       if (r.get('error') === 'access_denied') return;
@@ -1778,8 +1786,20 @@ function microsoftSignIn() {
       const why = (r.get('error_description') || r.get('error') || '').split(/\r?\n/)[0].slice(0, 160);
       return toast(t('No se pudo comprobar tu cuenta de Microsoft.') + (why ? ` (${why})` : ''), why ? 15000 : 3500);
     }
-    try { signedIn((await api('/api/auth/microsoft', { method: 'POST', body: JSON.stringify({ idToken: r.get('id_token'), nonce }) })).user); } catch (err) { toast(err.message); }
+    try {
+      const res = await api('/api/auth/microsoft', { method: 'POST', body: JSON.stringify({ idToken: r.get('id_token'), nonce }) });
+      if (res.pending) {
+        // Email que no es de Microsoft: hay que confirmarlo una vez con el enlace del correo.
+        $('#accountBody').innerHTML = `<h2>${t('Revisa tu correo')}</h2><p>${t('Para unir tu cuenta de Microsoft, confirma que este email es tuyo.')}</p><p>${t('Te hemos enviado un enlace a {email}. Ábrelo en este dispositivo para entrar.', { email: `<b>${esc(res.pending)}</b>` })}</p><p class="meta">${t('Si no lo ves, mira en la carpeta de spam.')}</p><div class="actions"><button type="button" class="btn primary" data-close>${t('Entendido')}</button></div>`;
+        if (!$('#accountDialog').open) $('#accountDialog').showModal();
+        return;
+      }
+      signedIn(res.user);
+    } catch (err) { toast(err.message); }
   };
+  // Si se cierra la ventana sin terminar, se deja de escuchar (un nuevo intento empieza limpio).
+  const timer = setInterval(() => { if (popup.closed) setTimeout(() => msLogin?.popup === popup && stopMicrosoft(), 1000); }, 800);
+  msLogin = { popup, onMessage, timer };
   window.addEventListener('message', onMessage);
 }
 
