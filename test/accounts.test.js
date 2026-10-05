@@ -205,17 +205,20 @@ test('Microsoft con email que no es de Microsoft: se confirma por correo y queda
     assert.equal(sent[1].email, 'ana@example.com');
     assert.equal((await call('GET', '/api/me')).body.user, null);
 
+    // Un dominio que solo se parece a uno de Microsoft no entra directo.
+    const fake = await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...base, sub: 'fakeSub0001', email: 'ana@outlook.evil.com' }), nonce: 'n1' });
+    assert.equal(fake.body.pending, 'ana@outlook.evil.com');
     // Eva confirma su email una vez y desde entonces entra directamente con Microsoft.
     const first = await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...base, sub: 'evaSub0001', email: 'eva@example.com', name: 'Eva Ruiz' }), nonce: 'n1' });
     assert.equal(first.body.pending, 'eva@example.com');
-    const link = new URL(sent[2].url).searchParams.get('login');
+    const link = new URL(sent[3].url).searchParams.get('login');
     const v = await call('POST', '/api/auth/verify', { token: link });
     assert.equal(v.status, 200);
     assert.ok(v.body.user.providers.includes('microsoft'));
     await call('POST', '/api/auth/logout');
     const again = await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...base, sub: 'evaSub0001', email: 'eva@example.com' }), nonce: 'n1' });
     assert.equal(again.body.user.email, 'eva@example.com');
-    assert.equal(sent.length, 3);
+    assert.equal(sent.length, 4);
   } finally {
     server.close();
   }
