@@ -15,6 +15,8 @@ const LOGIN_TTL = 30 * 60 * 1000;
 const SESSION_TTL = 180 * 24 * 60 * 60 * 1000;
 const HISTORY_MAX = 30;
 export const COOKIE = 'dl_s';
+// Dominios de email que son de Microsoft (su dueño es quien tiene la cuenta personal).
+const MS_EMAIL = /@(outlook|hotmail|live|msn|passport)\.[a-z.]{2,10}$/;
 const MS_CONSUMERS = '9188040d-6c67-4c5b-b112-36a304b66dad'; // «inquilino» de las cuentas personales de Microsoft
 
 const hash = (token) => createHash('sha256').update(String(token)).digest('hex');
@@ -95,11 +97,12 @@ export class Accounts {
     const user = current || { email: normEmail(email), name: '', provider: data.provider || 'email', createdAt: new Date(this.now()).toISOString(), history: [] };
     if (data.name && !user.name) user.name = String(data.name).slice(0, 80);
     user.providers = [...new Set([...(user.providers || [user.provider]), data.provider].filter(Boolean))];
+    if (data.msSub) user.msSub = data.msSub;
     return this.#saveUser(user);
   }
 
   // Envía el enlace de acceso. No dice si la cuenta existía (se crea al entrar).
-  async sendLoginLink({ email, lang = 'es', site, ip = '' }) {
+  async sendLoginLink({ email, lang = 'es', site, ip = '', link = null }) {
     email = normEmail(email);
     if (!isEmail(email)) throw Object.assign(new Error('Escribe un email válido.'), { status: 400 });
     const t = this.now();
@@ -111,7 +114,7 @@ export class Accounts {
     if (this.ipHits.size > 5000) this.ipHits.delete(this.ipHits.keys().next().value);
     await this.store.kvSet('mailrate:' + email, { at: t });
     const token = newToken();
-    await this.store.kvSet('login:' + hash(token), { email, exp: t + LOGIN_TTL });
+    await this.store.kvSet('login:' + hash(token), { email, exp: t + LOGIN_TTL, ...(link ? { link } : {}) });
     const prefix = lang && lang !== 'es' ? '/' + lang : '';
     const url = `${site}${prefix}/?login=${encodeURIComponent(token)}`;
     const res = await this.mailer?.loginLink?.({ email, url, lang });
@@ -129,7 +132,12 @@ export class Accounts {
     await this.store.kvDelete(key);
     if (row.exp < this.now()) throw Object.assign(new Error('El enlace ha caducado. Pide otro.'), { status: 400 });
     await this.store.kvDelete('mailrate:' + row.email);
-    const user = await this.#upsertUser(row.email, { provider: 'email' });
+    let user = await this.#upsertUser(row.email, { provider: 'email' });
+    // Enlace pedido al entrar con Microsoft: el email ya está confirmado, se une esa cuenta de Microsoft.
+    if (row.link?.provider === 'microsoft' && row.link.sub) {
+      await this.store.kvSet('msid:' + row.link.sub, { email: user.email });
+      user = await this.#upsertUser(user.email, { provider: 'microsoft', msSub: row.link.sub });
+    }
     return { user, session: await this.#newSession(user.email) };
   }
 
@@ -156,16 +164,31 @@ export class Accounts {
     return { user, session: await this.#newSession(user.email) };
   }
 
-  // Microsoft: solo cuentas personales (Outlook, Hotmail, Live), cuyo email lo verifica Microsoft.
-  // (En cuentas de empresa el email lo pone el administrador de cada empresa y no se puede fiar.)
-  async loginWithMicrosoft(idToken, nonce) {
+  // Microsoft: solo cuentas personales (Outlook, Hotmail, Live). La cuenta de Microsoft se
+  // identifica por su «sub» (fijo), no por el email. Microsoft no garantiza que el email de una
+  // cuenta personal esté verificado (se puede crear con cualquier dirección), así que la primera
+  // vez solo se entra directamente si el email es de Microsoft (outlook, hotmail, live, msn);
+  // si no, se envía un enlace a ese email para confirmar que es suyo y desde entonces queda unida.
+  async loginWithMicrosoft(idToken, nonce, { lang = 'es', site = '', ip = '' } = {}) {
     if (!this.microsoftClientId) throw Object.assign(new Error('El acceso con Microsoft no está activado.'), { status: 404 });
     const claims = await this.#verifyJwt(idToken, 'https://login.microsoftonline.com/consumers/discovery/v2.0/keys');
     const email = normEmail(claims?.email || claims?.preferred_username);
-    const valid = claims && claims.iss === `https://login.microsoftonline.com/${MS_CONSUMERS}/v2.0` && claims.tid === MS_CONSUMERS && claims.aud === this.microsoftClientId && nonce && claims.nonce === nonce && isEmail(email);
+    const sub = typeof claims?.sub === 'string' && /^[\w-]{8,128}$/.test(claims.sub) ? claims.sub : null;
+    const valid = claims && sub && claims.iss === `https://login.microsoftonline.com/${MS_CONSUMERS}/v2.0` && claims.tid === MS_CONSUMERS && claims.aud === this.microsoftClientId && nonce && claims.nonce === nonce && isEmail(email);
     if (!valid) throw Object.assign(new Error('No se pudo comprobar tu cuenta de Microsoft.'), { status: 401 });
-    const user = await this.#upsertUser(email, { provider: 'microsoft', name: String(claims.name || '').split(' ')[0] });
-    return { user, session: await this.#newSession(user.email) };
+    const name = String(claims.name || '').split(' ')[0];
+    const linked = await this.store.kvGet('msid:' + sub);
+    if (linked?.email && (await this.getUser(linked.email))?.msSub === sub) {
+      const user = await this.#upsertUser(linked.email, { provider: 'microsoft', name });
+      return { user, session: await this.#newSession(user.email) };
+    }
+    if (MS_EMAIL.test(email)) {
+      await this.store.kvSet('msid:' + sub, { email });
+      const user = await this.#upsertUser(email, { provider: 'microsoft', name, msSub: sub });
+      return { user, session: await this.#newSession(user.email) };
+    }
+    await this.sendLoginLink({ email, lang, site, ip, link: { provider: 'microsoft', sub } });
+    return { pending: email };
   }
 
   // Facebook: se pregunta a Facebook para qué app es el token y el email de la persona
@@ -247,6 +270,8 @@ export class Accounts {
   // Borra la cuenta y su historial (las reservas se conservan: son obligatorias para la contabilidad).
   async deleteUser(req, email) {
     await this.logout(req);
+    const user = await this.getUser(email);
+    if (user?.msSub) await this.store.kvDelete('msid:' + user.msSub);
     await this.store.kvDelete('user:' + normEmail(email));
   }
 }

@@ -765,12 +765,14 @@ export function createApp({
     }
   });
   for (const [path, login] of [
-    ['microsoft', (b) => accounts.loginWithMicrosoft(b?.idToken, String(b?.nonce || ''))],
+    ['microsoft', (b, req) => accounts.loginWithMicrosoft(b?.idToken, String(b?.nonce || ''), { lang: langOf(req), site: siteUrl(req), ip: req.ip })],
     ['facebook', (b) => accounts.loginWithFacebook(b?.accessToken)],
   ]) {
     app.post('/api/auth/' + path, async (req, res) => {
       try {
-        const { user, session } = await login(req.body);
+        const { user, session, pending } = await login(req.body, req);
+        // Hay que confirmar el email con el enlace que se acaba de enviar.
+        if (pending) return res.json({ pending });
         setSession(req, res, session);
         res.json({ user: publicUser(user) });
       } catch (err) {

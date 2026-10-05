@@ -544,5 +544,6 @@ export default {
  "No se pudo comprobar tu cuenta de Facebook.": "Your Facebook account could not be verified.",
  "Tu cuenta de Facebook no tiene un email confirmado. Entra con tu email.": "Your Facebook account has no confirmed email. Sign in with your email instead.",
  "Permite las ventanas emergentes para entrar con Microsoft.": "Allow pop-ups to sign in with Microsoft.",
- "Cargando Facebook… vuelve a pulsar en un momento.": "Loading Facebook… tap again in a moment."
+ "Cargando Facebook… vuelve a pulsar en un momento.": "Loading Facebook… tap again in a moment.",
+ "Para unir tu cuenta de Microsoft, confirma que este email es tuyo.": "To link your Microsoft account, confirm that this email is yours."
 };

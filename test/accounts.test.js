@@ -156,7 +156,7 @@ test('Microsoft: solo cuentas personales, para esta web y con el mismo nonce', a
     return head + '.' + sign('RSA-SHA256', Buffer.from(head), privateKey).toString('base64url');
   };
   const tid = '9188040d-6c67-4c5b-b112-36a304b66dad';
-  const claims = { iss: `https://login.microsoftonline.com/${tid}/v2.0`, tid, aud: 'ms-app', nonce: 'n1', exp: Math.floor(Date.now() / 1000) + 600, email: 'Luis@Outlook.com', name: 'Luis Pérez' };
+  const claims = { iss: `https://login.microsoftonline.com/${tid}/v2.0`, tid, sub: 'AAAAsubLuis', aud: 'ms-app', nonce: 'n1', exp: Math.floor(Date.now() / 1000) + 600, email: 'Luis@Outlook.com', name: 'Luis Pérez' };
   const fetchImpl = async () => ({ ok: true, json: async () => ({ keys: [jwk] }) });
   const off = await start();
   const { server, call } = await start({ microsoftClientId: 'ms-app', fetchImpl });
@@ -174,6 +174,50 @@ test('Microsoft: solo cuentas personales, para esta web y con el mismo nonce', a
   } finally {
     server.close();
     off.server.close();
+  }
+});
+
+test('Microsoft con email que no es de Microsoft: se confirma por correo y queda unido por «sub»', async () => {
+  const { generateKeyPairSync, sign } = await import('node:crypto');
+  const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'm1' };
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const jwt = (claims) => {
+    const head = b64({ alg: 'RS256', kid: 'm1' }) + '.' + b64(claims);
+    return head + '.' + sign('RSA-SHA256', Buffer.from(head), privateKey).toString('base64url');
+  };
+  const tid = '9188040d-6c67-4c5b-b112-36a304b66dad';
+  const base = { iss: `https://login.microsoftonline.com/${tid}/v2.0`, tid, aud: 'ms-app', nonce: 'n1', exp: Math.floor(Date.now() / 1000) + 600 };
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ keys: [jwk] }) });
+  const { server, call, sent } = await start({ microsoftClientId: 'ms-app', fetchImpl });
+  try {
+    // Ya existe una cuenta de ana@example.com (entró con su email).
+    await call('POST', '/api/auth/email', { email: 'ana@example.com' });
+    await call('POST', '/api/auth/verify', { token: new URL(sent[0].url).searchParams.get('login') });
+    await call('POST', '/api/auth/logout');
+    // Alguien crea una cuenta de Microsoft con ese email: no entra, se envía un enlace a Ana.
+    const intruder = await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...base, sub: 'intruso123', email: 'ana@example.com' }), nonce: 'n1' });
+    assert.equal(intruder.status, 200);
+    assert.equal(intruder.body.pending, 'ana@example.com');
+    assert.equal(intruder.body.user, undefined);
+    assert.equal(intruder.set, null);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[1].email, 'ana@example.com');
+    assert.equal((await call('GET', '/api/me')).body.user, null);
+
+    // Eva confirma su email una vez y desde entonces entra directamente con Microsoft.
+    const first = await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...base, sub: 'evaSub0001', email: 'eva@example.com', name: 'Eva Ruiz' }), nonce: 'n1' });
+    assert.equal(first.body.pending, 'eva@example.com');
+    const link = new URL(sent[2].url).searchParams.get('login');
+    const v = await call('POST', '/api/auth/verify', { token: link });
+    assert.equal(v.status, 200);
+    assert.ok(v.body.user.providers.includes('microsoft'));
+    await call('POST', '/api/auth/logout');
+    const again = await call('POST', '/api/auth/microsoft', { idToken: jwt({ ...base, sub: 'evaSub0001', email: 'eva@example.com' }), nonce: 'n1' });
+    assert.equal(again.body.user.email, 'eva@example.com');
+    assert.equal(sent.length, 3);
+  } finally {
+    server.close();
   }
 });
 
