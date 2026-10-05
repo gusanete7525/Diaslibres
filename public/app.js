@@ -99,8 +99,8 @@ function setView(view) {
   // Hoteles: destino libre (cualquier ciudad). Vuelos: solo aeropuertos con rutas.
   if (view === 'flights') filters.destination.setAttribute('list', 'destList');
   else filters.destination.removeAttribute('list');
-  filters.destination.placeholder = view === 'flights' ? t('Ciudad o aeropuerto') : t('Escribe cualquier ciudad');
-  filters.origin.placeholder = state.config.liveFlights ? t('Ciudad o código (MAD)') : t('Cualquiera');
+  filters.destination.placeholder = view === 'flights' ? t('Ciudad o aeropuerto') : view === 'trains' ? t('Ciudad (p. ej. Barcelona)') : t('Escribe cualquier ciudad');
+  filters.origin.placeholder = view === 'trains' ? t('Ciudad (p. ej. Madrid)') : state.config.liveFlights ? t('Ciudad o código (MAD)') : t('Cualquiera');
   if (view === 'mine') {
     // Con la cuenta abierta se ven sus reservas directamente; si no, hace falta email + código.
     const email = state.user?.email || store.get('dl-email');
@@ -141,6 +141,7 @@ async function search() {
   recordSearch();
   if (state.view === 'flights') await configReady;
   if (token !== searchToken) return;
+  if (state.view === 'trains') return searchTrains(token);
   if (state.view === 'flights' && state.config.liveFlights) return searchLiveFlights(token);
   results.classList.add('loading');
   if (state.view === 'hotels' && filters.destination.value.trim()) {
@@ -395,9 +396,10 @@ async function aiSearchSubmit() {
     filters.sort.value = f.sort || 'stars';
     filters.tags.value = (f.tags || []).join(',');
     filters.minStars.value = f.minStars || '';
-    filters.checkIn.value = f.kind === 'flight' ? '' : f.checkIn || '';
-    if (f.kind === 'flight' && f.checkIn) filters.date.value = f.checkIn;
-    if (f.adults) filters[f.kind === 'flight' ? 'passengers' : 'adults'].value = String(f.adults);
+    const trip = f.kind === 'flight' || f.kind === 'train';
+    filters.checkIn.value = trip ? '' : f.checkIn || '';
+    if (trip && f.checkIn) filters.date.value = f.checkIn;
+    if (f.adults) filters[trip ? 'passengers' : 'adults'].value = String(f.adults);
     filters.board.value = f.board || '';
     filters.stay.value = f.stay || '';
     filters.stops.value = f.stops || '';
@@ -412,7 +414,7 @@ async function aiSearchSubmit() {
       toast(t('Los vuelos todavía no están disponibles. De momento solo hoteles.'));
       return;
     }
-    setView(f.kind === 'flight' ? 'flights' : 'hotels');
+    setView(f.kind === 'flight' ? 'flights' : f.kind === 'train' ? 'trains' : 'hotels');
     await search();
   } catch (err) {
     toast(err.message);
@@ -1123,6 +1125,154 @@ function renderFlightResults(data, token) {
   renderRouteChart();
   for (const item of state.items.values()) results.append(liveFlightCard(item));
   loadFlightDays(token);
+  railHint(data, token);
+}
+
+// ---------- Trenes ----------
+// Duración del tren entre dos ciudades y comparación puerta a puerta con el avión.
+// La reserva se hace de momento en Rail Europe (enlace con origen, destino, fecha y pasajeros).
+const durText = (m) => (m == null ? '' : m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ' ' + String(m % 60).padStart(2, '0') : ''}`);
+const trainIcon = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 21l1.5-4m4.5 4-1.5-4"/></svg>';
+
+async function searchTrains(token) {
+  setFooter(true);
+  const origin = filters.origin.value.trim();
+  const destination = filters.destination.value.trim();
+  if (!origin) {
+    results.innerHTML = `<p class="empty">${t('Escribe de dónde sales y a dónde vas, y te comparamos el tren con el avión puerta a puerta.')}</p>`;
+    return;
+  }
+  results.classList.add('loading');
+  results.innerHTML = `<p class="count">${destination ? t('Buscando trenes de {from} a {to}…', { from: esc(origin), to: esc(destination) }) : t('Buscando trenes desde {city}…', { city: esc(origin) })}</p>`;
+  try {
+    const p = new URLSearchParams({ origin, destination, adults: filters.passengers.value });
+    if (filters.date.value) p.set('date', filters.date.value);
+    const data = await api(`/api/trains?${p}`);
+    if (token !== searchToken) return;
+    state.data = data;
+    if (!data.to) return renderRailNearby(data);
+    const html = [];
+    html.push(`<p class="count">${trainIcon} ${esc(data.from)} → ${esc(data.to)}${data.date ? ' · ' + fmtDay.format(toDate(data.date)) : ''} · ${tn(data.adults, '{n} pasajero', '{n} pasajeros')}</p>`);
+    html.push('<p class="rail-verdict" id="railVerdict"></p><div class="rail-compare" id="railCompare"></div>');
+    if (!data.train) html.push(`<p class="count">${t('No conocemos un buen tren entre estas dos ciudades. Te enseñamos los vuelos.')}</p>`);
+    if (data.nearby.length) html.push(`<p class="count">${t('Otros trenes desde {city}:', { city: esc(data.from) })}</p>${railChips(data.nearby)}`);
+    results.innerHTML = html.join('');
+    bindRailChips();
+    const box = $('#railCompare');
+    if (data.train) box.append(trainCard(data));
+    const wait = document.createElement('p');
+    wait.className = 'count';
+    if (data.fromIata && data.toIata) { wait.textContent = '✈️ ' + t('Comparando con los vuelos…'); box.append(wait); }
+    const flight = await railFlights(data);
+    if (token !== searchToken) return;
+    wait.remove();
+    if (flight) box.append(flightCompareCard(data, flight));
+    // Lo más rápido puerta a puerta.
+    const door = { train: data.train?.doorMinutes, plane: flight ? flight.minutes + data.doorFlight : null };
+    const win = door.train && door.plane ? (door.train <= door.plane ? 'train' : 'plane') : null;
+    if (win) {
+      box.querySelector(`[data-mode="${win}"]`)?.classList.add('win');
+      box.querySelector(`[data-mode="${win}"] .tags`)?.insertAdjacentHTML('afterbegin', `<span class="tag">⚡ ${t('Más rápido puerta a puerta')}</span>`);
+      const diff = Math.abs(door.train - door.plane);
+      $('#railVerdict').textContent = diff < 20 ? t('Tren y avión tardan casi lo mismo puerta a puerta.')
+        : win === 'train' ? t('En tren llegas antes: unos {time} menos puerta a puerta.', { time: durText(diff) })
+        : t('En avión llegas antes: unos {time} menos puerta a puerta.', { time: durText(diff) });
+    }
+    if (!data.train && !flight) box.innerHTML = `<p class="empty">${t('No hemos encontrado trenes ni vuelos para este trayecto.')}</p>`;
+  } catch (err) {
+    if (token === searchToken) results.innerHTML = `<p class="empty">${esc(err.message)}</p>`;
+  } finally {
+    if (token === searchToken) results.classList.remove('loading');
+  }
+}
+
+function railChips(list) {
+  return `<div class="rail-chips">${list.map((r) => `<button type="button" data-rail-to="${esc(r.to)}">${esc(r.to)} · ${durText(r.minutes)}</button>`).join('')}</div>`;
+}
+function bindRailChips() {
+  results.querySelectorAll('[data-rail-to]').forEach((b) => b.addEventListener('click', () => {
+    filters.destination.value = b.dataset.railTo;
+    search();
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+}
+function renderRailNearby(data) {
+  results.innerHTML = data.nearby.length
+    ? `<p class="count">${t('Trenes directos desde {city}. Elige destino:', { city: esc(data.from) })}</p>${railChips(data.nearby)}`
+    : `<p class="empty">${t('No conocemos trenes directos desde {city}. Prueba otra ciudad o busca vuelos.', { city: esc(data.from) })}</p>`;
+  bindRailChips();
+}
+
+function trainCard(data) {
+  const tr = data.train;
+  const el = document.createElement('article');
+  el.className = 'card rail-card';
+  el.dataset.mode = 'train';
+  el.innerHTML = `
+    <h3>${trainIcon} ${t('Tren')}</h3>
+    <div class="big">${durText(tr.minutes)}</div>
+    <div class="meta">${tr.direct ? t('Directo, de centro a centro') : t('Con transbordo en {city}', { city: esc(tr.via) })} · ${esc(tr.operators)}</div>
+    <div class="meta">${t('Puerta a puerta: unas {time}', { time: durText(tr.doorMinutes) })}</div>
+    <div class="tags"><span class="tag">${t('sin controles de aeropuerto')}</span><span class="tag">${t('maleta sin coste extra')}</span></div>
+    <a class="btn primary" href="${esc(tr.bookUrl)}" target="_blank" rel="noopener">${t('Ver horarios y reservar')}</a>
+    <div class="meta">${t('La reserva del tren se hace en Rail Europe, nuestro socio ferroviario.')}</div>`;
+  return el;
+}
+
+// El vuelo más rápido del trayecto (y su precio), si las dos ciudades tienen aeropuerto.
+async function railFlights(data) {
+  await configReady;
+  if (!data.fromIata || !data.toIata || data.fromIata === data.toIata || !state.config.liveFlights) return null;
+  try {
+    const p = new URLSearchParams({ origin: data.fromIata, destination: data.toIata, adults: String(data.adults) });
+    if (data.date) p.set('date', data.date);
+    const f = await api(`/api/flights?${p}`);
+    const trips = (f.results || []).filter((x) => x.outbound?.minutes);
+    if (!trips.length) return null;
+    const fastest = trips.reduce((a, b) => (b.outbound.minutes < a.outbound.minutes ? b : a));
+    const cheapest = trips.reduce((a, b) => (b.total < a.total ? b : a));
+    return { minutes: fastest.outbound.minutes, stops: fastest.outbound.stops, from: Math.round(cheapest.total), date: f.date, count: trips.length };
+  } catch { return null; }
+}
+
+function flightCompareCard(data, f) {
+  const el = document.createElement('article');
+  el.className = 'card rail-card';
+  el.dataset.mode = 'plane';
+  el.innerHTML = `
+    <h3>✈️ ${t('Avión')}</h3>
+    <div class="big">${durText(f.minutes)}</div>
+    <div class="meta">${t('Vuelo más rápido')} · ${stopsText(f.stops)} · ${t('desde {price}', { price: eur(f.from) })}</div>
+    <div class="meta">${t('Puerta a puerta: unas {time}', { time: durText(f.minutes + data.doorFlight) })}</div>
+    <div class="tags"><span class="tag">${tn(f.count, '{n} vuelo', '{n} vuelos')}</span></div>
+    <button class="btn" type="button">${t('Ver vuelos')}</button>`;
+  el.querySelector('button').addEventListener('click', () => {
+    filters.origin.value = data.fromIata;
+    filters.destination.value = data.toIata;
+    if (f.date && !filters.date.value) filters.date.value = f.date;
+    setView('flights');
+    search();
+  });
+  return el;
+}
+
+// En los resultados de vuelos: aviso si el trayecto también se hace bien en tren.
+async function railHint(data, token) {
+  try {
+    const p = new URLSearchParams({ origin: data.origin.name, destination: data.destination.name });
+    const r = await api(`/api/trains?${p}`);
+    if (token !== searchToken || !r.train) return;
+    const hint = document.createElement('p');
+    hint.className = 'count rail-hint';
+    hint.innerHTML = `${trainIcon} ${t('También en tren: {time}', { time: durText(r.train.minutes) })} <button class="btn" type="button">${t('Comparar tren y avión')}</button>`;
+    hint.querySelector('button').addEventListener('click', () => {
+      filters.origin.value = r.from;
+      filters.destination.value = r.to;
+      setView('trains');
+      search();
+    });
+    results.querySelector('.count')?.after(hint);
+  } catch { /* sin tren */ }
 }
 
 const FLIGHT_CAL_DAYS = 14;
@@ -1643,7 +1793,7 @@ function recordSearch() {
   if (isGuest()) return;
   const kind = state.view === 'flights' ? 'flight' : 'hotel';
   const city = filters.destination.value.trim();
-  if (!city || state.view === 'mine') return;
+  if (!city || state.view === 'mine' || state.view === 'trains') return;
   const s = { kind, city, origin: kind === 'flight' ? filters.origin.value.trim() : '', at: new Date().toISOString() };
   if (kind === 'hotel') {
     Object.assign(s, {

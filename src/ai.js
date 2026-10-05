@@ -5,6 +5,7 @@ import { FACILITIES, BOARDS } from './liteapi.js';
 import { findPlaceIn, cityName, placeName } from './seo.js';
 import { LANGS, tr } from './i18n.js';
 import { toSpanish } from './ai-langs.js';
+import { railOption } from './rail.js';
 
 // Búsqueda en lenguaje natural ("algo de playa barato en julio para una semana").
 // Con ANTHROPIC_API_KEY se usa Claude para convertir la frase en filtros; sin
@@ -26,7 +27,7 @@ const FILTER_SCHEMA = {
   additionalProperties: false,
   required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'adults', 'tags', 'fac', 'board', 'stay', 'stops', 'sort', 'explanation'],
   properties: {
-    kind: { type: 'string', enum: ['hotel', 'flight'] },
+    kind: { type: 'string', enum: ['hotel', 'flight', 'train'] },
     destination: nullable({ type: 'string' }),
     origin: nullable({ type: 'string' }),
     checkIn: nullable({ type: 'string', description: 'YYYY-MM-DD' }),
@@ -46,9 +47,10 @@ const FILTER_SCHEMA = {
 
 const SYSTEM = `Eres el buscador inteligente de DíasLibres, una agencia de reservas de hoteles y vuelos.
 Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
-- kind: "flight" si pide vuelos/avión/volar; si no, "hotel".
+- kind: "flight" si pide vuelos/avión/volar; "train" si pide tren (AVE, Eurostar, TGV, Ouigo, Iryo…) o pregunta cómo ir o viajar de una ciudad europea a otra sin decir avión (la web compara tren y avión puerta a puerta); si no, "hotel".
+- Para trenes, origin y destination son nombres de ciudad (p. ej. "Madrid", "París").
 - destination: para hoteles, la ciudad o pueblo que pida (cualquiera del mundo: la web busca hoteles reales en OpenStreetMap; ciudades con catálogo propio: ${CITIES.join(', ')}). Para vuelos, un aeropuerto de esta lista: ${Object.entries(AIRPORTS).map(([c, n]) => `${c} (${n})`).join(', ')}. Si menciona una zona o país, elige la ciudad más adecuada o déjalo en null si encajan varias.
-- origin: solo para vuelos (código IATA), si lo dice.
+- origin: solo para vuelos (código IATA) o trenes (ciudad), si lo dice.
 - checkIn: solo si da una fecha o mes concreto (para un mes sin día, usa el primer día futuro de ese mes). Si no, null: la web enseña un calendario de disponibilidad y el usuario no está obligado a elegir fechas.
 - nights: duración de la estancia (fin de semana = 2, una semana = 7).
 - maxPrice: precio máximo por noche (hotel) o por billete (vuelo) en euros, si lo indica o si dice "barato" pon un valor razonable o deja null y usa sort "price".
@@ -112,7 +114,7 @@ async function claudeParse(c, text, lang) {
 export function sanitize(f) {
   const today = todayISO();
   return {
-    kind: f.kind === 'flight' ? 'flight' : 'hotel',
+    kind: ['flight', 'train'].includes(f.kind) ? f.kind : 'hotel',
     destination: f.destination || null,
     origin: f.origin || null,
     checkIn: isISODate(f.checkIn) && f.checkIn >= today && f.checkIn <= addDays(today, 330) ? f.checkIn : null,
@@ -123,7 +125,7 @@ export function sanitize(f) {
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => TAGS.includes(t)) : [],
     fac: Array.isArray(f.fac) ? [...new Set(f.fac.filter((k) => k in FACILITIES))] : [],
     board: f.board in BOARDS ? f.board : null,
-    stay: f.kind !== 'flight' && f.stay in STAYS ? f.stay : null,
+    stay: (f.kind || 'hotel') === 'hotel' && f.stay in STAYS ? f.stay : null,
     stops: f.kind === 'flight' && f.stops in STOPS ? f.stops : null,
     sort: ['price', 'rating'].includes(f.sort) ? f.sort : 'stars',
     explanation: String(f.explanation || '').slice(0, 300),
@@ -166,10 +168,20 @@ const hasWord = (s, w) => ` ${s.replace(/[^a-z0-9]+/g, ' ')} `.includes(` ${w.re
 export function localParse(text, lang = 'es') {
   if (lang !== 'es') text = toSpanish(text, lang);
   const t = norm(text);
-  const kind = /\b(vuelo|vuelos|volar|avion|billete)/.test(t) ? 'flight' : 'hotel';
+  // «de X a Y» o «a Y desde X».
+  const fwd = t.match(/(?:desde|de)\s+([a-z ]+?)\s+(?:a|hacia|hasta)\s+([a-z ]+)/);
+  const back = !fwd && t.match(/(?:^|\s)(?:a|hacia|hasta)\s+([a-z ]+?)\s+desde\s+([a-z ]+)/);
+  const route = fwd || (back && [back[0], back[2], back[1]]);
+  const flightWords = /\b(vuelo|vuelos|volar|avion|billete)/.test(t);
+  let kind = /\b(trenes|tren|ave|alvia|avant|eurostar|ferrocarril|ouigo|iryo|tgv|frecciarossa|italo|ice|railjet)\b/.test(t) ? 'train' : flightWords ? 'flight' : 'hotel';
+  // «Cómo ir de Madrid a Sevilla»: si hay buen tren, se comparan tren y avión.
+  if (kind === 'hotel' && route && /\b(como ir|como llegar|como viajar|ir|viajar|viaje|trayecto|itinerario|moverme)\b/.test(t)) {
+    const [a, b] = [findPlaceIn(route[1]), findPlaceIn(route[2])];
+    if (a && b && a !== b) kind = railOption(a, b) ? 'train' : a.iata && b.iata ? 'flight' : kind;
+  }
   const findCity = (s) => {
     // Hoteles: primero el destino tal como se escribe («Tenerife», no el de su aeropuerto).
-    const named = kind === 'hotel' && findPlaceIn(s);
+    const named = kind !== 'flight' && findPlaceIn(s);
     if (named) return cityName(named, lang);
     for (const [code, name] of Object.entries(AIRPORTS)) if (hasWord(s, norm(name))) return kind === 'flight' ? code : name;
     for (const [region, city] of Object.entries(REGION)) if (hasWord(s, region)) return city;
@@ -181,8 +193,7 @@ export function localParse(text, lang = 'es') {
 
   let origin = null;
   let destination = null;
-  const route = t.match(/(?:desde|de)\s+([a-z ]+?)\s+(?:a|hacia|hasta)\s+([a-z ]+)/);
-  if (kind === 'flight' && route) {
+  if (kind !== 'hotel' && route) {
     origin = findCity(route[1]);
     destination = findCity(route[2]);
   }
@@ -289,9 +300,9 @@ export function localParse(text, lang = 'es') {
   const x = (k, v) => tr(lang, k, v);
   const low = (w) => (lang === 'de' ? w : w.toLowerCase());
   const where = (code) => (kind === 'flight' ? placeName(code, lang, AIRPORTS[code] || code) : code);
-  const parts = [x(kind === 'flight' ? 'vuelos' : STAYS[stay] || 'hoteles')];
+  const parts = [x(kind === 'flight' ? 'vuelos' : kind === 'train' ? 'trenes y vuelos' : STAYS[stay] || 'hoteles')];
   if (origin) parts.push(x('desde {place}', { place: where(origin) }));
-  if (destination) parts.push(x(kind === 'flight' ? 'a {place}' : 'en {place}', { place: where(destination) }));
+  if (destination) parts.push(x(kind !== 'hotel' ? 'a {place}' : 'en {place}', { place: where(destination) }));
   if (tags.length) parts.push(`(${tags.map((g) => x(g)).join(', ')})`);
   if (nights) parts.push(x(nights > 1 ? 'para {n} noches' : 'para {n} noche', { n: nights }));
   if (adults) parts.push(x(adults > 1 ? 'para {n} personas' : 'para {n} persona', { n: adults }));

@@ -8,12 +8,13 @@ import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { readFileSync } from 'node:fs';
 import { minify } from 'terser';
-import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, cityStats, cityKey, cityByName, cityByIata, placeName, CITIES } from './src/seo.js';
+import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, cityStats, cityKey, cityByName, cityByIata, placeName, cityName, CITIES } from './src/seo.js';
 import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
 import { Accounts, COOKIE, publicUser, mergeHistory } from './src/accounts.js';
 import { recommend } from './src/recommend.js';
+import { railOption, railFrom, railBookUrl, DOOR_FLIGHT } from './src/rail.js';
 import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS, STAY_TYPES } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -298,6 +299,28 @@ export function createApp({
     if (liveFlights) return liveFlightSearch({ ...req.query, lang: langOf(req) }, res);
     if (live) return res.status(404).json({ error: 'Los vuelos todavía no están disponibles.' });
     res.json(searchFlights(await store.all(), req.query));
+  });
+
+  // ---------- Trenes (Europa) ----------
+  // Trayecto en tren entre dos ciudades, con su duración y la comparación puerta a puerta con el avión.
+  app.get('/api/trains', (req, res) => {
+    const lang = langOf(req);
+    const from = cityByName(req.query.origin);
+    const to = cityByName(req.query.destination);
+    const adults = Math.max(1, Math.min(6, Number(req.query.adults) || 1));
+    const date = isISODate(req.query.date) && req.query.date >= todayISO() ? req.query.date : null;
+    const name = (c) => cityName(c, lang);
+    if (!from) return res.status(400).json({ error: trText(lang, 'Escribe una ciudad de salida que conozcamos (p. ej. Madrid, París o Roma).') });
+    const nearby = railFrom(from).slice(0, 12).map((r) => ({ to: name(r.to), minutes: r.minutes, operators: r.operators }));
+    if (!to) return res.json({ from: name(from), to: null, train: null, nearby });
+    if (to === from) return res.status(400).json({ error: trText(lang, 'La salida y el destino son la misma ciudad.') });
+    const train = railOption(from, to, lang);
+    res.json({
+      from: name(from), to: name(to), date, adults, nearby,
+      fromIata: from.iata, toIata: to.iata,
+      doorFlight: DOOR_FLIGHT,
+      train: train && { ...train, bookUrl: railBookUrl({ from, to, date, adults }) },
+    });
   });
 
   // ---------- Vuelos reales con LiteAPI (si hay LITEAPI_KEY y no LITEAPI_FLIGHTS=off) ----------
