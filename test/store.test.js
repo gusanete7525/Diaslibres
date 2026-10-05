@@ -40,7 +40,7 @@ test('la web funciona igual guardando en PostgreSQL', async () => {
     const res = await post('/api/bookings', { type: 'hotel', itemId: h.id, checkIn: h.bestStay.checkIn, checkOut: h.bestStay.checkOut, name: 'Eva Ruiz', email: 'eva@test.com' });
     assert.equal(res.status, 201);
     const b = await res.json();
-    const mine = await fetch(`${base}/api/bookings?email=eva@test.com`).then((r) => r.json());
+    const mine = await fetch(`${base}/api/bookings?email=eva@test.com&code=${b.code}`).then((r) => r.json());
     assert.equal(mine[0].code, b.code);
     assert.equal((await post(`/api/bookings/${b.code}/cancel`, { email: 'eva@test.com' }).then((r) => r.json())).status, 'cancelada');
   } finally {

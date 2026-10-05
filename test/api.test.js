@@ -56,7 +56,7 @@ test('reservar un hotel ocupa los días y no permite sobre-reservar', async () =
   const extra = await post('/api/bookings', { type: 'hotel', itemId: h.id, checkIn, checkOut, units: 1, name: 'Ana', email: 'ana@test.com' });
   assert.equal(extra.status, 409);
 
-  const mine = await get('/api/bookings?email=ANA@test.com');
+  const mine = await get(`/api/bookings?email=ANA@test.com&code=${last.body.code.toLowerCase()}`);
   assert.equal(mine.length, leftBefore);
   const cancel = await post(`/api/bookings/${mine[0].code}/cancel`, { email: 'ana@test.com' });
   assert.equal(cancel.body.status, 'cancelada');

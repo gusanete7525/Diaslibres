@@ -227,7 +227,7 @@ test('pago del cliente: checkout, pago pendiente, confirmación y datos internos
     assert.equal(co.transactionId, undefined);
 
     // La reserva pendiente de pago no aparece en «Mis reservas».
-    assert.deepEqual(await fetch(`${base}/api/bookings?email=ana@test.com`).then((r) => r.json()), []);
+    assert.equal((await fetch(`${base}/api/bookings?email=ana@test.com`)).status, 401, 'sin código no se ve nada');
 
     // Sin pagar: 402 y sigue pendiente.
     const unpaid = await post(`/api/checkout/${co.checkoutId}/confirm`, {});
@@ -247,7 +247,7 @@ test('pago del cliente: checkout, pago pendiente, confirmación y datos internos
     assert.equal(again.code, ok.code);
     assert.equal(log.filter((l) => l.endsWith('/rates/book')).length, books, 'no se reserva dos veces');
 
-    const mine = await fetch(`${base}/api/bookings?email=ana@test.com`).then((r) => r.json());
+    const mine = await fetch(`${base}/api/bookings?email=ana@test.com&code=${ok.code}`).then((r) => r.json());
     assert.equal(mine.length, 1);
     assert.equal(mine[0].transactionId, undefined);
     assert.equal((await post('/api/checkout/noexiste/confirm', {})).status, 404);

@@ -102,8 +102,11 @@ function setView(view) {
   filters.destination.placeholder = view === 'flights' ? t('Ciudad o aeropuerto') : t('Escribe cualquier ciudad');
   filters.origin.placeholder = state.config.liveFlights ? t('Ciudad o código (MAD)') : t('Cualquiera');
   if (view === 'mine') {
-    const email = store.get('dl-email');
-    if (email) { $('#mineForm').email.value = email; loadMine(email); }
+    // Con la cuenta abierta se ven sus reservas directamente; si no, hace falta email + código.
+    const email = state.user?.email || store.get('dl-email');
+    if (email) $('#mineForm').email.value = email;
+    if (!$('#mineForm').code.value) $('#mineForm').code.value = store.get('dl-code') || '';
+    if (state.user || (email && $('#mineForm').code.value)) loadMine(email);
   }
 }
 document.querySelectorAll('[data-view]').forEach((b) =>
@@ -1004,9 +1007,8 @@ async function finishPayment(id) {
   try {
     const b = await api(`/api/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
     toast(`✅ ${t('Pago recibido.')} ${b.sandbox ? t('Reserva de prueba confirmada') : t('Reserva confirmada')} · ${t('código {code}', { code: b.code })} · ${eur2(b.total)}`);
+    rememberBooking(b);
     setView('mine');
-    $('#mineForm').email.value = b.email;
-    loadMine(b.email);
   } catch (err) {
     toast(err.message);
   }
@@ -1037,6 +1039,7 @@ onSend(bookForm, async () => {
     store.set('dl-email', booking.email);
     dialog.close();
     toast(`✅ ${booking.sandbox ? t('Reserva de prueba confirmada') : t('Reserva confirmada')} · ${t('código {code}', { code: booking.code })} · ${eur(booking.total)}`);
+    rememberBooking(booking);
     await search();
   } catch (err) {
     if (err.body?.newTotal != null) await refreshQuote(); // muestra el total nuevo
@@ -1482,7 +1485,7 @@ async function finishFlightPayment(id, redirectStatus) {
   try {
     const b = await api(`/api/flights/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
     toast(`✅ ${b.sandbox ? t('Reserva de prueba confirmada') : t('Vuelo reservado')} · ${t('código {code}', { code: b.code })}${b.pnr ? ' · ' + t('localizador {pnr}', { pnr: b.pnr }) : ''}`, 8000);
-    $('#mineForm').email.value = b.email;
+    rememberBooking(b);
     loadMine(b.email);
   } catch (err) {
     toast(err.message, 15000);
@@ -1490,10 +1493,20 @@ async function finishFlightPayment(id, redirectStatus) {
 }
 
 // ---------- Mis reservas ----------
+// Tras reservar: email y código quedan puestos para ver la reserva sin escribir nada.
+function rememberBooking(b) {
+  $('#mineForm').email.value = b.email;
+  $('#mineForm').code.value = b.code;
+  store.set('dl-email', b.email);
+  store.set('dl-code', b.code);
+}
 async function loadMine(email) {
   const list = $('#mineList');
+  const code = $('#mineForm').code.value.trim();
+  const own = state.user && (!email || email.toLowerCase() === state.user.email);
+  if (!own && !code) { list.innerHTML = `<p class="empty">${t('Escribe el código de una de tus reservas (DL-…), que te enviamos por email, o entra con tu cuenta.')}</p>`; return; }
   try {
-    const items = await api(`/api/bookings?email=${encodeURIComponent(email)}`);
+    const items = await api(own ? '/api/bookings' : `/api/bookings?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`);
     if (!items.length) { list.innerHTML = `<p class="empty">${t('No hay reservas con ese email.')}</p>`; return; }
     list.innerHTML = items.map((b) => `
       <div class="booking">
@@ -1516,6 +1529,7 @@ async function loadMine(email) {
 onSend($('#mineForm'), () => {
   const email = $('#mineForm').email.value.trim();
   store.set('dl-email', email);
+  store.set('dl-code', $('#mineForm').code.value.trim());
   loadMine(email);
 });
 $('#mineList').addEventListener('click', async (e) => {

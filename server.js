@@ -822,17 +822,54 @@ export function createApp({
     res.json({ items });
   });
 
+  // «Mis reservas»: solo con la sesión de la cuenta de ese email o con email + código de una
+  // de sus reservas (el código llega por email). Así nadie ve ni cancela reservas ajenas
+  // sabiendo solo un email. Los intentos fallidos se limitan por IP.
+  const lookupFails = new Map(); // ip → [marcas de tiempo]
+  const failsOf = (ip) => (lookupFails.get(ip) || []).filter((x) => Date.now() - x < 60 * 60 * 1000);
+  const blocked = (req, res) => {
+    if (failsOf(req.ip).length < 20) return false;
+    res.status(429).json({ error: 'Demasiados intentos. Prueba dentro de un rato.' });
+    return true;
+  };
+  const failed = (req) => {
+    lookupFails.set(req.ip, [...failsOf(req.ip), Date.now()]);
+    if (lookupFails.size > 5000) lookupFails.delete(lookupFails.keys().next().value);
+  };
+  // ¿Puede esta petición ver o cancelar la reserva? (sesión del mismo email, o email + su código)
+  const owns = async (req, found, email) => {
+    if (!found) return false;
+    const owner = found.email.toLowerCase();
+    if ((await me(req))?.email === owner) return true;
+    return !!email && email === owner;
+  };
+
   app.get('/api/bookings', async (req, res) => {
-    const email = String(req.query.email || '').toLowerCase();
+    const user = await me(req);
+    const email = String(req.query.email || '').trim().toLowerCase();
+    const code = String(req.query.code || '').trim().toUpperCase();
+    const list = async (e) => res.json((await store.listByEmail(e)).filter((b) => b.status !== 'pendiente_pago').map(publicBooking));
+    if (user && (!email || email === user.email)) return list(user.email);
     if (!email) return res.status(400).json({ error: 'Indica tu email.' });
-    res.json((await store.listByEmail(email)).filter((b) => b.status !== 'pendiente_pago').map(publicBooking));
+    if (!code) return res.status(401).json({ error: 'Escribe también el código de una de tus reservas (DL-…), que te enviamos por email, o entra con tu cuenta.' });
+    if (blocked(req, res)) return;
+    const found = await store.get(code);
+    if (!found || found.email.toLowerCase() !== email) {
+      failed(req);
+      return res.status(404).json({ error: 'No hay ninguna reserva con ese email y ese código.' });
+    }
+    list(email);
   });
 
   // Cuánto se devolvería al cancelar un vuelo (estimación de la aerolínea).
   app.get('/api/bookings/:code/cancel-quote', async (req, res) => {
     const email = String(req.query.email || '').toLowerCase();
-    const found = await store.get(req.params.code);
-    if (!found || found.email.toLowerCase() !== email || found.status !== 'confirmada') return res.status(404).json({ error: 'Reserva no encontrada.' });
+    if (blocked(req, res)) return;
+    const found = await store.get(String(req.params.code).toUpperCase());
+    if (!(await owns(req, found, email)) || found.status !== 'confirmada') {
+      if (!found || !(await owns(req, found, email))) failed(req);
+      return res.status(404).json({ error: 'Reserva no encontrada.' });
+    }
     if (found.type !== 'flight' || found.provider !== 'liteapi' || !live) return res.json({ refundable: !!found.refundable, refund: null });
     try {
       res.json(await live.flightCancelQuote(found.providerBookingId));
@@ -844,8 +881,12 @@ export function createApp({
 
   app.post('/api/bookings/:code/cancel', async (req, res) => {
     const email = String(req.body?.email || '').toLowerCase();
-    const found = await store.get(req.params.code);
-    if (!found || found.email.toLowerCase() !== email || found.status !== 'confirmada') return res.status(404).json({ error: 'Reserva no encontrada.' });
+    if (blocked(req, res)) return;
+    const found = await store.get(String(req.params.code).toUpperCase());
+    if (!(await owns(req, found, email)) || found.status !== 'confirmada') {
+      if (!found || !(await owns(req, found, email))) failed(req);
+      return res.status(404).json({ error: 'Reserva no encontrada.' });
+    }
     let cancellation;
     if (found.provider === 'liteapi') {
       if (!live) return res.status(503).json({ error: 'No se puede cancelar ahora: falta la conexión con el proveedor.' });
@@ -860,7 +901,7 @@ export function createApp({
         return res.json(publicBooking(b));
       }
     }
-    const b = await store.cancel(req.params.code, req.body?.email);
+    const b = await store.cancel(found.code, found.email);
     if (!b) return res.status(404).json({ error: 'Reserva no encontrada.' });
     const cancelled = cancellation ? await store.update(b.code, { cancellation }) : b;
     notify('bookingCancelled', cancelled);

@@ -123,7 +123,7 @@ test('vuelos reales: búsqueda, precio, datos de pasajeros, pago y confirmación
     // Sin pagar: 402 y no aparece en «Mis reservas».
     state.book = 'unpaid';
     assert.equal((await post(`/api/flights/checkout/${co.checkoutId}/confirm`, {})).status, 402);
-    assert.deepEqual(await fetch(`${base}/api/bookings?email=ana@test.com`).then((r) => r.json()), []);
+    assert.equal((await fetch(`${base}/api/bookings?email=ana@test.com`)).status, 401);
 
     state.book = 'ok';
     const ok = await post(`/api/flights/checkout/${co.checkoutId}/confirm`, {}).then((r) => r.json());
@@ -134,7 +134,7 @@ test('vuelos reales: búsqueda, precio, datos de pasajeros, pago y confirmación
     assert.equal(ok.date, '2030-03-10');
     assert.deepEqual(ok.passengers, ['Ana García López', 'Luis García López']);
     assert.equal(ok.prebookId, undefined);
-    const mine = await fetch(`${base}/api/bookings?email=ana@test.com`).then((r) => r.json());
+    const mine = await fetch(`${base}/api/bookings?email=ana@test.com&code=${ok.code}`).then((r) => r.json());
     assert.equal(mine.length, 1);
     assert.ok(!JSON.stringify(mine).includes('PAE123456'), 'no se guarda el número de documento');
     await new Promise((r) => setTimeout(r, 20));
