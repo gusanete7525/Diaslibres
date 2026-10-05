@@ -16,7 +16,14 @@ const SESSION_TTL = 180 * 24 * 60 * 60 * 1000;
 const HISTORY_MAX = 30;
 export const COOKIE = 'dl_s';
 // Dominios de email que son de Microsoft (su dueño es quien tiene la cuenta personal).
-const MS_EMAIL = /@(outlook|hotmail|live|msn|passport)\.[a-z.]{2,10}$/;
+// Lista cerrada de dominios completos: cualquier otro (también regionales que falten) pasa por
+// la confirmación por email, nunca al revés (p. ej. outlook.evil.com no entra directo).
+const MS_DOMAINS = new Set([
+  'outlook.com', 'outlook.es', 'outlook.fr', 'outlook.de', 'outlook.it', 'outlook.pt', 'outlook.co.uk',
+  'hotmail.com', 'hotmail.es', 'hotmail.fr', 'hotmail.de', 'hotmail.it', 'hotmail.co.uk',
+  'live.com', 'live.fr', 'live.de', 'live.it', 'live.co.uk', 'msn.com', 'passport.com',
+]);
+const isMsEmail = (email) => MS_DOMAINS.has(email.slice(email.lastIndexOf('@') + 1));
 const MS_CONSUMERS = '9188040d-6c67-4c5b-b112-36a304b66dad'; // «inquilino» de las cuentas personales de Microsoft
 
 const hash = (token) => createHash('sha256').update(String(token)).digest('hex');
@@ -182,7 +189,7 @@ export class Accounts {
       const user = await this.#upsertUser(linked.email, { provider: 'microsoft', name });
       return { user, session: await this.#newSession(user.email) };
     }
-    if (MS_EMAIL.test(email)) {
+    if (isMsEmail(email)) {
       await this.store.kvSet('msid:' + sub, { email });
       const user = await this.#upsertUser(email, { provider: 'microsoft', name, msSub: sub });
       return { user, session: await this.#newSession(user.email) };
