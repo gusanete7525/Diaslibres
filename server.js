@@ -264,7 +264,7 @@ export function createApp({
     const good = (h) => (h.rating || 0) >= 8 && (h.reviewCount || 0) >= 50;
     // Solo hoteles de la propia ciudad (no de pueblos de alrededor como Swords o Schönefeld), si hay bastantes.
     const plain = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-    const inCity = (l, c) => { const k = plain(c).split(' ')[0]; const own = l.filter((h) => plain(h.city).startsWith(k)); return own.length >= 5 ? own : l; };
+    const inCity = (l, c) => { const k = plain(c).slice(0, 3); const own = l.filter((h) => plain(h.city).startsWith(k)); return own.length >= 5 ? own : l; };
     const tops = lists.map((l, i) => [...inCity(l, cities[i])].sort((a, b) => good(b) - good(a) || (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0)).slice(0, 10));
     const out = [];
     for (let i = 0; i < 10; i++) for (const t of tops) if (t[i]) out.push(t[i]);
