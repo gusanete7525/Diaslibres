@@ -215,6 +215,58 @@ body[data-view="trains"] .flight-only.f-ida, body[data-view="trains"] .flight-on
 .stats { display: flex; flex-wrap: wrap; gap: 16px; margin: 6px 0 4px; font-size: 13px; color: var(--text-2); }
 .stats b { color: var(--text); font-size: 16px; }
 
+/* Ficha de hotel: foto | datos | calendario y mejor opción */
+.card.hotel-card { grid-template-columns: 300px minmax(0, 1fr) 290px 240px; gap: 22px; }
+.hotel-media { position: relative; }
+.deal-badge { position: absolute; left: 10px; top: 10px; background: rgb(10 20 40 / 72%); color: #fff; border: 1px solid rgb(255 255 255 / 25%); border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 700; backdrop-filter: blur(4px); pointer-events: none; }
+.hotel-media .open-hotel { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.hotel-photo { display: block; width: 100%; height: 100%; min-height: 220px; max-height: 320px; object-fit: cover; border-radius: 12px; background: var(--surface-2); }
+.hotel-info h3 { font-size: 21px; }
+.hotel-photo.empty { display: grid; place-items: center; font-size: 56px; }
+.hotel-info { min-width: 0; }
+.hotel-info h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.hotel-info .meta { margin-top: 3px; }
+.hotel-info .desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.stat-boxes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; max-width: 420px; }
+.stat-box { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; }
+.stat-box b { font-size: 18px; color: var(--text); }
+.stat-box span { font-size: 12px; color: var(--text-2); }
+.insight { margin: 10px 0 0; font-size: 13px; font-weight: 600; color: var(--good); }
+.hotel-cal { min-width: 0; }
+.hotel-cal .selection { margin-top: 8px; }
+.hotel-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--surface-2); align-self: start; }
+.best-box { display: flex; flex-direction: column; gap: 2px; text-align: left; font: inherit; font-size: 13px; color: var(--text-2); background: none; border: 0; padding: 0; cursor: pointer; }
+button.best-box:hover .best-dates { color: var(--brand); }
+.best-title { font-weight: 700; color: var(--text); font-size: 16px; margin-bottom: 4px; }
+.best-dates { font-size: 15px; font-weight: 600; color: var(--text); }
+.best-night { font-size: 22px; font-weight: 800; color: var(--good); letter-spacing: -0.01em; }
+:root[data-theme="dark"] .best-night { color: #3fd23f; }
+.book-btn { width: 100%; justify-content: center; padding: 11px 14px; font-size: 15px; }
+.history-btn { width: 100%; }
+.history-btn[aria-expanded="true"] { border-color: var(--brand); color: var(--brand); }
+.details-link { align-self: flex-start; background: none; border: 0; padding: 0; cursor: pointer; font-weight: 600; }
+.hotel-chart { grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 4px; }
+.fac-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, max-content)); gap: 6px 18px; font-size: 13px; color: var(--text-2); }
+.fac-list li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-box.hi { border-color: var(--good); background: var(--good-bg); }
+.stat-box.hi b { color: var(--good-ink); }
+@media (max-width: 1360px) {
+  .card.hotel-card { grid-template-columns: 240px minmax(0, 1fr) 290px; }
+  .hotel-panel { grid-column: 2 / -1; display: grid; grid-template-columns: 1fr 1fr; align-items: center; }
+  .hotel-panel .best-box { grid-row: span 3; }
+}
+@media (max-width: 980px) {
+  .card.hotel-card { grid-template-columns: 200px minmax(0, 1fr); }
+  .hotel-cal { grid-column: 1 / -1; }
+  .hotel-panel { grid-column: 1 / -1; }
+}
+@media (max-width: 640px) {
+  .card.hotel-card { grid-template-columns: 1fr; }
+  .hotel-photo { aspect-ratio: 16 / 9; }
+  .hotel-panel { display: flex; }
+  .fac-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .chart-wrap { margin-top: 12px; }
 .chart-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-2); }
 .chart-title strong { color: var(--text); font-weight: 600; }
@@ -472,4 +524,52 @@ body[data-view="trains"] .flight-only.f-ida, body[data-view="trains"] .flight-on
 @media (max-width: 460px) {
   .tabs { border-radius: 20px; }
   .tabs button { flex-direction: column; gap: 2px; padding: 5px 2px; font-size: 12px; line-height: 1.2; border-radius: 16px; }
+}
+
+/* ---------- Diseño 2026: portada con foto, tarjetas de ideas y buscador en fichas ---------- */
+.topbar { padding-left: max(16px, calc((100% - 1440px) / 2)); padding-right: max(16px, calc((100% - 1440px) / 2)); }
+.tagline { font-size: 12px; color: var(--text-3); white-space: nowrap; margin-left: -6px; }
+.tabs { margin-left: auto; margin-right: auto; }
+.hero, .results { max-width: 1440px; }
+.hero { position: relative; isolation: isolate; padding-top: 40px; }
+.hero::before {
+  content: ""; position: absolute; z-index: -1; top: 0; left: 50%; width: 100vw; transform: translateX(-50%); height: 440px;
+  background:
+    linear-gradient(90deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 85%, transparent) 30%, transparent 62%),
+    linear-gradient(0deg, var(--bg) 0%, transparent 38%),
+    url("/img/hero.svg") right center / cover no-repeat;
+}
+.hero h1 { font-size: clamp(28px, 4.2vw, 46px); max-width: 640px; }
+.hero h1 em { background: linear-gradient(90deg, #2a8cff, #4fc3ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero .sub { max-width: 600px; font-size: 16px; }
+.hero-quote {
+  position: absolute; right: 16px; top: 56px; display: flex; gap: 12px; align-items: center; max-width: 280px;
+  padding: 14px 18px; border-radius: 14px; background: rgb(15 25 45 / 45%); border: 1px solid rgb(255 255 255 / 18%);
+  color: #fff; font-size: 15px; line-height: 1.4; backdrop-filter: blur(6px);
+}
+.hq-ico { font-size: 28px; }
+.ai-box { max-width: 900px; padding: 7px 7px 7px 18px; background: color-mix(in srgb, var(--surface) 88%, transparent); backdrop-filter: blur(6px); }
+.ai-badge { font-size: 18px; }
+.ai-box .btn.primary { padding: 10px 20px; white-space: nowrap; }
+#examples { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 16px; }
+.ex-card { aspect-ratio: 5 / 2; }
+.ex-card.kids img { filter: hue-rotate(35deg) saturate(1.2); }
+.ex-card span b { display: block; font-size: 15px; }
+.ex-card span small { display: block; font-size: 12px; font-weight: 500; opacity: 0.9; }
+.filters { gap: 10px; }
+.filters label {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px 4px; font-size: 13px; color: var(--text); gap: 0;
+}
+.filters label:focus-within { border-color: var(--brand); }
+.filters label input, .filters label select { border: 0; background: none; height: 30px; padding: 0; font-size: 15px; }
+.filters .f-btn { height: 56px; border-radius: 12px; }
+.results > .count:first-child { font-size: 15px; }
+@media (max-width: 1100px) {
+  .tagline, .hero-quote { display: none; }
+  #examples { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  #examples { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero::before { height: 300px; }
+  .filters label { padding: 6px 10px 2px; }
 }

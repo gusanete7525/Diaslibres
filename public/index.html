@@ -14,6 +14,7 @@
 <body>
   <header class="topbar">
     <a class="logo" href="/" data-view="hotels" data-home>Días<span>Libres</span></a>
+    <span class="tagline" data-i18n>Viaja más. Vive mejor.</span>
     <nav class="tabs" role="tablist">
       <button role="tab" data-view="hotels" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V7m0 7h18v4m0-4v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/></svg><span>Hoteles</span></button>
       <button role="tab" data-view="flights" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 13.5 4 11l1.5-1.5 7 1 4-4a2.1 2.1 0 0 1 3 3l-4 4 1 7L15 22l-2.5-6.5L9 19v2.5L7.5 23 6 19.5 2.5 18 4 16.5h2.5z"/></svg><span>Vuelos</span></button>
@@ -29,19 +30,21 @@
   </header>
 
   <section class="hero" id="searchSection">
+    <div class="hero-quote" aria-hidden="true"><span class="hq-ico">🌴</span><span data-i18n>«Los mejores viajes no se planean, se viven»</span></div>
     <h1 data-i18n>Encuentra tu próximo viaje con <em>inteligencia artificial</em></h1>
-    <p class="sub" data-i18n>Busca vuelos y hoteles o cuéntale a la IA cómo quieres viajar. Cada hotel y vuelo muestra su calendario: <span class="pill good">verde = libre</span> <span class="pill bad">rojo = completo</span>, y una gráfica con los días más baratos.</p>
+    <p class="sub" data-i18n>Cuéntale a DíasLibres cómo quieres viajar. La IA busca los mejores hoteles y vuelos, con sus precios por día, y te muestra cuándo es más barato.</p>
 
     <form id="aiForm" class="ai-box" autocomplete="off">
-      <span class="ai-badge" aria-hidden="true">✨ IA</span>
-      <input id="aiQuery" type="search" placeholder="Ej.: algo de playa barato para una semana en julio" aria-label="Describe tu viaje" />
-      <button type="button" data-send class="btn primary">Buscar</button>
+      <span class="ai-badge" aria-hidden="true">✨</span>
+      <input id="aiQuery" type="search" placeholder="Ej.: una semana en Canarias con niños, hotel todo incluido y playa" aria-label="Describe tu viaje" />
+      <button type="button" data-send class="btn primary"><span data-i18n>Buscar con IA</span> →</button>
     </form>
     <div class="examples" id="examples">
-      <button type="button" class="ex-card"><img src="/img/ex-romantica.svg" alt="" loading="lazy" /><span>Escapada romántica de fin de semana</span></button>
-      <button type="button" class="ex-card"><img src="/img/ex-montana.svg" alt="" loading="lazy" /><span>Hotel de montaña menos de 100 €</span></button>
-      <button type="button" class="ex-card" data-kind="flight"><img src="/img/ex-vuelos.svg" alt="" loading="lazy" /><span>Vuelos directos de Madrid a Lisboa</span></button>
-      <button type="button" class="ex-card"><img src="/img/ex-playa.svg" alt="" loading="lazy" /><span>Playa con niños en Canarias 5 noches</span></button>
+      <button type="button" class="ex-card" data-q="Algo de playa barato para una semana en julio"><img src="/img/ex-playa.svg" alt="" loading="lazy" /><span><b data-i18n>Escapadas de playa</b><small data-i18n>Sol, mar y relax</small></span></button>
+      <button type="button" class="ex-card" data-q="Escapada romántica de fin de semana"><img src="/img/ex-romantica.svg" alt="" loading="lazy" /><span><b data-i18n>Escapadas románticas</b><small data-i18n>Momentos especiales</small></span></button>
+      <button type="button" class="ex-card" data-q="Hotel de montaña menos de 100 €"><img src="/img/ex-montana.svg" alt="" loading="lazy" /><span><b data-i18n>Montaña y naturaleza</b><small data-i18n>Aire puro y aventura</small></span></button>
+      <button type="button" class="ex-card" data-kind="flight" data-q="Vuelos directos de Madrid a Lisboa"><img src="/img/ex-vuelos.svg" alt="" loading="lazy" /><span><b data-i18n>Vuelos al mejor precio</b><small data-i18n>Tu próxima ciudad te espera</small></span></button>
+      <button type="button" class="ex-card kids" data-q="Playa con niños en Canarias 5 noches"><img src="/img/ex-playa.svg" alt="" loading="lazy" /><span><b data-i18n>Escapadas con niños</b><small data-i18n>Diversión en familia</small></span></button>
     </div>
     <section id="forYou" class="for-you" hidden>
       <h2>Para ti <span class="meta" id="forYouWhy">según tus últimas búsquedas</span></h2>

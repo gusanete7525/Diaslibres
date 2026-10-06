@@ -420,14 +420,15 @@ async function aiSearchSubmit() {
     toast(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = t('Buscar');
+    btn.textContent = `${t('Buscar con IA')} →`;
   }
 }
 onSend($('#aiForm'), aiSearchSubmit);
 $('#examples').addEventListener('click', (e) => {
   const card = e.target.closest('button');
   if (!card) return;
-  $('#aiQuery').value = card.textContent.trim();
+  // Las tarjetas con título y subtítulo llevan en data-q la búsqueda que lanzan.
+  $('#aiQuery').value = card.dataset.q ? t(card.dataset.q) : card.textContent.trim();
   aiSearchSubmit();
 });
 
@@ -537,6 +538,7 @@ function renderCard(item) {
   el.id = 'card-' + item.id;
   el.hidden = !passesStay(item);
   const s = item.summary;
+  if (!isFlight) return renderHotelCard(el, item, ui);
   const head = isFlight
     ? `<div class="thumb">✈️</div><div>
         <h3>${esc(item.originCity)} → ${esc(item.destinationCity)}</h3>
@@ -568,6 +570,71 @@ function renderCard(item) {
       </div>
     </div>`;
   bindCard(el, item, isFlight);
+  return el;
+}
+
+// Ficha de hotel: foto grande, datos y cifras en el centro, calendario y «Mejor opción» a la derecha;
+// la gráfica de precios queda plegada en «Ver evolución de precios».
+function renderHotelCard(el, item, ui) {
+  const s = item.summary;
+  const live = item.origin === 'liteapi';
+  el.classList.add('hotel-card');
+  const nights = state.data.nights;
+  const best = item.bestStay;
+  const bestNight = best ? Math.round(best.total / nights) : null;
+  const ratio = bestNight && s.avgPrice ? bestNight / s.avgPrice : 1;
+  const insight = ratio <= 0.75 ? t('Precio muy por debajo de la media') : ratio <= 0.85 ? t('Precio por debajo de la media') : '';
+  // Etiqueta solo cuando hay una diferencia importante:
+  // 🔥 su mejor noche cuesta un 20 % menos que la de los hoteles parecidos (mismas estrellas) de esta búsqueda;
+  // 💰 elegir bien los días ahorra mucho: la mejor estancia sale un 30 % por debajo de su precio medio por noche.
+  const peers = (state.data.results || []).filter((h) => h !== item && (h.stars || 0) === (item.stars || 0) && h.bestStay).map((h) => h.bestStay.total / nights).sort((a, b) => a - b);
+  const peerMedian = peers.length >= 3 ? peers[Math.floor(peers.length / 2)] : null;
+  const badge = bestNight && peerMedian && bestNight <= peerMedian * 0.8 ? `🔥 ${t('Buen precio')}`
+    : bestNight && s.avgPrice && bestNight <= s.avgPrice * 0.7 ? `💰 ${t('Entre los días más baratos')}` : '';
+  const picked = canBook(ui, false);
+  const pickedTotal = picked ? stayDays(item, ui).reduce((a, d) => a + d.price, 0) : null;
+  const photo = item.photo
+    ? `<img class="hotel-photo" src="${esc(item.photo)}" alt="${esc(item.name)}" loading="lazy" onerror="this.outerHTML='<div class=&quot;hotel-photo empty&quot;>🏨</div>'">`
+    : `<div class="hotel-photo empty">${item.image || '🏨'}</div>`;
+  const facilities = (item.facilities || []).map((k) => facilityInfo()[k]).filter(Boolean);
+  el.innerHTML = `
+    <div class="hotel-media">${live ? `<button type="button" class="open-hotel" data-act="info" aria-label="${esc(t('Ver fotos y detalles'))}">${photo}</button>` : photo}${badge ? `<span class="deal-badge">${badge}</span>` : ''}</div>
+    <div class="hotel-info">
+      <h3>${live ? `<button type="button" class="link-title" data-act="info">${esc(item.name)}</button>` : esc(item.name)}${item.stars ? ` <span class="stars" aria-label="${t('{n} estrellas', { n: item.stars })}">${'★'.repeat(item.stars)}</span>` : ''}</h3>
+      <div class="meta">${STAY_LABEL[item.stay] ? `<span class="stay-type">${t(STAY_LABEL[item.stay])}</span> · ` : ''}${item.rating ? `<span class="rating">${item.rating.toLocaleString(LOCALE)}</span>${item.reviewCount ? ` ${tn(item.reviewCount, '{n} opinión', '{n} opiniones', { n: item.reviewCount.toLocaleString(LOCALE) })}` : ''}` : `${esc(item.city)}, ${esc(item.country)}`}</div>
+      <div class="meta">📍 ${item.address ? mapLink(item, item.address) : `${esc(item.city)}, ${esc(item.country)}`}${item.website ? ` · <a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${t('Web oficial')} ↗</a>` : ''}</div>
+      ${item.tags.length || item.origin !== 'liteapi' ? `<div class="tags">${item.origin === 'osm' ? `<a class="tag osm" href="${esc(item.source)}" target="_blank" rel="noopener noreferrer" title="${t('Ficha en OpenStreetMap')}">🗺️ OpenStreetMap</a>` : ''}${item.origin === 'ai' ? `<span class="tag osm" title="${t('Datos sugeridos por IA: compruébalos antes de viajar')}">✨ ${t('Sugerido por IA')}</span>` : ''}${item.tags.map((x) => `<span class="tag">${esc(t(x))}</span>`).join('')}</div>` : ''}
+      ${item.description ? `<p class="desc">${esc(item.description)}</p>` : ''}
+      ${facilities.length ? `<ul class="fac-list">${facilities.slice(0, 6).map((f) => `<li title="${esc(t(f.label))}"><span aria-hidden="true">${f.icon}</span> ${esc(t(f.label))}</li>`).join('')}</ul>` : ''}
+      <div class="stat-boxes">
+        <div class="stat-box hi"><b>${s.minPrice != null ? eur(s.minPrice) : '—'}</b><span>${t('Desde')}</span></div>
+        <div class="stat-box"><b>${s.avgPrice != null ? eur(s.avgPrice) : '—'}</b><span>${t('Media')}</span></div>
+        <div class="stat-box"><b>${s.freeDays}/${item.calendar.length}</b><span>${t('Días libres')}</span></div>
+      </div>
+      ${insight ? `<p class="insight">📉 ${insight}</p>` : ''}
+    </div>
+    <div class="hotel-cal">
+      ${renderCalendar(item, ui)}
+      <div class="selection">${selectionText(item, ui, false)}</div>
+    </div>
+    <div class="hotel-panel">
+      ${picked && !(best && ui.start === best.checkIn && ui.end === best.checkOut) ? `<div class="best-box on">
+        <span class="best-title">🗓️ ${t('Tu estancia')}</span>
+        <span class="best-dates">${fmtShort.format(toDate(ui.start))} → ${fmtShort.format(toDate(ui.end))}</span>
+        <span class="best-night">${t('{price}/noche', { price: eur(Math.round(pickedTotal / diffDays(ui.start, ui.end))) })}</span>
+        <span>${t('{price} total', { price: eur(pickedTotal) })} (${tn(diffDays(ui.start, ui.end), '{n} noche', '{n} noches')})</span>
+      </div>` : best ? `<button type="button" class="best-box${picked ? ' on' : ''}" data-act="best">
+        <span class="best-title">⭐ ${t('Mejor opción')}</span>
+        <span class="best-dates">${fmtShort.format(toDate(best.checkIn))} → ${fmtShort.format(toDate(best.checkOut))}</span>
+        <span class="best-night">${t('{price}/noche', { price: eur(bestNight) })}</span>
+        <span>${t('{price} total', { price: eur(best.total) })} (${tn(nights, '{n} noche', '{n} noches')})</span>
+      </button>` : ''}
+      <button class="btn primary book-btn" data-act="book" ${picked || best ? '' : 'disabled'}>${picked ? t('Reservar por {price} →', { price: eur(pickedTotal) }) : best ? t('Reservar por {price} →', { price: eur(best.total) }) : t('Reservar')}</button>
+      <button type="button" class="btn ghost history-btn" data-act="history" aria-expanded="${!!ui.historyOpen}">📈 ${t('Ver evolución de precios')}</button>
+      ${live ? `<button type="button" class="link-title small details-link" data-act="info">${t('Ver detalles del hotel')} →</button>` : ''}
+    </div>
+    ${ui.historyOpen ? `<div class="hotel-chart">${renderChart(item, ui, false)}</div>` : ''}`;
+  bindCard(el, item, false);
   return el;
 }
 
@@ -688,13 +755,23 @@ function bindCard(el, item, isFlight) {
       Object.assign(ui, { start: b.checkIn, end: b.checkOut, picking: 'start', month: monthIndex(state.data.start, b.checkIn) });
       return rerender(item.id);
     }
-    if (act === 'book') return openBooking(item, ui, isFlight);
+    if (act === 'book') {
+      // Ficha de hotel sin fechas elegidas: «Reservar por…» reserva la mejor opción.
+      if (!isFlight && !canBook(ui, false) && item.bestStay) {
+        const b = item.bestStay;
+        Object.assign(ui, { start: b.checkIn, end: b.checkOut, picking: 'start', month: monthIndex(state.data.start, b.checkIn) });
+        rerender(item.id);
+      }
+      return openBooking(item, ui, isFlight);
+    }
     if (act === 'info') return openHotel(item);
+    if (act === 'history') { ui.historyOpen = !ui.historyOpen; return rerender(item.id); }
     const day = e.target.closest('.day[data-date]');
     if (day) pickDay(item, ui, day.dataset.date, isFlight);
   });
 
-  bindChart(el, item, isFlight, (d) => {
+  // Ficha de hotel: la gráfica solo se pinta al pulsar «Ver evolución de precios».
+  if ($('.plot', el)) bindChart(el, item, isFlight, (d) => {
     ui.month = monthIndex(state.data.start, d.date);
     pickDay(item, ui, d.date, isFlight);
   });
