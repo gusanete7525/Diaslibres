@@ -255,7 +255,8 @@ export function createApp({
 
   // Sin destino escrito, la portada mezcla hoteles bien valorados de varias ciudades y países
   // (cambian cada día) en vez de enseñar solo una ciudad.
-  const MIX_CITIES = ['Barcelona', 'Lisbon', 'Paris', 'Rome', 'London', 'Amsterdam', 'Malaga', 'Prague', 'Vienna', 'Porto', 'Seville', 'Florence', 'Athens', 'Dublin', 'Berlin', 'Valencia', 'Palma de Mallorca', 'Budapest'];
+  // Con el país: «Athens» a secas puede ser Athens (Georgia, EE. UU.).
+  const MIX_CITIES = ['Barcelona, Spain', 'Lisbon, Portugal', 'Paris, France', 'Rome, Italy', 'London, United Kingdom', 'Amsterdam, Netherlands', 'Malaga, Spain', 'Prague, Czech Republic', 'Vienna, Austria', 'Porto, Portugal', 'Seville, Spain', 'Florence, Italy', 'Athens, Greece', 'Dublin, Ireland', 'Berlin, Germany', 'Valencia, Spain', 'Palma de Mallorca, Spain', 'Budapest, Hungary'];
   const MIX_PER_DAY = 6;
   async function mixedHotels(lang) {
     const day = Math.floor(Date.now() / 864e5);
