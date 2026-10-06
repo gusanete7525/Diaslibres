@@ -1801,7 +1801,14 @@ filters.checkIn.max = addDays(filters.checkIn.min, 330);
       updateMoreCount();
     }
   } catch { /* sin filtros */ }
-  if (state.view === 'hotels') { setView(start); search(); }
+  // Páginas generales (/hoteles, /vuelos, /escapadas, /donde-viajar): se dejan sus enlaces a la vista
+  // sin lanzar una búsqueda; en «¿Dónde viajar?» el cursor va a la caja de la IA.
+  const hub = document.body.dataset.hub;
+  if (state.view === 'hotels') {
+    setView(start);
+    if (!hub) search();
+    else if (hub === 'whereTo') $('#aiQuery')?.focus({ preventScroll: true });
+  }
 })();
 
 // Si el navegador está en otro idioma de la web, se ofrece la página en ese idioma.

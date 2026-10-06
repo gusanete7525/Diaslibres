@@ -7,15 +7,16 @@ import { join, dirname } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-// prefix: delante de cada dirección; hotels/flights: la palabra de la dirección.
+// prefix: delante de cada dirección; hotels/flights/escapes/whereTo: la palabra de la dirección
+// (hotels y flights también son las páginas generales /hoteles y /vuelos).
 export const LANGS = {
-  es: { name: 'Español', locale: 'es-ES', og: 'es_ES', prefix: '', hotels: 'hoteles', flights: 'vuelos' },
-  en: { name: 'English', locale: 'en-GB', og: 'en_GB', prefix: '/en', hotels: 'hotels', flights: 'flights' },
-  fr: { name: 'Français', locale: 'fr-FR', og: 'fr_FR', prefix: '/fr', hotels: 'hotels', flights: 'vols' },
-  de: { name: 'Deutsch', locale: 'de-DE', og: 'de_DE', prefix: '/de', hotels: 'hotels', flights: 'fluege' },
-  it: { name: 'Italiano', locale: 'it-IT', og: 'it_IT', prefix: '/it', hotels: 'hotel', flights: 'voli' },
-  pt: { name: 'Português', locale: 'pt-PT', og: 'pt_PT', prefix: '/pt', hotels: 'hoteis', flights: 'voos' },
-  nl: { name: 'Nederlands', locale: 'nl-NL', og: 'nl_NL', prefix: '/nl', hotels: 'hotels', flights: 'vluchten' },
+  es: { name: 'Español', locale: 'es-ES', og: 'es_ES', prefix: '', hotels: 'hoteles', flights: 'vuelos', escapes: 'escapadas', whereTo: 'donde-viajar' },
+  en: { name: 'English', locale: 'en-GB', og: 'en_GB', prefix: '/en', hotels: 'hotels', flights: 'flights', escapes: 'getaways', whereTo: 'where-to-go' },
+  fr: { name: 'Français', locale: 'fr-FR', og: 'fr_FR', prefix: '/fr', hotels: 'hotels', flights: 'vols', escapes: 'escapades', whereTo: 'ou-partir' },
+  de: { name: 'Deutsch', locale: 'de-DE', og: 'de_DE', prefix: '/de', hotels: 'hotels', flights: 'fluege', escapes: 'kurzurlaub', whereTo: 'reiseziele' },
+  it: { name: 'Italiano', locale: 'it-IT', og: 'it_IT', prefix: '/it', hotels: 'hotel', flights: 'voli', escapes: 'fughe', whereTo: 'dove-andare' },
+  pt: { name: 'Português', locale: 'pt-PT', og: 'pt_PT', prefix: '/pt', hotels: 'hoteis', flights: 'voos', escapes: 'escapadinhas', whereTo: 'para-onde-viajar' },
+  nl: { name: 'Nederlands', locale: 'nl-NL', og: 'nl_NL', prefix: '/nl', hotels: 'hotels', flights: 'vluchten', escapes: 'weekendjes-weg', whereTo: 'waar-naartoe' },
 };
 export const LANG_CODES = Object.keys(LANGS);
 export const isLang = (x) => Object.hasOwn(LANGS, x);

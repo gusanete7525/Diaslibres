@@ -8,7 +8,7 @@ import { aiSearch } from './src/ai.js';
 import { AIRPORTS } from './src/catalog.js';
 import { readFileSync } from 'node:fs';
 import { minify } from 'terser';
-import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, cityStats, cityKey, cityByName, cityByIata, placeName, cityName, CITIES } from './src/seo.js';
+import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, hubPage, HUBS, cityStats, cityKey, cityByName, cityByIata, placeName, cityName, CITIES } from './src/seo.js';
 import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
@@ -145,6 +145,8 @@ export function createApp({
       const page = cityPage(lang, city, filter, stats);
       sendPage(req, res, page, lang);
     };
+    // Páginas generales: /hoteles, /vuelos, /escapadas, /donde-viajar (y sus equivalentes en cada idioma).
+    for (const kind of HUBS) app.get(`${L.prefix}/${L[kind]}`, (req, res) => sendPage(req, res, hubPage(lang, kind), lang));
     app.get(`${L.prefix}/${L.hotels}/:slug`, hotelsPage);
     app.get(`${L.prefix}/${L.hotels}/:slug/:filter`, hotelsPage);
     app.get(`${L.prefix}/${L.flights}/:slug`, (req, res) => {
@@ -161,9 +163,11 @@ export function createApp({
     const site = siteUrl(req);
     res.type('text/plain').send([
       '# DíasLibres', '',
-      '> Agencia online de hoteles y vuelos de Gusansoft. En cada hotel y vuelo muestra un calendario con los días libres (verde, con su precio) y completos (rojo), una gráfica de precios de los próximos días y el botón «Días más baratos». Reserva y pago con tarjeta. Web en español, inglés, francés, alemán, italiano, portugués y neerlandés.', '',
+      '> Buscador y agencia de viajes de Gusansoft: encuentra vuelos, hoteles y trenes y descubre dónde viajar describiendo el viaje con tus palabras (búsqueda con IA en lenguaje natural).', '',
+      'En cada hotel y vuelo muestra un calendario con los días libres (verde, con su precio) y completos (rojo), una gráfica de precios de los próximos días y el botón «Días más baratos». Reserva y pago con tarjeta. Web en español, inglés, francés, alemán, italiano, portugués y neerlandés.', '',
       '## Páginas',
       `- [Inicio](${site}/): buscador de hoteles, vuelos y trenes, también en lenguaje natural.`,
+      `- [Hoteles](${site}/hoteles), [Vuelos](${site}/vuelos), [Escapadas](${site}/escapadas) y [¿Dónde viajar?](${site}/donde-viajar): todos los destinos, rutas e ideas de viaje.`,
       `- [Hoteles en Madrid](${site}/hoteles/madrid), [Barcelona](${site}/hoteles/barcelona), [Lisboa](${site}/hoteles/lisboa) y más ciudades: precio por noche y disponibilidad.`,
       `- [Vuelos Madrid–Barcelona](${site}/vuelos/madrid-barcelona) y otras rutas.`,
       `- [Sitemap](${site}/sitemap.xml) · [Información legal](${site}/legal.html)`, '',

@@ -90,7 +90,10 @@ export function routeFromSlug(lang, s) {
 export const homeUrl = (lang) => LANGS[lang].prefix + '/';
 export const cityUrl = (lang, city, filter) => `${LANGS[lang].prefix}/${LANGS[lang].hotels}/${slug(cityName(city, lang))}${filter ? '/' + filter.slug[lang] : ''}`;
 export const routeUrl = (lang, o, d) => `${LANGS[lang].prefix}/${LANGS[lang].flights}/${slug(cityName(o, lang))}-${slug(cityName(d, lang))}`;
-const urlOf = (lang, key) => (key.type === 'city' ? cityUrl(lang, key.city, key.filter) : key.type === 'route' ? routeUrl(lang, key.o, key.d) : homeUrl(lang));
+// Páginas generales: /hoteles, /vuelos, /escapadas y /donde-viajar (con su palabra en cada idioma).
+export const HUBS = ['hotels', 'flights', 'escapes', 'whereTo'];
+export const hubUrl = (lang, kind) => `${LANGS[lang].prefix}/${LANGS[lang][kind]}`;
+const urlOf = (lang, key) => (key.type === 'city' ? cityUrl(lang, key.city, key.filter) : key.type === 'route' ? routeUrl(lang, key.o, key.d) : key.type === 'hub' ? hubUrl(lang, key.kind) : homeUrl(lang));
 
 // ---------- Datos de cada ciudad (de la lista completa de sus hoteles) ----------
 const brief = (h) => ({ name: h.name, stars: h.stars || null, rating: h.rating || null, reviews: h.reviewCount || 0 });
@@ -216,9 +219,78 @@ export function routePage(lang, o, d) {
 export function homePage(lang, noindex) {
   return {
     key: { type: 'home' },
-    title: tr(lang, 'DíasLibres · Hoteles y vuelos baratos con calendario de días libres'),
-    description: tr(lang, 'Reserva hoteles y vuelos de todo el mundo viendo de un vistazo qué días están libres y cuándo es más barato. Precios reales y pago seguro.'),
+    title: tr(lang, 'DíasLibres · Vuelos y hoteles baratos con calendario e IA'),
+    description: tr(lang, 'Busca vuelos y hoteles, mira en un calendario qué días están libres y cuándo es más barato, o cuéntale a la IA cómo quieres viajar. Pago seguro.'),
     noindex,
+  };
+}
+
+// ---------- Páginas generales (/hoteles, /vuelos, /escapadas, /donde-viajar) ----------
+// Solo enlaces y datos reales de la web: destinos, rutas y filtros que ya tienen su página.
+const EUROPE = new Set(['ES', 'PT', 'FR', 'IT', 'DE', 'GB', 'IE', 'NL', 'BE', 'LU', 'CH', 'AT', 'GR', 'HR', 'SI', 'CZ', 'SK', 'PL', 'HU', 'RO', 'BG', 'DK', 'SE', 'NO', 'FI', 'IS', 'EE', 'LV', 'LT', 'MT', 'CY', 'ME', 'AL', 'RS', 'BA', 'MK', 'MC', 'AD', 'SM', 'VA', 'LI']);
+const FILTER = Object.fromEntries(FILTERS.map((f) => [f.id, f]));
+const HUB_TEXT = {
+  hotels: { title: 'Hoteles en España, Europa y todo el mundo · Precio por noche | DíasLibres', description: 'Hoteles en {n} destinos con calendario de días libres y el precio de cada noche. Elige ciudad, compara fechas y reserva con pago seguro.', h1: 'Hoteles: mira qué días están libres en cada destino', crumb: 'Hoteles', view: 'hotels' },
+  flights: { title: 'Vuelos baratos: compara el precio de cada día | DíasLibres', description: 'Vuelos baratos en {n} rutas con el precio de cada día de las próximas dos semanas y una gráfica para ver el día más barato. Reserva con pago seguro.', h1: 'Vuelos: encuentra el día más barato para volar', crumb: 'Vuelos', view: 'flights' },
+  escapes: { title: 'Escapadas de playa, montaña, spa y con niños · Hoteles | DíasLibres', description: 'Ideas de escapada con el precio de cada noche: hoteles en la playa, en la montaña, con spa, para familias o que admiten mascotas. Mira qué días están libres.', h1: 'Escapadas: elige el plan y mira qué días están libres', crumb: 'Escapadas', view: 'hotels' },
+  whereTo: { title: '¿Dónde viajar? Ideas y buscador de viajes con IA | DíasLibres', description: 'Cuéntale a la IA de DíasLibres cómo quieres viajar y te propone hoteles y vuelos con el precio de cada día. Ideas de playa, islas, montaña y ciudades.', h1: '¿Dónde viajar? Cuéntaselo a la IA y mira qué días están libres', crumb: '¿Dónde viajar?', view: 'hotels' },
+};
+const AI_EXAMPLES = ['Escapada romántica de fin de semana', 'Hotel de montaña menos de 100 €', 'Vuelos directos de Madrid a Lisboa', 'Playa con niños en Canarias 5 noches'];
+
+export function hubPage(lang, kind) {
+  const t = (k, v = {}) => tr(lang, k, v);
+  const cityLinks = (list, filter) => links(list.map((c) => [cityUrl(lang, c, filter), filter ? t(filter.title, { city: cityName(c, lang) }) : t('Hoteles en {city}', { city: cityName(c, lang) })]));
+  const section = (title, html) => `<h2>${esc(t(title))}</h2>${html}`;
+  const es = CITIES.filter((c) => c.country === 'ES');
+  const parts = [];
+  let n = 0;
+  if (kind === 'hotels') {
+    n = CITIES.length;
+    parts.push(`<p>${esc(t('Elige un destino para ver todos sus hoteles con el calendario de disponibilidad y el precio de cada noche de los próximos 30 días.'))}</p>`);
+    parts.push(section('Hoteles en España', cityLinks(es)));
+    parts.push(section('Hoteles en Europa', cityLinks(CITIES.filter((c) => c.country !== 'ES' && EUROPE.has(c.country)))));
+    const rest = CITIES.filter((c) => !EUROPE.has(c.country));
+    if (rest.length) parts.push(section('Hoteles en el resto del mundo', cityLinks(rest)));
+  } else if (kind === 'flights') {
+    n = ROUTE_CITIES.length;
+    parts.push(`<p>${esc(t('Elige una ruta para ver el precio de cada día de las próximas dos semanas. En el buscador puedes consultar cualquier otro origen y destino.'))}</p>`);
+    const byOrigin = new Map();
+    for (const [o, d] of ROUTE_CITIES) byOrigin.set(o, [...(byOrigin.get(o) || []), d]);
+    for (const [o, ds] of byOrigin) {
+      parts.push(`<h2>${esc(t('Vuelos desde {city}', { city: cityName(o, lang) }))}</h2>${links(ds.map((d) => [routeUrl(lang, o, d), t('Vuelos de {from} a {to}', { from: cityName(o, lang), to: cityName(d, lang) })]))}`);
+    }
+  } else if (kind === 'escapes') {
+    parts.push(`<p>${esc(t('Ideas para una escapada de fin de semana o unas vacaciones. Cada enlace muestra los hoteles con su calendario y el precio de cada noche.'))}</p>`);
+    const sea = es.filter((c) => c.type === 'beach' || c.type === 'island');
+    parts.push(section('Hoteles en la playa', cityLinks(sea.slice(0, 16), FILTER.playa)));
+    parts.push(section('Escapadas a la montaña', cityLinks(CITIES.filter((c) => c.type === 'mountain').slice(0, 16))));
+    parts.push(section('Escapadas con spa', cityLinks(es.filter((c) => c.type === 'city').slice(0, 16), FILTER.spa)));
+    parts.push(section('Vacaciones con niños', cityLinks(sea.slice(0, 12), FILTER.familias)));
+    parts.push(section('Viajar con mascotas', cityLinks(es.slice(0, 12), FILTER.mascotas)));
+    parts.push(section('Todo incluido en las islas', cityLinks(es.filter((c) => c.type === 'island').slice(0, 12), FILTER['todo-incluido'])));
+  } else if (kind === 'whereTo') {
+    parts.push(`<p>${esc(t('Escribe en el buscador lo que buscas, con tus palabras. La IA entiende el destino, las fechas, el presupuesto y lo que quieres, y te enseña hoteles y vuelos con su calendario.'))}</p>`);
+    parts.push(`<p>${esc(t('Por ejemplo:'))}</p><ul>${AI_EXAMPLES.map((x) => `<li>${esc(t(x))}</li>`).join('')}</ul>`);
+    const pick = (type) => CITIES.filter((c) => c.type === type).slice(0, 16);
+    parts.push(section('Destinos de playa', cityLinks(pick('beach'))));
+    parts.push(section('Islas', cityLinks(pick('island'))));
+    parts.push(section('Montaña', cityLinks(pick('mountain'))));
+    parts.push(section('Ciudades', cityLinks(pick('city'))));
+  } else {
+    return null;
+  }
+  const others = HUBS.filter((k) => k !== kind);
+  parts.push(section('Más ideas', links(others.map((k) => [hubUrl(lang, k), t(HUB_TEXT[k].crumb)]))));
+  const x = HUB_TEXT[kind];
+  return {
+    key: { type: 'hub', kind },
+    title: t(x.title),
+    description: t(x.description, { n: num(lang, n) }),
+    h1: t(x.h1),
+    crumb: t(x.crumb),
+    view: x.view,
+    hub: kind,
+    html: parts.join(''),
   };
 }
 
@@ -226,7 +298,8 @@ export function homePage(lang, noindex) {
 function popular(lang) {
   const hotels = CITIES.filter((c) => c.country === 'ES').slice(0, 12).concat(CITIES.filter((c) => c.country !== 'ES').slice(0, 8));
   const routes = ROUTE_CITIES.slice(0, 8);
-  return `<p><strong>${esc(tr(lang, 'Hoteles:'))}</strong> ${hotels.map((c) => `<a href="${esc(cityUrl(lang, c))}">${esc(cityName(c, lang))}</a>`).join(' · ')}</p>` +
+  return `<p><strong>${esc(tr(lang, 'Explora:'))}</strong> ${HUBS.map((k) => `<a href="${esc(hubUrl(lang, k))}">${esc(tr(lang, HUB_TEXT[k].crumb))}</a>`).join(' · ')}</p>` +
+    `<p><strong>${esc(tr(lang, 'Hoteles:'))}</strong> ${hotels.map((c) => `<a href="${esc(cityUrl(lang, c))}">${esc(cityName(c, lang))}</a>`).join(' · ')}</p>` +
     `<p><strong>${esc(tr(lang, 'Vuelos:'))}</strong> ${routes.map(([o, d]) => `<a href="${esc(routeUrl(lang, o, d))}">${esc(cityName(o, lang))} – ${esc(cityName(d, lang))}</a>`).join(' · ')}</p>`;
 }
 
@@ -286,7 +359,8 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
       .map(([l, u]) => `<a href="${esc(u.slice(site.length) || '/')}" hreflang="${l}" lang="${l}"${l === lang ? ' aria-current="true"' : ''}>${esc(LANGS[l].name)}</a>`).join(''))
     .replace('<!--POPULAR-->', popular(lang));
   if (page.h1) out = out.replace(/<h1( data-i18n)?>[\s\S]*?<\/h1>/, `<h1>${esc(page.h1)}</h1>`);
-  if (page.view) out = out.replace('<body>', `<body data-start-view="${esc(page.view)}"${page.filters ? ` data-start-filters="${esc(JSON.stringify(page.filters))}"` : ''}>`);
+  // data-hub: página general; la web no lanza una búsqueda al abrirla y deja visibles sus enlaces.
+  if (page.view) out = out.replace('<body>', `<body data-start-view="${esc(page.view)}"${page.hub ? ` data-hub="${esc(page.hub)}"` : ''}${page.filters ? ` data-start-filters="${esc(JSON.stringify(page.filters))}"` : ''}>`);
   if (page.destination) out = out.replace('<input name="destination" ', `<input name="destination" value="${esc(page.destination)}" `);
   if (page.origin) out = out.replace('<input name="origin" ', `<input name="origin" value="${esc(page.origin)}" `);
   // Texto visible para buscadores (y para quien entra antes de que cargue la web);
@@ -307,7 +381,7 @@ export function sitemapIndex(site) {
 // statsOf(city): datos de la ciudad si ya se tienen. Los filtros solo entran con al menos 3 hoteles.
 export function sitemap(site, lang, statsOf = () => null) {
   const today = new Date().toISOString().slice(0, 10);
-  const urls = [[homeUrl(lang), 'daily', '1.0']];
+  const urls = [[homeUrl(lang), 'daily', '1.0'], ...HUBS.map((k) => [hubUrl(lang, k), 'weekly', '0.9'])];
   for (const c of CITIES) {
     urls.push([cityUrl(lang, c), 'daily', '0.8']);
     const s = statsOf(c);
