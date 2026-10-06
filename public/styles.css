@@ -537,7 +537,7 @@ button.best-box:hover .best-dates { color: var(--brand); }
   background:
     linear-gradient(90deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 85%, transparent) 30%, transparent 62%),
     linear-gradient(0deg, var(--bg) 0%, transparent 38%),
-    url("/img/hero.svg") right center / cover no-repeat;
+    url("/img/hero.jpg") right center / cover no-repeat;
 }
 .hero h1 { font-size: clamp(28px, 4.2vw, 46px); max-width: 640px; }
 .hero h1 em { background: linear-gradient(90deg, #2a8cff, #4fc3ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -553,7 +553,6 @@ button.best-box:hover .best-dates { color: var(--brand); }
 .ai-box .btn.primary { padding: 10px 20px; white-space: nowrap; }
 #examples { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 16px; }
 .ex-card { aspect-ratio: 5 / 2; }
-.ex-card.kids img { filter: hue-rotate(35deg) saturate(1.2); }
 .ex-card span b { display: block; font-size: 15px; }
 .ex-card span small { display: block; font-size: 12px; font-weight: 500; opacity: 0.9; }
 .filters { gap: 10px; }

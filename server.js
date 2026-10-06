@@ -253,10 +253,28 @@ export function createApp({
   };
   const isLive = (id) => !!live && String(id || '').startsWith('lite-');
 
+  // Sin destino escrito, la portada mezcla hoteles bien valorados de varias ciudades y países
+  // (cambian cada día) en vez de enseñar solo una ciudad.
+  const MIX_CITIES = ['Barcelona', 'Lisbon', 'Paris', 'Rome', 'London', 'Amsterdam', 'Malaga', 'Prague', 'Vienna', 'Porto', 'Seville', 'Florence', 'Athens', 'Dublin', 'Berlin', 'Valencia', 'Palma de Mallorca', 'Budapest'];
+  const MIX_PER_DAY = 6;
+  async function mixedHotels(lang) {
+    const day = Math.floor(Date.now() / 864e5);
+    const cities = Array.from({ length: MIX_PER_DAY }, (_, i) => MIX_CITIES[(day * MIX_PER_DAY + i) % MIX_CITIES.length]);
+    const lists = await Promise.all(cities.map((c) => live.hotels(c, { lang }).catch(() => [])));
+    const good = (h) => (h.rating || 0) >= 8 && (h.reviewCount || 0) >= 50;
+    const tops = lists.map((l) => [...l].sort((a, b) => good(b) - good(a) || (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0)).slice(0, 10));
+    const out = [];
+    for (let i = 0; i < 10; i++) for (const t of tops) if (t[i]) out.push(t[i]);
+    return out;
+  }
+
   async function liveHotels(q, res) {
-    const city = String(q.destination || '').trim() || 'Madrid';
+    const typed = String(q.destination || '').trim();
+    const city = typed || 'Madrid';
+    const mixed = !typed;
     try {
-      let hotels = await live.hotels(city, { lang: q.lang });
+      let hotels = mixed ? await mixedHotels(q.lang) : await live.hotels(city, { lang: q.lang });
+      if (mixed && !hotels.length) hotels = await live.hotels(city, { lang: q.lang });
       // Filtros: estrellas, puntuación y servicios (todos los marcados).
       const fac = list(q.fac).filter((k) => k in FACILITIES);
       if (q.minStars) hotels = hotels.filter((h) => (h.stars || 0) >= Number(q.minStars));
@@ -269,7 +287,9 @@ export function createApp({
       const byRating = (a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0);
       const byReviews = (a, b) => (b.reviewCount || 0) - (a.reviewCount || 0) || byRating(a, b);
       // «Más baratos» se ordena en el navegador cuando llegan los precios; aquí, por puntuación.
-      hotels = [...hotels].sort({ rating: byRating, price: byRating, reviews: byReviews }[q.sort] || byStars);
+      const sorter = { rating: byRating, price: byRating, reviews: byReviews }[q.sort];
+      // La mezcla de portada va intercalada por ciudades salvo que se pida otro orden.
+      if (!mixed || sorter) hotels = [...hotels].sort(sorter || byStars);
       const board = q.board in BOARDS ? q.board : null;
       // El calendario empieza hoy; si la fecha de entrada pedida queda más allá, empieza ese día.
       const nights = Math.max(1, Math.min(30, Number(q.nights) || 3));
@@ -286,7 +306,7 @@ export function createApp({
         summary: { freeDays: 0, minPrice: null, maxPrice: null, avgPrice: null },
         bestStay: null,
       }));
-      res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, board, boardName: board ? BOARDS[board] : null, nights, results, live: { sandbox: live.sandbox, city, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
+      res.json({ start, days: LIVE_DAYS, total, page, hasMore: (page + 1) * HOTEL_PAGE < total, board, boardName: board ? BOARDS[board] : null, nights, results, live: { sandbox: live.sandbox, city, mixed, bookingEnabled: liveBookingEnabled, payment: livePayment }, guests: occupancy({ adults: q.adults, children: q.children }) });
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudieron consultar los hoteles ahora mismo. Inténtalo de nuevo en unos segundos.' });

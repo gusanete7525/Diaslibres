@@ -24,6 +24,8 @@ export default {
  "(entorno de pruebas)": "(Testumgebung)",
  "precios con {board}": "Preise mit {board}",
  "Mostrando {city}. Escribe otra ciudad para ver sus hoteles.": "Angezeigt wird {city}. Gib eine andere Stadt ein, um ihre Hotels zu sehen.",
+
+ "Ideas de hoteles en varias ciudades. Escribe una ciudad para ver todos sus hoteles.": "Hotelideen in mehreren Städten. Gib eine Stadt ein, um alle ihre Hotels zu sehen.",
  "{shown} de {total}": "{shown} von {total}",
  "próximos {n} días": "nächste {n} Tage",
  "Cargando precios reales…": "Echte Preise werden geladen…",

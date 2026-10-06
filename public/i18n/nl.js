@@ -24,6 +24,8 @@ export default {
  "(entorno de pruebas)": "(testomgeving)",
  "precios con {board}": "prijzen met {board}",
  "Mostrando {city}. Escribe otra ciudad para ver sus hoteles.": "{city} wordt getoond. Typ een andere stad om de hotels daar te zien.",
+
+ "Ideas de hoteles en varias ciudades. Escribe una ciudad para ver todos sus hoteles.": "Hotelideeën in verschillende steden. Typ een stad om al haar hotels te zien.",
  "{shown} de {total}": "{shown} van {total}",
  "próximos {n} días": "komende {n} dagen",
  "Cargando precios reales…": "Echte prijzen laden…",

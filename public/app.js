@@ -457,7 +457,7 @@ function renderResults() {
   const live = state.data.live;
   const liveNote = live ? ' · ' + t('precios y disponibilidad en tiempo real') + (live.sandbox ? ' ' + t('(entorno de pruebas)') : '') : '';
   const boardNote = state.data.boardName ? ' · ' + t('precios con {board}', { board: lower(t(state.data.boardName)) }) : '';
-  const city = live && !filters.destination.value.trim() ? `<p class="count">${t('Mostrando {city}. Escribe otra ciudad para ver sus hoteles.', { city: esc(live.city) })}</p>` : '';
+  const city = live && !filters.destination.value.trim() ? `<p class="count">${live.mixed ? t('Ideas de hoteles en varias ciudades. Escribe una ciudad para ver todos sus hoteles.') : t('Mostrando {city}. Escribe otra ciudad para ver sus hoteles.', { city: esc(live.city) })}</p>` : '';
   const total = state.data.total > list.length ? t('{shown} de {total}', { shown: `<span id="shownCount">${list.length}</span>`, total: state.data.total.toLocaleString(LOCALE) }) : list.length;
   results.innerHTML = `<p class="count">${total} ${kind}${osmNote}${liveNote}${boardNote} · ${state.data.start > new Date().toISOString().slice(0, 10) ? t('{n} días desde el {date}', { n: state.data.days, date: fmtDay.format(toDate(state.data.start)) }) : t('próximos {n} días', { n: state.data.days })}</p>${city}${live ? `<p class="count" id="livePending">${t('Cargando precios reales…')}</p><p class="count" id="hiddenNote" hidden></p>` : ''}${warnings}`;
   setFooter(!!live);
@@ -580,7 +580,7 @@ function goodPrice(item) {
   const nights = state.data.nights;
   const night = (h) => h.bestStay.total / nights;
   const score = (h) => {
-    const peers = list.filter((p) => p !== h && (p.stars || 0) === (h.stars || 0)).map(night).sort((a, b) => a - b);
+    const peers = list.filter((p) => p !== h && (p.stars || 0) === (h.stars || 0) && (!state.data.live?.mixed || p.city === h.city)).map(night).sort((a, b) => a - b);
     if (peers.length < 3) return Infinity;
     return night(h) / peers[Math.floor(peers.length / 2)];
   };
@@ -1965,7 +1965,7 @@ function renderForYou() {
       ? []
       : [q.stay ? t(STAY_PLURAL[q.stay]) : '', q.board && state.config.boards?.[q.board] ? t(state.config.boards[q.board]) : '', q.maxPrice ? t('hasta {price}/noche', { price: eur(q.maxPrice) }) : ''].filter(Boolean);
     const img = r.kind === 'flight' ? 'vuelos' : TYPE_IMG[r.type] || 'romantica';
-    return `<button type="button" class="ex-card rec" data-i="${i}"><img src="${esc(r.photo || `/img/ex-${img}.svg`)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/img/ex-${img}.svg'" /><span><small>${esc(t(r.reason.key, { city: r.reason.city || '' }))}</small>${esc(r.city)}${sub.length ? `<em>${esc(sub.join(' · '))}</em>` : ''}</span></button>`;
+    return `<button type="button" class="ex-card rec" data-i="${i}"><img src="${esc(r.photo || `/img/ex-${img}.jpg`)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/img/ex-${img}.jpg'" /><span><small>${esc(t(r.reason.key, { city: r.reason.city || '' }))}</small>${esc(r.city)}${sub.length ? `<em>${esc(sub.join(' · '))}</em>` : ''}</span></button>`;
   }).join('');
 }
 $('#forYouList').addEventListener('click', (e) => {
