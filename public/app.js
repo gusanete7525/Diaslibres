@@ -1091,6 +1091,38 @@ async function searchLiveFlights(token) {
   }
 }
 
+// ---------- Vuelo + hotel ----------
+// Al buscar o reservar un vuelo se proponen hoteles en el destino para esas fechas.
+// Son dos reservas independientes, cada una con su pago (no es un viaje combinado).
+function tripHotelBox({ city, checkIn, checkOut, adults }) {
+  if (!city || !checkIn) return null;
+  const nights = Math.max(1, Math.min(30, checkOut && checkOut > checkIn ? diffDays(checkIn, checkOut) : 3));
+  const el = document.createElement('div');
+  el.className = 'trip-hotel';
+  el.style.cssText = 'display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 16px;margin:12px 0;border:1px solid rgba(127,127,127,.35);border-radius:12px';
+  el.innerHTML = `<span>🏨 <b>${esc(t('¿Necesitas hotel en {city}?', { city }))}</b> <span class="meta">${esc(fmtDay.format(toDate(checkIn)))} · ${esc(tn(nights, '{n} noche', '{n} noches'))}</span></span><button class="btn primary" type="button">${esc(t('Ver hoteles'))}</button>`;
+  $('button', el).addEventListener('click', () => hotelsForTrip({ city, checkIn, nights, adults }));
+  return el;
+}
+function hotelsForTrip({ city, checkIn, nights, adults }) {
+  filters.destination.value = city;
+  filters.checkIn.value = checkIn;
+  filters.nights.value = String(nights);
+  if (adults) filters.adults.value = String(Math.min(6, Math.max(1, Number(adults) || 2)));
+  setView('hotels');
+  search();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+// Datos del viaje para proponer hotel al volver del pago del vuelo.
+function tripFromFlight(trip, data) {
+  return {
+    city: data.destination?.name,
+    checkIn: (trip?.outbound?.arrival || trip?.outbound?.departure || data.date || '').slice(0, 10),
+    checkOut: (trip?.inbound?.departure || data.returnDate || '').slice(0, 10) || undefined,
+    adults: data.adults,
+  };
+}
+
 function renderFlightResults(data, token) {
   setFooter(true);
   if (data.needRoute) return loadDeals(token);
@@ -1123,6 +1155,8 @@ function renderFlightResults(data, token) {
   }
   results.innerHTML = `<p class="count">${tn(state.items.size, '{n} vuelo', '{n} vuelos')} · ${route} · ${when} · ${tn(data.adults, '{n} pasajero', '{n} pasajeros')}${stopsNote}${note}</p><div id="routeChart"></div><p class="count" id="livePending"></p>`;
   renderRouteChart();
+  const hotelBox = tripHotelBox(tripFromFlight(data.results[0], data));
+  if (hotelBox) results.append(hotelBox);
   for (const item of state.items.values()) results.append(liveFlightCard(item));
   loadFlightDays(token);
   railHint(data, token);
@@ -1533,6 +1567,7 @@ async function payFlightWithWrapper(co) {
 
 async function openFlightBooking(trip, data) {
   state.flight = { trip, adults: data.adults, stripe: null, elements: null, checkout: null };
+  store.set('dl-trip', JSON.stringify(tripFromFlight(trip, data)));
   $('#flightSummary').innerHTML = `<b>${esc(data.origin.name)} → ${esc(data.destination.name)}</b><br>${t('Ida')} ${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))} · ${legText(trip.outbound)}${trip.inbound ? `<br>${t('Vuelta')} ${fmtDay.format(toDate(trip.inbound.departure.slice(0, 10)))} · ${legText(trip.inbound)}` : ''}<br>${tn(data.adults, '{n} pasajero', '{n} pasajeros')} · ${esc(trip.outbound.airlines.join(', '))}`;
   $('#paxList').innerHTML = Array.from({ length: data.adults }, (_, i) => paxFieldset(i)).join('');
   for (const d of flightForm.querySelectorAll('[name="birthday"]')) d.max = new Date().toISOString().slice(0, 10);
@@ -1636,7 +1671,11 @@ async function finishFlightPayment(id, redirectStatus) {
     const b = await api(`/api/flights/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
     toast(`✅ ${b.sandbox ? t('Reserva de prueba confirmada') : t('Vuelo reservado')} · ${t('código {code}', { code: b.code })}${b.pnr ? ' · ' + t('localizador {pnr}', { pnr: b.pnr }) : ''}`, 8000);
     rememberBooking(b);
-    loadMine(b.email);
+    await loadMine(b.email);
+    let trip = null;
+    try { trip = JSON.parse(store.get('dl-trip') || 'null'); } catch { /* sin datos */ }
+    const box = trip && tripHotelBox(trip);
+    if (box) $('#mine').prepend(box);
   } catch (err) {
     toast(err.message, 15000);
   }

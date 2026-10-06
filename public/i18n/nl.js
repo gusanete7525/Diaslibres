@@ -583,5 +583,7 @@ export default {
  "desde {price}": "vanaf {price}",
  "Ver vuelos": "Vluchten bekijken",
  "También en tren: {time}": "Ook met de trein: {time}",
- "Comparar tren y avión": "Trein en vliegtuig vergelijken"
+ "Comparar tren y avión": "Trein en vliegtuig vergelijken",
+ "¿Necesitas hotel en {city}?": "Hotel nodig in {city}?",
+ "Ver hoteles": "Bekijk hotels"
 };

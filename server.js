@@ -47,9 +47,22 @@ export function createApp({
     if (req.get('host') === host || /^localhost(:|$)|^127\./.test(req.get('host') || '')) return next();
     res.redirect(301, site.replace(/\/$/, '') + req.originalUrl);
   });
+  // Los avisos de index.html están escritos para el modo demostración. Con LiteAPI se entregan ya
+  // los del modo real, para que buscadores y visitantes sin JavaScript no lean «precios simulados».
+  let liveHtml;
+  const pageHtml = () => {
+    if (!live) return indexHtml;
+    if (liveHtml) return liveHtml;
+    const footer = ['Precios y disponibilidad en tiempo real.', live.sandbox ? 'Entorno de pruebas: las reservas son de prueba y no se cobran.' : '', liveFlights ? '' : 'Los vuelos son simulados.'].filter(Boolean).join(' ');
+    const bookNote = live.sandbox ? 'Entorno de pruebas: la reserva es de prueba y no se cobra nada.'
+      : livePayment === 'customer' ? 'Pago seguro con tarjeta. La reserva se confirma al completar el pago.' : null;
+    liveHtml = indexHtml.replace(/(<span id="footerNote"[^>]*>)[^<]*(<\/span>)/, `$1${footer}$2`);
+    if (bookNote) liveHtml = liveHtml.replace(/(<p id="bookNote" class="meta">)[^<]*(<\/p>)/, `$1${bookNote}$2`);
+    return liveHtml;
+  };
   const sendPage = (req, res, page, lang = 'es') => {
     res.set('Cache-Control', 'public, max-age=300');
-    res.type('html').send(renderPage(indexHtml, page, { site: siteUrl(req), verification: process.env.GOOGLE_SITE_VERIFICATION?.trim(), lang }));
+    res.type('html').send(renderPage(pageHtml(), page, { site: siteUrl(req), verification: process.env.GOOGLE_SITE_VERIFICATION?.trim(), lang }));
   };
 
   // Datos de cada ciudad para sus páginas (nº de hoteles, estrellas, servicios, mejor valorados).
@@ -142,6 +155,20 @@ export function createApp({
   }
   app.get('/robots.txt', (req, res) => {
     res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${siteUrl(req)}/sitemap.xml\n`);
+  });
+  // Resumen para asistentes de IA (ChatGPT, Claude, Perplexity…): https://llmstxt.org
+  app.get('/llms.txt', (req, res) => {
+    const site = siteUrl(req);
+    res.type('text/plain').send([
+      '# DíasLibres', '',
+      '> Agencia online de hoteles y vuelos de Gusansoft. En cada hotel y vuelo muestra un calendario con los días libres (verde, con su precio) y completos (rojo), una gráfica de precios de los próximos días y el botón «Días más baratos». Reserva y pago con tarjeta. Web en español, inglés, francés, alemán, italiano, portugués y neerlandés.', '',
+      '## Páginas',
+      `- [Inicio](${site}/): buscador de hoteles, vuelos y trenes, también en lenguaje natural.`,
+      `- [Hoteles en Madrid](${site}/hoteles/madrid), [Barcelona](${site}/hoteles/barcelona), [Lisboa](${site}/hoteles/lisboa) y más ciudades: precio por noche y disponibilidad.`,
+      `- [Vuelos Madrid–Barcelona](${site}/vuelos/madrid-barcelona) y otras rutas.`,
+      `- [Sitemap](${site}/sitemap.xml) · [Información legal](${site}/legal.html)`, '',
+      '## Empresa', '- Gusansoft (https://gusansoft.com) · contact@gusansoft.com', '',
+    ].join('\n'));
   });
   app.get('/sitemap.xml', (req, res) => res.type('application/xml').send(sitemapIndex(siteUrl(req))));
   app.get('/sitemap-:lang.xml', async (req, res, next) => {

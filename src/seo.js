@@ -249,6 +249,7 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
     url: site + '/',
     email: 'contact@gusansoft.com',
     logo: site + '/icon-512.png',
+    parentOrganization: { '@type': 'Organization', name: 'Gusansoft', url: 'https://gusansoft.com/' },
   }, ...(page.ld || [])];
   if (page.crumb) {
     ld.push({

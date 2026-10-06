@@ -583,5 +583,7 @@ export default {
  "desde {price}": "desde {price}",
  "Ver vuelos": "Ver voos",
  "También en tren: {time}": "Também de comboio: {time}",
- "Comparar tren y avión": "Comparar comboio e avião"
+ "Comparar tren y avión": "Comparar comboio e avião",
+ "¿Necesitas hotel en {city}?": "Precisas de hotel em {city}?",
+ "Ver hoteles": "Ver hotéis"
 };
