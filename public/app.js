@@ -573,6 +573,22 @@ function renderCard(item) {
   return el;
 }
 
+// «Buen precio»: la mejor noche cuesta al menos un 20 % menos que la mediana de los hoteles con sus mismas
+// estrellas en esta búsqueda, y está entre los 3 con más diferencia.
+function goodPrice(item) {
+  const list = (state.data.results || []).filter((h) => h.bestStay);
+  const nights = state.data.nights;
+  const night = (h) => h.bestStay.total / nights;
+  const score = (h) => {
+    const peers = list.filter((p) => p !== h && (p.stars || 0) === (h.stars || 0)).map(night).sort((a, b) => a - b);
+    if (peers.length < 3) return Infinity;
+    return night(h) / peers[Math.floor(peers.length / 2)];
+  };
+  const mine = item.bestStay ? score(item) : Infinity;
+  if (!(mine <= 0.8)) return false;
+  return list.filter((h) => score(h) < mine).length < 3;
+}
+
 // Ficha de hotel: foto grande, datos y cifras en el centro, calendario y «Mejor opción» a la derecha;
 // la gráfica de precios queda plegada en «Ver evolución de precios».
 function renderHotelCard(el, item, ui) {
@@ -585,11 +601,9 @@ function renderHotelCard(el, item, ui) {
   const ratio = bestNight && s.avgPrice ? bestNight / s.avgPrice : 1;
   const insight = ratio <= 0.75 ? t('Precio muy por debajo de la media') : ratio <= 0.85 ? t('Precio por debajo de la media') : '';
   // Etiqueta solo cuando hay una diferencia importante:
-  // 🔥 su mejor noche cuesta un 20 % menos que la de los hoteles parecidos (mismas estrellas) de esta búsqueda;
+  // 🔥 ver goodPrice() (solo los 3 más destacados de la búsqueda, para que la etiqueta signifique algo);
   // 💰 elegir bien los días ahorra mucho: la mejor estancia sale un 30 % por debajo de su precio medio por noche.
-  const peers = (state.data.results || []).filter((h) => h !== item && (h.stars || 0) === (item.stars || 0) && h.bestStay).map((h) => h.bestStay.total / nights).sort((a, b) => a - b);
-  const peerMedian = peers.length >= 3 ? peers[Math.floor(peers.length / 2)] : null;
-  const badge = bestNight && peerMedian && bestNight <= peerMedian * 0.8 ? `🔥 ${t('Buen precio')}`
+  const badge = goodPrice(item) ? `🔥 ${t('Buen precio')}`
     : bestNight && s.avgPrice && bestNight <= s.avgPrice * 0.7 ? `💰 ${t('Entre los días más baratos')}` : '';
   const picked = canBook(ui, false);
   const pickedTotal = picked ? stayDays(item, ui).reduce((a, d) => a + d.price, 0) : null;
