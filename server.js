@@ -134,7 +134,8 @@ export function createApp({
     const L = LANGS[lang];
     const home = lang === 'es' ? ['/', '/index.html'] : [`/${lang}/`];
     // Las vueltas del pago (?pago=, ?vuelo=) no son páginas para Google.
-    app.get(home, (req, res) => sendPage(req, res, homePage(lang, Object.keys(req.query).length > 0), lang));
+    // Otros parámetros (utm_*, gclid, fbclid…) no cambian la página: basta el canonical, sin noindex.
+    app.get(home, (req, res) => sendPage(req, res, homePage(lang, 'pago' in req.query || 'vuelo' in req.query), lang));
     const hotelsPage = async (req, res) => {
       const city = cityFromSlug(lang, req.params.slug);
       const filter = req.params.filter ? filterFromSlug(lang, req.params.filter) : null;

@@ -187,8 +187,9 @@ export function cityPage(lang, city, filter, stats) {
     filters: filter ? { fac: filter.fac, board: filter.board, minStars: filter.minStars, sort: filter.sort, stay: filter.stay } : null,
     html: parts.join(''),
     ld,
-    // Un filtro sin hoteles que lo cumplan no es una página útil para Google.
-    noindex: city.adhoc ? !stats?.total : filter ? !stats || fs?.count === 0 : false,
+    // Un filtro sin hoteles que lo cumplan no es una página útil para Google. Si aún no hay datos de la ciudad (por
+    // ejemplo justo después de reiniciar el servidor) no se sabe: la página se deja indexable.
+    noindex: city.adhoc ? !stats?.total : filter ? fs?.count === 0 : false,
   };
 }
 
@@ -379,20 +380,25 @@ export function sitemapIndex(site) {
 }
 
 // statsOf(city): datos de la ciudad si ya se tienen. Los filtros solo entran con al menos 3 hoteles.
+// Para un dominio nuevo, Google indexa mejor pocas páginas fuertes que miles parecidas: en el sitemap van la portada,
+// las páginas generales y las ciudades en todos los idiomas; los filtros (solo con bastantes hoteles) y las rutas de
+// vuelo, de momento solo en español e inglés. Las demás páginas siguen existiendo y enlazadas.
+export const SITEMAP_FULL_LANGS = new Set(['es', 'en']);
+export const SITEMAP_FILTER_MIN = 10;
 export function sitemap(site, lang, statsOf = () => null) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [[homeUrl(lang), 'daily', '1.0'], ...HUBS.map((k) => [hubUrl(lang, k), 'weekly', '0.9'])];
   for (const c of CITIES) {
     urls.push([cityUrl(lang, c), 'daily', '0.8']);
     const s = statsOf(c);
-    if (!s) continue;
+    if (!s || !SITEMAP_FULL_LANGS.has(lang)) continue;
     for (const f of FILTERS) {
       if (f.types && !f.types.includes(c.type)) continue;
       const n = s.filters?.[f.id]?.count;
-      if (n != null ? n >= 3 : s.total >= 20) urls.push([cityUrl(lang, c, f), 'weekly', '0.6']);
+      if (n != null && n >= SITEMAP_FILTER_MIN) urls.push([cityUrl(lang, c, f), 'weekly', '0.6']);
     }
   }
-  for (const [o, d] of ROUTE_CITIES) urls.push([routeUrl(lang, o, d), 'daily', '0.7']);
+  if (SITEMAP_FULL_LANGS.has(lang)) for (const [o, d] of ROUTE_CITIES) urls.push([routeUrl(lang, o, d), 'daily', '0.7']);
   if (lang === 'es') urls.push(['/legal.html', 'yearly', '0.2']);
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
     .map(([p, f, pr]) => `  <url><loc>${esc(site + p)}</loc><lastmod>${today}</lastmod><changefreq>${f}</changefreq><priority>${pr}</priority></url>`)

@@ -205,7 +205,7 @@ test('IndexNow: clave publicada y envío de todas las páginas', async () => {
   process.env.SITE_URL = 'https://diaslibre.com';
   try {
     const r = await app.locals.submitIndexNow(async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200 }; });
-    assert.ok(r.sent > 3000);
+    assert.ok(r.sent > 2500);
     assert.equal(sent[0].host, 'diaslibre.com');
     assert.ok(sent[0].urlList.includes('https://diaslibre.com/de/hotels/sevilla'));
     assert.equal((await app.locals.submitIndexNow(async () => { throw new Error('no debería enviar'); })).sent, 0);

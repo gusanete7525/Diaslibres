@@ -125,6 +125,10 @@ test('ciudades, filtros y rutas siguen igual', async () => {
   const madrid = CITIES.find((c) => c.es === 'Madrid');
   const empty = cityPage('es', madrid, { id: 'spa', fac: ['spa'], title: 'Hoteles con spa en {city}', slug: { es: 'con-spa' } }, { total: 10, stars: [0, 0, 0, 0, 0], fac: {}, stay: {}, top: [], filters: { spa: { count: 0, top: [] } } });
   assert.equal(empty.noindex, true);
+  // Sin datos todavía de la ciudad (recién reiniciado), el filtro no se marca noindex.
+  assert.notEqual(cityPage('es', madrid, { id: 'spa', fac: ['spa'], title: 'Hoteles con spa en {city}', slug: { es: 'con-spa' } }, null).noindex, true);
+  // Parámetros de campañas en la portada: indexable (el canonical apunta a la portada).
+  assert.doesNotMatch((await html('/?utm_source=x&gclid=y')).body, /name="robots" content="noindex"/);
 });
 
 test('sitemaps: índice por idioma y páginas generales dentro', async () => {
@@ -136,6 +140,10 @@ test('sitemaps: índice por idioma y páginas generales dentro', async () => {
     assert.ok(xml.includes(`<loc>${base}${LANGS[l].prefix}/</loc>`));
   }
   assert.equal((await fetch(base + '/sitemap-xx.xml')).status, 404);
+  // Filtros y rutas, de momento solo en español e inglés.
+  const fr = await (await fetch(`${base}/sitemap-fr.xml`)).text();
+  assert.ok(!fr.includes('/vols/'), 'sin rutas en francés');
+  assert.ok(fr.includes('<loc>' + base + '/fr/hotels/madrid</loc>'), 'con ciudades en francés');
 });
 
 test('robots.txt y llms.txt', async () => {
