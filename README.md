@@ -52,6 +52,14 @@ Tests: `npm test`
 
 Los **24 hoteles son reales** (2 por ciudad): nombre, categoría, dirección, web oficial y una fuente pública de verificación están en `src/catalog.js`. Lo que **no** es real es el inventario: precios y ocupación de «otros clientes» se generan de forma determinista según temporada y fin de semana, y se suman las reservas reales hechas en la web. Las reservas no se envían al hotel y no hay pasarela de pago; para producción haría falta una base de datos, pagos y conexión a proveedores reales (channel manager / GDS).
 
+## Seguridad
+
+- **IP de los visitantes:** solo se confía en un proxy (el de Render), así que nadie puede inventarse su IP con `X-Forwarded-For` para saltarse los límites de intentos. Con otro número de saltos, `TRUST_PROXY=<n>`.
+- **Códigos de reserva:** `DL-` y 8 caracteres sin confusiones (sin 0/O ni 1/I), unos 10¹² combinaciones; se comprueba que no estén ya en uso. Los códigos antiguos de 6 caracteres siguen funcionando.
+- **Límites por IP** cada 10 minutos: 30 búsquedas con IA, 20 intentos de pago y 20 reservas de prueba (`limits` en `createApp`). Además, 20 consultas o cancelaciones fallidas por hora en «Mis reservas» y 10 enlaces de inicio de sesión por hora.
+- Cabeceras `X-Content-Type-Options`, `X-Frame-Options` y `Referrer-Policy`; sin `X-Powered-By`.
+- Las fechas que no existen (31 de febrero) o mal escritas se ignoran; «hoy» es el día en España.
+
 ## Pago y reservas
 
 - **Pago del cliente (por defecto con LiteAPI):** «Pagar y reservar» bloquea la habitación al precio mostrado (`/api/checkout`), muestra el formulario de tarjeta de la pasarela de LiteAPI y, al pagar, el cliente vuelve a `/?pago=<id>`, donde la reserva se confirma con el pago (`/api/checkout/:id/confirm`). Sin pago completado no hay reserva ni cargo. En el entorno de pruebas se paga con la tarjeta `4242 4242 4242 4242`, cualquier fecha futura y cualquier CVC.
@@ -78,7 +86,7 @@ Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la prim
 1. En Render, cambia el servicio al plan **Starter** (de pago) para que la web no se duerma. En `render.yaml` sería `plan: starter`.
 2. Compra el dominio (por ejemplo `diaslibres.es`) en un registrador.
 3. En Render → servicio → **Settings → Custom Domains**, añade el dominio y crea en tu registrador los registros DNS que te indique. Render pone el certificado HTTPS solo.
-4. Define `PUBLIC_URL=https://tudominio.es` para que la vuelta del pago use el dominio.
+4. Define `SITE_URL=https://tudominio.es` (o `PUBLIC_URL`, que también vale) para que los enlaces de inicio de sesión, la vuelta del pago y las páginas para buscadores usen el dominio. Sin ninguna de las dos, en Render se usa la dirección que da Render (`RENDER_EXTERNAL_URL`); la cabecera `Host` de la petición solo se usa en local, porque se puede falsear.
 
 ## Información legal
 
