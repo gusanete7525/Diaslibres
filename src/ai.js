@@ -162,6 +162,9 @@ const STOP = new Set(['la', 'el', 'los', 'las', 'lo', 'mi', 'tu', 'su', 'este', 
   'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'manana', 'hoy', 'pasado', 'proximo', 'proxima', 'cuanto', 'cuantos', 'unos', 'unas', 'poco', 'mucho', 'por', 'para', 'the']);
 // Palabras que cierran el nombre de una ciudad en «de X a Y …».
 const ROUTE_END = new Set(['en', 'con', 'y', 'ida', 'vuelta', 'directo', 'directos', 'sin', 'escala', 'escalas', 'barato', 'baratos', 'economico', 'economicos', 'el', 'a', 'desde', 'hasta', 'hacia']);
+const ARTICLES = ['el', 'la', 'las', 'los'];
+// Sitios genéricos que no son una ciudad («en el campo», «en la costa»).
+const GENERIC = new Set(['campo', 'ciudad', 'pueblo', 'costa', 'interior', 'norte', 'sur', 'este', 'oeste', 'extranjero', 'isla', 'islas', 'rural', 'naturaleza', 'nieve', 'aeropuerto', 'estacion', 'barrio', 'casco']);
 const REGION = { canarias: 'Tenerife', andalucia: 'Sevilla', galicia: 'Vigo', portugal: 'Lisboa', francia: 'París', italia: 'Roma', cataluna: 'Barcelona', baleares: 'Ibiza' };
 
 // La palabra entera («roma», no «romántica»).
@@ -196,13 +199,23 @@ export function localParse(text, lang = 'es') {
   // Ciudad que no está en nuestras listas («de Lima a Chiclayo»): va tal cual y el servidor busca su aeropuerto.
   const rawPlace = (s) => {
     const words = [];
-    for (const w of s.trim().split(/\s+/)) {
-      const joins = ['la', 'las', 'los'].includes(w) && ['de', 'del'].includes(words.at(-1)); // «Santa Cruz de la Sierra»
-      if ((STOP.has(w) && !joins) || ROUTE_END.has(w) || MONTHS.includes(w) || w in NUMBERS || /^\d/.test(w) || words.length === 6) break;
+    for (const piece of s.trim().split(/\s+/)) {
+      const w = piece.replace(/[^\p{L}\d'-]+$/u, '');
+      const lead = !words.length && ARTICLES.includes(w); // «La Paz», «Las Palmas», «El Calafate»
+      const joins = ARTICLES.includes(w) && ['de', 'del'].includes(words.at(-1)); // «Santa Cruz de la Sierra»
+      if (!w || ((STOP.has(w) || ROUTE_END.has(w)) && !lead && !joins) || MONTHS.includes(w) || w in NUMBERS || /^\d/.test(w) || words.length === 6) break;
       words.push(w);
+      if (w !== piece) break; // «gandía, con piscina»
     }
-    while (['de', 'del', 'la', 'las', 'los'].includes(words.at(-1))) words.pop();
-    return words.length ? words.join(' ').replace(/(^|\s)(\p{L})/gu, (x, sp, c) => sp + c.toUpperCase()).replace(/ (De|Del|La|Las|Los)(?= )/g, (x) => x.toLowerCase()) : null;
+    while (['de', 'del', ...ARTICLES].includes(words.at(-1))) words.pop();
+    // «la ciudad de Oaxaca» → «Oaxaca».
+    if (ARTICLES.includes(words[0]) && GENERIC.has(words[1]) && words[2] === 'de') words.splice(0, 3);
+    const named = words.filter((w) => !ARTICLES.includes(w));
+    // «la playa», «la montaña»: es un tipo de viaje, no un sitio.
+    if (!named.length || (named.length === 1 && GENERIC.has(named[0])) || (named.length === 1 && Object.values(TAG_WORDS).flat().some((x) => named[0].startsWith(x)))) return null;
+    // Con las tildes que escribió el usuario («Medellín», no «Medellin»).
+    const typed = new Map(text.split(/[^\p{L}'-]+/u).filter(Boolean).map((w) => [norm(w), w]));
+    return words.map((w, i) => (i && ['de', 'del', ...ARTICLES].includes(w) ? w : (typed.get(w) ?? w).replace(/^\p{L}/u, (c) => c.toUpperCase()))).join(' ');
   };
 
   let origin = null;
@@ -223,14 +236,11 @@ export function localParse(text, lang = 'es') {
     const m = text.match(/(?<!\p{L})(?:en|a|de)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)(?:\s+(?:de\s+|del\s+|la\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)*)/u);
     if (m && !MONTHS.includes(norm(m[1]))) destination = m[1];
   }
-  // También en minúsculas («algo en gandía»), si la palabra no es un mes, una época u otra cosa conocida.
+  // También en minúsculas («algo en gandía», «hoteles en la paz»), si no es un mes, una época u otra cosa conocida.
   if (!destination && kind === 'hotel') {
-    for (const m of text.matchAll(/(?<!\p{L})(?:en|a)\s+([a-záéíóúñüç][\wáéíóúñüç'-]+(?:\s+(?:de|del|la)\s+[a-záéíóúñüç][\wáéíóúñüç'-]+)?)/giu)) {
-      const first = norm(m[1].split(/\s+/)[0]);
-      const tagWord = Object.values(TAG_WORDS).flat().some((w) => first.startsWith(w));
-      if (MONTHS.includes(first) || STOP.has(first) || first in NUMBERS || tagWord || /^\d/.test(first)) continue;
-      destination = m[1].replace(/(^|\s)(\p{L})/gu, (x, sp, c) => sp + c.toUpperCase()).replace(/ (De|Del|La) /g, (x) => x.toLowerCase());
-      break;
+    for (const m of t.matchAll(/(?:^|\s)(?:en|a)\s+/g)) {
+      destination = rawPlace(t.slice(m.index + m[0].length));
+      if (destination) break;
     }
   }
 

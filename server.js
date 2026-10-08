@@ -454,7 +454,14 @@ export function createApp({
     const place = cityByName(text);
     if (place?.iata) return { code: place.iata, name: place.es };
     if (text.length < 2) return null;
-    const [first] = await live.airports(text);
+    const found = await live.airports(text);
+    // «Ciudad del Cabo» no da Cape Town, sino Cabo Frío: si ningún aeropuerto es de esa ciudad, se busca por su nombre en inglés.
+    let first = found.find((a) => norm(a.city) === norm(text) || norm(a.name).includes(norm(text)));
+    if (!first) {
+      const en = await live.placeName(text).catch(() => null);
+      if (en && norm(en) !== norm(text)) [first] = await live.airports(en).catch(() => []);
+    }
+    first ??= found[0];
     return first ? { code: first.code, name: first.city || first.name } : null;
   }
 

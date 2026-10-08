@@ -501,6 +501,13 @@ export class LiteApi {
   // Búsqueda → verificación del precio → prebook (crea el pago con Stripe) → el
   // cliente paga → booking. Nuitée cobra al cliente como comerciante (Merchant of Record).
 
+  // Nombre de un sitio en otro idioma («Ciudad del Cabo» → «Cape Town»), para buscar su aeropuerto.
+  async placeName(text, lang = 'en') {
+    const { data = [] } = await this.#request('GET', `${API}/data/places?textQuery=${encodeURIComponent(text)}&language=${lang}`);
+    const place = data.find((p) => p.types?.includes('locality')) || data[0];
+    return place?.displayName || null;
+  }
+
   async airports(q) {
     const { data = [] } = await this.#request('GET', `${API}/data/flights/airports?q=${encodeURIComponent(q)}`);
     return data.flatMap((set) => set.airports || []).filter((a) => a.iata).map((a) => ({ code: a.iata, name: a.name, city: a.city, country: a.country }));

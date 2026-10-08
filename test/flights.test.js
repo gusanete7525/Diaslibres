@@ -21,6 +21,10 @@ function fakeFlights(state) {
     const u = String(url).replace(/^https:\/\/[^/]+\/v3\.0/, '');
     const body = opts.body ? JSON.parse(opts.body) : null;
     state.log.push(`${opts.method} ${u}`);
+    // «Ciudad del Cabo» da Cabo Frío; su nombre en inglés, Cape Town.
+    if (u.startsWith('/data/flights/airports?q=Ciudad')) return Response.json({ data: [{ airports: [{ iata: 'CFB', city: 'Cabo Frio', name: 'Cabo Frio Airport' }] }] });
+    if (u.startsWith('/data/flights/airports?q=Cape')) return Response.json({ data: [{ airports: [{ iata: 'CPT', city: 'Cape Town', name: 'Cape Town International' }] }] });
+    if (u.startsWith('/data/places?textQuery=Ciudad')) return Response.json({ data: [{ placeId: 'p1', displayName: 'Cape Town', types: ['locality'] }] });
     if (u.startsWith('/data/flights/airports')) return Response.json({ data: [{ airports: [{ iata: 'OPO', city: 'Oporto', name: 'Francisco Sá Carneiro' }] }] });
     if (u === '/flights/rates') {
       state.search = body;
@@ -154,6 +158,8 @@ test('vuelos reales: búsqueda, precio, datos de pasajeros, pago y confirmación
     const roundTrip = await fetch(`${base}/api/flights?origin=MAD&destination=Oporto&date=2030-03-10&returnDate=2030-03-15`).then((r) => r.json());
     assert.equal(roundTrip.destination.code, 'OPO', 'ciudades fuera de la lista: se buscan en LiteAPI');
     assert.deepEqual(state.search.legs[1], { origin: 'OPO', destination: 'MAD', date: '2030-03-15', direction: 'INBOUND' });
+    const cape = await fetch(`${base}/api/flights?origin=MAD&destination=${encodeURIComponent('Ciudad del Cabo')}&date=2030-03-10`).then((r) => r.json());
+    assert.equal(cape.destination.code, 'CPT', 'si ningún aeropuerto es de esa ciudad, se busca por su nombre en inglés');
   } finally {
     server.close();
   }
