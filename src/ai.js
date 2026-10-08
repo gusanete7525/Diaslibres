@@ -49,8 +49,8 @@ const SYSTEM = `Eres el buscador inteligente de DíasLibres, una agencia de rese
 Convierte la petición del usuario en filtros de búsqueda. Hoy es ${'{TODAY}'}.
 - kind: "flight" si pide vuelos/avión/volar; "train" si pide tren (AVE, Eurostar, TGV, Ouigo, Iryo…) o pregunta cómo ir o viajar de una ciudad europea a otra sin decir avión (la web compara tren y avión puerta a puerta); si no, "hotel".
 - Para trenes, origin y destination son nombres de ciudad (p. ej. "Madrid", "París").
-- destination: para hoteles, la ciudad o pueblo que pida (cualquiera del mundo: la web busca hoteles reales en OpenStreetMap; ciudades con catálogo propio: ${CITIES.join(', ')}). Para vuelos, un aeropuerto de esta lista: ${Object.entries(AIRPORTS).map(([c, n]) => `${c} (${n})`).join(', ')}. Si menciona una zona o país, elige la ciudad más adecuada o déjalo en null si encajan varias.
-- origin: solo para vuelos (código IATA) o trenes (ciudad), si lo dice.
+- destination: para hoteles, la ciudad o pueblo que pida (cualquiera del mundo: la web busca hoteles reales en OpenStreetMap; ciudades con catálogo propio: ${CITIES.join(', ')}). Para vuelos, un aeropuerto de esta lista: ${Object.entries(AIRPORTS).map(([c, n]) => `${c} (${n})`).join(', ')}; si la ciudad no está en la lista, su código IATA o su nombre (p. ej. "Chiclayo"): la web busca vuelos a cualquier aeropuerto del mundo. Si menciona una zona o país, elige la ciudad más adecuada o déjalo en null si encajan varias.
+- origin: solo para vuelos (código IATA o nombre de la ciudad) o trenes (ciudad), si lo dice.
 - checkIn: solo si da una fecha o mes concreto (para un mes sin día, usa el primer día futuro de ese mes). Si no, null: la web enseña un calendario de disponibilidad y el usuario no está obligado a elegir fechas.
 - nights: duración de la estancia (fin de semana = 2, una semana = 7).
 - maxPrice: precio máximo por noche (hotel) o por billete (vuelo) en euros, si lo indica o si dice "barato" pon un valor razonable o deja null y usa sort "price".
@@ -160,6 +160,8 @@ const STOP = new Set(['la', 'el', 'los', 'las', 'lo', 'mi', 'tu', 'su', 'este', 
   'casa', 'apartamento', 'pareja', 'familia', 'solas', 'solo', 'sola', 'buen', 'buena', 'precio', 'oferta', 'ver', 'dormir', 'descansar', 'pasar', 'menos', 'partir', 'poder', 'ser',
   'mitad', 'centro', 'zona', 'sitio', 'lugar', 'algo', 'donde', 'nuestro', 'nuestra', 'vacaciones', 'hora', 'dia', 'dias', 'noche', 'noches', 'mes', 'ano', 'lunes', 'martes',
   'miercoles', 'jueves', 'viernes', 'sabado', 'domingo', 'manana', 'hoy', 'pasado', 'proximo', 'proxima', 'cuanto', 'cuantos', 'unos', 'unas', 'poco', 'mucho', 'por', 'para', 'the']);
+// Palabras que cierran el nombre de una ciudad en «de X a Y …».
+const ROUTE_END = new Set(['en', 'con', 'y', 'ida', 'vuelta', 'directo', 'directos', 'sin', 'escala', 'escalas', 'barato', 'baratos', 'economico', 'economicos', 'el', 'a', 'desde', 'hasta', 'hacia']);
 const REGION = { canarias: 'Tenerife', andalucia: 'Sevilla', galicia: 'Vigo', portugal: 'Lisboa', francia: 'París', italia: 'Roma', cataluna: 'Barcelona', baleares: 'Ibiza' };
 
 // La palabra entera («roma», no «romántica»).
@@ -191,11 +193,23 @@ export function localParse(text, lang = 'es') {
     return null;
   };
 
+  // Ciudad que no está en nuestras listas («de Lima a Chiclayo»): va tal cual y el servidor busca su aeropuerto.
+  const rawPlace = (s) => {
+    const words = [];
+    for (const w of s.trim().split(/\s+/)) {
+      const joins = ['la', 'las', 'los'].includes(w) && ['de', 'del'].includes(words.at(-1)); // «Santa Cruz de la Sierra»
+      if ((STOP.has(w) && !joins) || ROUTE_END.has(w) || MONTHS.includes(w) || w in NUMBERS || /^\d/.test(w) || words.length === 6) break;
+      words.push(w);
+    }
+    while (['de', 'del', 'la', 'las', 'los'].includes(words.at(-1))) words.pop();
+    return words.length ? words.join(' ').replace(/(^|\s)(\p{L})/gu, (x, sp, c) => sp + c.toUpperCase()).replace(/ (De|Del|La|Las|Los)(?= )/g, (x) => x.toLowerCase()) : null;
+  };
+
   let origin = null;
   let destination = null;
   if (kind !== 'hotel' && route) {
-    origin = findCity(route[1]);
-    destination = findCity(route[2]);
+    origin = findCity(route[1]) ?? rawPlace(route[1]);
+    destination = findCity(route[2]) ?? rawPlace(route[2]);
   }
   destination ??= findCity(t);
   // Cualquier otra ciudad escrita con mayúscula tras "en"/"a" (hoteles vía OpenStreetMap).
