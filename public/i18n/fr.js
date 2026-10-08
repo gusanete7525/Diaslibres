@@ -324,6 +324,8 @@ export default {
  "en {board}": "en {board}",
  "ordenados por precio": "triés par prix",
  "ordenados por puntuación": "triés par note",
+ "¿Qué {place}?": "Quelle ville : {place} ?",
+ "¿Querías decir…?": "Vouliez-vous dire…?",
  "Busco {what}.": "Je cherche : {what}.",
  "a {place}": "vers {place}",
  "en {place}": "à {place}",

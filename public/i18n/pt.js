@@ -324,6 +324,8 @@ export default {
  "en {board}": "com {board}",
  "ordenados por precio": "ordenados por preço",
  "ordenados por puntuación": "ordenados por pontuação",
+ "¿Qué {place}?": "Qual {place}?",
+ "¿Querías decir…?": "Quis dizer…?",
  "Busco {what}.": "Procuro {what}.",
  "a {place}": "para {place}",
  "en {place}": "em {place}",

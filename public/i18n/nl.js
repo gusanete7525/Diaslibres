@@ -324,6 +324,8 @@ export default {
  "en {board}": "met {board}",
  "ordenados por precio": "gesorteerd op prijs",
  "ordenados por puntuación": "gesorteerd op score",
+ "¿Qué {place}?": "Welk {place}?",
+ "¿Querías decir…?": "Bedoelde je…?",
  "Busco {what}.": "Ik zoek {what}.",
  "a {place}": "naar {place}",
  "en {place}": "in {place}",

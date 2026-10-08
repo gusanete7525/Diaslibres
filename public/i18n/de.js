@@ -324,6 +324,8 @@ export default {
  "en {board}": "mit {board}",
  "ordenados por precio": "sortiert nach Preis",
  "ordenados por puntuación": "sortiert nach Bewertung",
+ "¿Qué {place}?": "Welches {place}?",
+ "¿Querías decir…?": "Meinten Sie…?",
  "Busco {what}.": "Ich suche {what}.",
  "a {place}": "nach {place}",
  "en {place}": "in {place}",
