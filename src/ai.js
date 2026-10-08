@@ -117,6 +117,8 @@ export function sanitize(f) {
     kind: ['flight', 'train'].includes(f.kind) ? f.kind : 'hotel',
     destination: f.destination || null,
     origin: f.origin || null,
+    originText: typeof f.originText === 'string' ? f.originText : null,
+    destinationText: typeof f.destinationText === 'string' ? f.destinationText : null,
     checkIn: isISODate(f.checkIn) && f.checkIn >= today && f.checkIn <= addDays(today, 330) ? f.checkIn : null,
     nights: f.nights ? Math.max(1, Math.min(30, Math.round(f.nights))) : null,
     maxPrice: f.maxPrice > 0 ? Math.round(f.maxPrice) : null,
@@ -220,15 +222,20 @@ export function localParse(text, lang = 'es') {
 
   let origin = null;
   let destination = null;
+  // Lo que escribió el usuario, para preguntar si hay varias ciudades con ese nombre («Cartagena»).
+  let originText = null;
+  let destinationText = null;
   if (kind !== 'hotel' && route) {
-    origin = findCity(route[1]) ?? rawPlace(route[1]);
-    destination = findCity(route[2]) ?? rawPlace(route[2]);
+    originText = rawPlace(route[1]);
+    destinationText = rawPlace(route[2]);
+    origin = findCity(route[1]) ?? originText;
+    destination = findCity(route[2]) ?? destinationText;
   } else if (kind === 'flight') {
     // Una sola ciudad: «vuelos a Chiclayo», «vuelo desde Chiclayo».
     const to = t.match(/(?:^|\s)(?:a|hacia|hasta)\s+([a-z ]+)/);
     const from = t.match(/(?:^|\s)desde\s+([a-z ]+)/);
-    if (to) destination = findCity(to[1]) ?? rawPlace(to[1]);
-    if (from) origin = findCity(from[1]) ?? rawPlace(from[1]);
+    if (to) { destinationText = rawPlace(to[1]); destination = findCity(to[1]) ?? destinationText; }
+    if (from) { originText = rawPlace(from[1]); origin = findCity(from[1]) ?? originText; }
   }
   if (!origin) destination ??= findCity(t);
   // Cualquier otra ciudad escrita con mayúscula tras "en"/"a" (hoteles vía OpenStreetMap).
@@ -344,5 +351,5 @@ export function localParse(text, lang = 'es') {
   if (cheap) parts.push(x('ordenados por precio'));
   else if (best) parts.push(x('ordenados por puntuación'));
 
-  return sanitize({ kind, destination, origin, checkIn, nights, maxPrice, minStars, tags, fac, adults, board, stay, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: x('Busco {what}.', { what: parts.join(' ') }) });
+  return sanitize({ kind, destination, origin, originText, destinationText, checkIn, nights, maxPrice, minStars, tags, fac, adults, board, stay, stops, sort: cheap ? 'price' : best ? 'rating' : 'stars', explanation: x('Busco {what}.', { what: parts.join(' ') }) });
 }

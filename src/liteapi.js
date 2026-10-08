@@ -508,6 +508,15 @@ export class LiteApi {
     return place?.displayName || null;
   }
 
+  // Ciudades con ese nombre (para preguntar «¿Qué Córdoba?»): nombre y país en `lang`.
+  async findPlaces(text, lang = 'es') {
+    const { data = [] } = await this.#request('GET', `${API}/data/places?textQuery=${encodeURIComponent(text)}&language=${lang}`);
+    return data.filter((p) => !p.types || p.types.includes('locality')).map((p) => {
+      const parts = String(p.formattedAddress || '').split(',').map((x) => x.trim()).filter(Boolean);
+      return { name: p.displayName, country: parts.length > 1 ? parts.at(-1) : null, countryName: parts.length > 1 ? parts.at(-1) : null };
+    });
+  }
+
   async airports(q) {
     const { data = [] } = await this.#request('GET', `${API}/data/flights/airports?q=${encodeURIComponent(q)}`);
     return data.flatMap((set) => set.airports || []).filter((a) => a.iata).map((a) => ({ code: a.iata, name: a.name, city: a.city, country: a.country }));

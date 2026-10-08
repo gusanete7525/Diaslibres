@@ -431,6 +431,23 @@ async function aiSearchSubmit() {
       return;
     }
     setView(f.kind === 'flight' ? 'flights' : f.kind === 'train' ? 'trains' : 'hotels');
+    // «¿Qué Cartagena?», «¿Querías decir…?»: se busca cuando el usuario elige.
+    if (f.ask?.options?.length) {
+      const q = document.createElement('span');
+      q.className = 'ai-ask';
+      q.append(document.createElement('br'), Object.assign(document.createElement('strong'), { textContent: f.ask.question }), ' ');
+      for (const o of f.ask.options) {
+        const b = Object.assign(document.createElement('button'), { type: 'button', className: 'chip', textContent: o.label });
+        b.addEventListener('click', () => {
+          filters[f.ask.field].value = o.value;
+          q.remove();
+          search();
+        });
+        q.append(b, ' ');
+      }
+      ex.append(q);
+      return;
+    }
     await search();
   } catch (err) {
     toast(err.message);

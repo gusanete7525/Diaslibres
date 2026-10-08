@@ -574,3 +574,5 @@ button.best-box:hover .best-dates { color: var(--brand); }
   .hero::before { height: 300px; }
   .filters label { padding: 6px 10px 2px; }
 }
+.ai-ask button.chip { background: var(--surface); cursor: pointer; margin: 6px 4px 0 0; font: inherit; font-size: 14px; color: var(--text); }
+.ai-ask button.chip:hover { border-color: var(--brand); }

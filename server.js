@@ -5,6 +5,7 @@ import { join, dirname } from 'node:path';
 import { BookingStore, PgBookingStore, createStore } from './src/store.js';
 import { searchHotels, searchFlights, quote, todayISO, addDays, isISODate } from './src/availability.js';
 import { aiSearch } from './src/ai.js';
+import { makeResolver } from './src/resolve.js';
 import { AIRPORTS } from './src/catalog.js';
 import { readFileSync } from 'node:fs';
 import { minify } from 'terser';
@@ -707,9 +708,12 @@ export function createApp({
   }));
   app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, flights: liveFlights, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
 
+  // «¿Qué Cartagena?», «¿Querías decir Chiclayo?»: la IA pregunta si no puede decidir la ciudad.
+  const resolvePlaces = makeResolver(live);
   app.post('/api/ai-search', aiLimit, async (req, res) => {
     try {
-      res.json(await aiSearch(req.body?.query, langOf(req)));
+      const lang = langOf(req);
+      res.json(await resolvePlaces(await aiSearch(req.body?.query, lang), lang, String(req.body?.query || '')));
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
