@@ -65,6 +65,22 @@ export function createApp({
   const aiLimit = rateLimit({ max: limits.aiSearch, windowMs: limits.windowMs, message: 'Has hecho muchas búsquedas seguidas. Prueba dentro de unos minutos.' });
   const checkoutLimit = rateLimit({ max: limits.checkout, windowMs: limits.windowMs, message: 'Demasiados intentos de pago seguidos. Prueba dentro de unos minutos.' });
   const bookingLimit = rateLimit({ max: limits.demoBooking, windowMs: limits.windowMs, message: 'Demasiadas reservas seguidas. Prueba dentro de unos minutos.' });
+  // Las reservas de un mismo hotel o vuelo, de una en una: entre leer la disponibilidad y guardar hay esperas (código,
+  // base de datos), y dos reservas simultáneas de la última plaza veían las dos hueco. Vale para una sola instancia.
+  const locks = new Map();
+  const oneAtATime = async (key, fn) => {
+    const previous = locks.get(key) || Promise.resolve();
+    let release;
+    const mine = previous.then(() => new Promise((resolve) => { release = resolve; }));
+    locks.set(key, mine);
+    await previous;
+    try {
+      return await fn();
+    } finally {
+      release();
+      if (locks.get(key) === mine) locks.delete(key);
+    }
+  };
   // Un código que no esté ya en uso (con la base de datos, uno repetido rompería la reserva después de prerreservar).
   const newCode = async () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -829,22 +845,24 @@ export function createApp({
       }
     }
     try {
-      const q = quote(await store.all(), body, osm?.known());
-      const booking = await store.add({
-        code: await newCode(),
-        lang: langOf(req),
-        type: body.type,
-        itemId: q.item.id,
-        itemName: body.type === 'hotel' ? `${q.item.name} (${q.item.city})` : `${q.item.airline} ${q.item.origin}→${q.item.destination} ${q.item.departure}`,
-        checkIn: body.type === 'hotel' ? body.checkIn : undefined,
-        checkOut: body.type === 'hotel' ? body.checkOut : undefined,
-        date: body.type === 'flight' ? body.date : undefined,
-        units: q.units,
-        total: q.total,
-        name,
-        email,
-        status: 'confirmada',
-        createdAt: new Date().toISOString(),
+      const booking = await oneAtATime('item:' + String(body.itemId), async () => {
+        const q = quote(await store.all(), body, osm?.known());
+        return store.add({
+          code: await newCode(),
+          lang: langOf(req),
+          type: body.type,
+          itemId: q.item.id,
+          itemName: body.type === 'hotel' ? `${q.item.name} (${q.item.city})` : `${q.item.airline} ${q.item.origin}→${q.item.destination} ${q.item.departure}`,
+          checkIn: body.type === 'hotel' ? body.checkIn : undefined,
+          checkOut: body.type === 'hotel' ? body.checkOut : undefined,
+          date: body.type === 'flight' ? body.date : undefined,
+          units: q.units,
+          total: q.total,
+          name,
+          email,
+          status: 'confirmada',
+          createdAt: new Date().toISOString(),
+        });
       });
       notify('bookingConfirmed', booking);
       res.status(201).json(publicBooking(booking));

@@ -140,6 +140,8 @@ button, input, select { font: inherit; color: inherit; }
 }
 .ai-badge { font-size: 13px; font-weight: 700; color: var(--brand); white-space: nowrap; }
 .ai-box input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; padding: 8px 4px; font-size: 16px; }
+/* El campo no lleva contorno propio: se marca la caja entera para que el foco se vea. */
+.ai-box:focus-within { outline: 3px solid var(--brand); outline-offset: 2px; }
 .examples { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
 .ex-card {
   position: relative; display: block; padding: 0; border: 0; border-radius: 14px; overflow: hidden; cursor: pointer;
