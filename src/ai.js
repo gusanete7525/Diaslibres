@@ -210,8 +210,14 @@ export function localParse(text, lang = 'es') {
   if (kind !== 'hotel' && route) {
     origin = findCity(route[1]) ?? rawPlace(route[1]);
     destination = findCity(route[2]) ?? rawPlace(route[2]);
+  } else if (kind === 'flight') {
+    // Una sola ciudad: «vuelos a Chiclayo», «vuelo desde Chiclayo».
+    const to = t.match(/(?:^|\s)(?:a|hacia|hasta)\s+([a-z ]+)/);
+    const from = t.match(/(?:^|\s)desde\s+([a-z ]+)/);
+    if (to) destination = findCity(to[1]) ?? rawPlace(to[1]);
+    if (from) origin = findCity(from[1]) ?? rawPlace(from[1]);
   }
-  destination ??= findCity(t);
+  if (!origin) destination ??= findCity(t);
   // Cualquier otra ciudad escrita con mayúscula tras "en"/"a" (hoteles vía OpenStreetMap).
   if (!destination && kind === 'hotel') {
     const m = text.match(/(?<!\p{L})(?:en|a|de)\s+((?:[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)(?:\s+(?:de\s+|del\s+|la\s+)?[A-ZÁÉÍÓÚÑ][\wáéíóúñüç'-]+)*)/u);

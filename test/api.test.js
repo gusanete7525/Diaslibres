@@ -97,6 +97,10 @@ test('búsqueda IA (intérprete local) entiende frases en español', async () =>
   assert.deepEqual([cix.origin, cix.destination, cix.adults], ['LIM', 'Chiclayo', 2]);
   assert.deepEqual([localParse('vuelo a trujillo desde lima').origin, localParse('vuelo a trujillo desde lima').destination], ['LIM', 'Trujillo']);
   assert.equal(localParse('vuelo de madrid a santa cruz de la sierra').destination, 'Santa Cruz de la Sierra');
+  assert.equal(localParse('vuelos a chiclayo').destination, 'Chiclayo');
+  assert.equal(localParse('vuelo desde chiclayo').origin, 'Chiclayo');
+  assert.deepEqual([localParse('vuelo desde lima').origin, localParse('vuelo desde lima').destination ?? null], ['LIM', null]);
+  assert.equal(localParse('vuelos a partir del 10 de noviembre').destination ?? null, null);
 
   assert.equal(localParse('algo en gandía este finde').destination, 'Gandía');
   assert.equal(localParse('hoteles en santiago de compostela').destination, 'Santiago de Compostela');
