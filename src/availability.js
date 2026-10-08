@@ -2,8 +2,10 @@ import { HOTELS, FLIGHTS, AIRPORTS, seeded, demand } from './catalog.js';
 
 export const MAX_DAYS = 180;
 
-export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+// «Hoy» en España: con la fecha UTC, entre las 00:00 y las 02:00 se aceptaba como entrada el día que ya había pasado.
+const madridDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+export function todayISO(now = new Date()) {
+  return madridDate.format(now);
 }
 
 export function addDays(iso, n) {
@@ -12,8 +14,11 @@ export function addDays(iso, n) {
   return d.toISOString().slice(0, 10);
 }
 
+// Una fecha AAAA-MM-DD que existe (Date.parse acepta el 31 de febrero y lo convierte en marzo).
 export function isISODate(s) {
-  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + 'T00:00:00Z'));
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const time = Date.parse(s + 'T00:00:00Z');
+  return !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === s;
 }
 
 export function daysBetween(a, b) {
@@ -85,7 +90,7 @@ const norm = (s) =>
 
 // `extra`: hoteles adicionales ya acotados al destino (p. ej. de OpenStreetMap).
 export function searchHotels(bookings, f = {}, extra = []) {
-  const start = f.start && f.start >= todayISO() ? f.start : todayISO();
+  const start = isISODate(f.start) && f.start >= todayISO() ? f.start : todayISO();
   const days = Math.min(MAX_DAYS, Math.max(7, Number(f.days) || 60));
   const nights = Math.max(1, Math.min(30, Number(f.nights) || 3));
   const q = norm(f.destination);
@@ -118,7 +123,7 @@ export function searchHotels(bookings, f = {}, extra = []) {
 }
 
 export function searchFlights(bookings, f = {}) {
-  const start = f.start && f.start >= todayISO() ? f.start : todayISO();
+  const start = isISODate(f.start) && f.start >= todayISO() ? f.start : todayISO();
   const days = Math.min(MAX_DAYS, Math.max(7, Number(f.days) || 60));
   const matchAirport = (code, q) => !q || norm(code) === norm(q) || norm(AIRPORTS[code]).includes(norm(q));
   let list = FLIGHTS.filter((fl) => matchAirport(fl.origin, f.origin) && matchAirport(fl.destination, f.destination)).map((fl) => {

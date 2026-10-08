@@ -19,6 +19,25 @@ import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES,
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+// Códigos de reserva: 8 caracteres de un alfabeto sin confusiones (sin 0/O ni 1/I), unos 10^12 combinaciones, para que
+// no se puedan adivinar a partir de un email.
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const randomCode = () => 'DL-' + [...randomBytes(8)].map((byte) => CODE_ALPHABET[byte % 32]).join('');
+
+// Límite de peticiones por IP en una ventana de tiempo (en memoria; vale para una sola instancia).
+export function rateLimit({ max, windowMs, message = 'Demasiadas peticiones. Prueba dentro de un rato.' }) {
+  const hits = new Map(); // ip → [marcas de tiempo]
+  return (req, res, next) => {
+    const now = Date.now();
+    const recent = (hits.get(req.ip) || []).filter((t) => now - t < windowMs);
+    if (recent.length >= max) return res.status(429).json({ error: message });
+    recent.push(now);
+    hits.set(req.ip, recent);
+    if (hits.size > 5000) hits.delete(hits.keys().next().value);
+    next();
+  };
+}
+
 export function createApp({
   store = new BookingStore(join(root, 'data', 'bookings.json')),
   osm = process.env.DIASLIBRES_OSM === 'off' ? null : new OsmHotels({ file: join(root, 'data', 'osm-cache.json') }),
@@ -28,15 +47,38 @@ export function createApp({
   livePayment = process.env.LITEAPI_PAYMENT === 'account' ? 'account' : 'customer',
   mailer = new Mailer(),
   accounts = new Accounts({ store, mailer }),
+  // Peticiones por IP y por ventana: la búsqueda con IA cuesta una llamada a Claude, y cada pago o reserva crea una
+  // prerreserva en LiteAPI o una fila en la base de datos.
+  limits = { aiSearch: 30, checkout: 20, demoBooking: 20, windowMs: 10 * 60 * 1000 },
 } = {}) {
   // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
   const notify = (fn, b) => { if (b && mailer?.[fn]) Promise.resolve().then(() => mailer[fn](b)).catch(() => {}); };
   const app = express();
-  app.set('trust proxy', true); // https correcto detrás del proxy de Render
+  // Solo el proxy de Render (un salto): con `true`, cualquiera podría poner su propia X-Forwarded-For y cambiar su IP,
+  // y los límites de intentos por IP no servirían. TRUST_PROXY permite otro número de saltos.
+  app.set('trust proxy', Number(process.env.TRUST_PROXY ?? 1));
+  app.disable('x-powered-by');
+  app.use((_req, res, next) => {
+    res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'strict-origin-when-cross-origin' });
+    next();
+  });
+  const aiLimit = rateLimit({ max: limits.aiSearch, windowMs: limits.windowMs, message: 'Has hecho muchas búsquedas seguidas. Prueba dentro de unos minutos.' });
+  const checkoutLimit = rateLimit({ max: limits.checkout, windowMs: limits.windowMs, message: 'Demasiados intentos de pago seguidos. Prueba dentro de unos minutos.' });
+  const bookingLimit = rateLimit({ max: limits.demoBooking, windowMs: limits.windowMs, message: 'Demasiadas reservas seguidas. Prueba dentro de unos minutos.' });
+  // Un código que no esté ya en uso (con la base de datos, uno repetido rompería la reserva después de prerreservar).
+  const newCode = async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = randomCode();
+      if (!(await store.get(code))) return code;
+    }
+    throw new Error('No se pudo generar un código de reserva.');
+  };
   app.use(express.json({ limit: '20kb' }));
   // ---------- Buscadores y app Android ----------
   const indexHtml = readFileSync(join(root, 'public', 'index.html'), 'utf8');
-  const siteUrl = (req) => (process.env.SITE_URL?.trim() || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  // La dirección pública: SITE_URL o, en Render, la que da Render. Solo en local se usa la cabecera Host, porque se puede
+  // falsear: con ella, un enlace de inicio de sesión pedido para otra persona podría apuntar a una web ajena.
+  const siteUrl = (req) => (process.env.SITE_URL?.trim() || process.env.PUBLIC_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim() || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
   // Con dominio propio (SITE_URL), las demás direcciones (onrender.com, www.) redirigen a él.
   // El archivo de verificación de Google no: la propiedad antigua debe seguir verificada.
   app.use((req, res, next) => {
@@ -529,7 +571,7 @@ export function createApp({
 
   // 1) Bloquea la tarifa y crea el pago; 2) el cliente paga con Stripe y vuelve a
   // /?vuelo=<id>; 3) se confirma la reserva con la aerolínea.
-  app.post('/api/flights/checkout', async (req, res) => {
+  app.post('/api/flights/checkout', checkoutLimit, async (req, res) => {
     if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
     const body = req.body || {};
     const trip = live.flightOffer(String(body.offerId || ''));
@@ -542,7 +584,7 @@ export function createApp({
       const pre = await live.flightPrebook({ offerId: trip.offerId, contact: who.contact, passengers: who.passengers });
       const checkoutId = randomBytes(16).toString('hex');
       const booking = await store.add({
-        code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        code: await newCode(),
         lang: langOf(req),
         type: 'flight',
         itemId: 'lite-flight',
@@ -564,7 +606,7 @@ export function createApp({
         transactionId: pre.transactionId,
         createdAt: new Date().toISOString(),
       });
-      const base = (process.env.SITE_URL?.trim() || process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const base = siteUrl(req);
       res.status(201).json({
         checkoutId,
         code: booking.code,
@@ -626,7 +668,7 @@ export function createApp({
   }));
   app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, flights: liveFlights, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
 
-  app.post('/api/ai-search', async (req, res) => {
+  app.post('/api/ai-search', aiLimit, async (req, res) => {
     try {
       res.json(await aiSearch(req.body?.query, langOf(req)));
     } catch (err) {
@@ -657,7 +699,7 @@ export function createApp({
   // 1) /api/checkout bloquea la habitación al precio visto y devuelve la clave del pago.
   // 2) El navegador muestra el formulario de tarjeta; al pagar vuelve a /?pago=<id>.
   // 3) /api/checkout/:id/confirm confirma la reserva en LiteAPI con el pago hecho.
-  app.post('/api/checkout', async (req, res) => {
+  app.post('/api/checkout', checkoutLimit, async (req, res) => {
     const body = req.body || {};
     if (!isLive(body.itemId) || livePayment !== 'customer') return res.status(400).json({ error: 'Este alojamiento no admite pago con tarjeta.' });
     const who = validCustomer(body);
@@ -670,7 +712,7 @@ export function createApp({
       const pre = await live.prebook({ offerId: q.offerId, maxTotal: seen, customerPays: true });
       const checkoutId = randomBytes(16).toString('hex');
       const booking = await store.add({
-        code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        code: await newCode(),
         lang: langOf(req),
         type: 'hotel',
         itemId: q.item.id,
@@ -694,7 +736,7 @@ export function createApp({
         transactionId: pre.transactionId,
         createdAt: new Date().toISOString(),
       });
-      const base = (process.env.SITE_URL?.trim() || process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const base = siteUrl(req);
       res.status(201).json({
         checkoutId,
         code: booking.code,
@@ -716,6 +758,8 @@ export function createApp({
     if (!b) return res.status(404).json({ error: 'No encontramos ese pago.' });
     if (b.status === 'confirmada' || b.status === 'cancelada') return res.json(publicBooking(b));
     if (b.status !== 'pendiente_pago') return res.status(409).json({ error: 'Esta reserva no se puede confirmar.' });
+    // Sin LiteAPI no se puede confirmar: no es un «pago sin reserva» (no se avisa al titular), solo hay que reintentarlo.
+    if (!live) return res.status(503).json({ error: 'No se puede confirmar ahora: falta la conexión con el proveedor.' });
     if (confirming.has(id)) return res.status(409).json({ error: 'Estamos confirmando tu reserva. Espera unos segundos.' });
     confirming.add(id);
     try {
@@ -734,7 +778,7 @@ export function createApp({
     }
   });
 
-  app.post('/api/bookings', async (req, res) => {
+  app.post('/api/bookings', bookingLimit, async (req, res) => {
     const body = req.body || {};
     const name = String(body.name || '').trim().slice(0, 80);
     const email = String(body.email || '').trim().slice(0, 120);
@@ -755,7 +799,7 @@ export function createApp({
         if (q.total > seen + 0.01) throw new PriceChangedError(q.total);
         const b = await live.book({ offerId: q.offerId, name, email, units: q.units, maxTotal: seen });
         const booking = await store.add({
-          code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+          code: await newCode(),
         lang: langOf(req),
           type: 'hotel',
           itemId: q.item.id,
@@ -787,7 +831,7 @@ export function createApp({
     try {
       const q = quote(await store.all(), body, osm?.known());
       const booking = await store.add({
-        code: 'DL-' + randomBytes(3).toString('hex').toUpperCase(),
+        code: await newCode(),
         lang: langOf(req),
         type: body.type,
         itemId: q.item.id,
