@@ -50,6 +50,8 @@ export function createApp({
   // Peticiones por IP y por ventana: la búsqueda con IA cuesta una llamada a Claude, y cada pago o reserva crea una
   // prerreserva en LiteAPI o una fila en la base de datos.
   limits = { aiSearch: 30, checkout: 20, demoBooking: 20, windowMs: 10 * 60 * 1000 },
+  // Cada cuánto se revisan los pagos que se quedaron a medias (0 = nunca; las pruebas lo llaman a mano).
+  reconcileEveryMs = 15 * 60 * 1000,
 } = {}) {
   // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
   const notify = (fn, b) => { if (b && mailer?.[fn]) Promise.resolve().then(() => mailer[fn](b)).catch(() => {}); };
@@ -644,6 +646,27 @@ export function createApp({
   });
 
   const confirmingFlights = new Set();
+  // Confirmar en el proveedor una reserva ya pagada (o intentarlo: si el pago no se completó, PaymentPendingError).
+  const confirmFlight = async (b) => {
+    const r = await live.flightBook({ prebookId: b.prebookId, transactionId: b.transactionId });
+    const done = await store.update(b.code, {
+      status: 'confirmada',
+      providerBookingId: r.bookingId,
+      bookingRef: r.bookingRef,
+      pnr: r.pnr,
+      total: r.total ?? b.total,
+      paidAt: new Date().toISOString(),
+    });
+    notify('bookingConfirmed', done);
+    return done;
+  };
+  const confirmHotel = async (b) => {
+    const r = await live.confirm({ prebookId: b.prebookId, name: b.name, email: b.email, units: b.units, transactionId: b.transactionId });
+    const done = await store.update(b.code, { status: 'confirmada', providerBookingId: r.bookingId, total: r.total ?? b.total, paidAt: new Date().toISOString() });
+    notify('bookingConfirmed', done);
+    return done;
+  };
+
   app.post('/api/flights/checkout/:id/confirm', async (req, res) => {
     const id = String(req.params.id);
     const b = await store.findByCheckout(id);
@@ -653,17 +676,7 @@ export function createApp({
     if (confirmingFlights.has(id)) return res.status(409).json({ error: 'Estamos confirmando tu reserva. Espera unos segundos.' });
     confirmingFlights.add(id);
     try {
-      const r = await live.flightBook({ prebookId: b.prebookId, transactionId: b.transactionId });
-      const done = await store.update(b.code, {
-        status: 'confirmada',
-        providerBookingId: r.bookingId,
-        bookingRef: r.bookingRef,
-        pnr: r.pnr,
-        total: r.total ?? b.total,
-        paidAt: new Date().toISOString(),
-      });
-      notify('bookingConfirmed', done);
-      res.json(publicBooking(done));
+      res.json(publicBooking(await confirmFlight(b)));
     } catch (err) {
       console.error('[liteapi vuelos]', err.message);
       if (err instanceof PaymentPendingError) return res.status(402).json({ error: 'El pago no se ha completado. No se ha hecho ningún cargo ni reserva.' });
@@ -783,10 +796,7 @@ export function createApp({
     if (confirming.has(id)) return res.status(409).json({ error: 'Estamos confirmando tu reserva. Espera unos segundos.' });
     confirming.add(id);
     try {
-      const r = await live.confirm({ prebookId: b.prebookId, name: b.name, email: b.email, units: b.units, transactionId: b.transactionId });
-      const done = await store.update(b.code, { status: 'confirmada', providerBookingId: r.bookingId, total: r.total ?? b.total, paidAt: new Date().toISOString() });
-      notify('bookingConfirmed', done);
-      res.json(publicBooking(done));
+      res.json(publicBooking(await confirmHotel(b)));
     } catch (err) {
       console.error('[liteapi]', err.message);
       if (err instanceof PaymentPendingError) return res.status(402).json({ error: 'El pago no se ha completado. No se ha hecho ningún cargo ni reserva.' });
@@ -798,6 +808,48 @@ export function createApp({
       confirming.delete(id);
     }
   });
+
+  // Pagos a medias: el cliente paga en la pasarela y no vuelve a la web (cierra la pestaña, se queda sin conexión), así que
+  // nadie llama a «confirm» y la reserva se queda en «pendiente_pago». Cada cierto tiempo se intenta confirmar como si
+  // hubiera vuelto. Pagada → se confirma y le llega el correo. Sin pagar tras 24 h → «caducada» (no hubo cargo). Otro
+  // error → se avisa al titular una sola vez y se deja para revisarla a mano.
+  const RECONCILE_AFTER = 10 * 60 * 1000;
+  const EXPIRE_AFTER = 24 * 60 * 60 * 1000;
+  const reconcilePending = async (now = Date.now()) => {
+    if (!live) return { confirmed: 0, expired: 0, alerted: 0 };
+    const result = { confirmed: 0, expired: 0, alerted: 0 };
+    const pending = (await store.all()).filter((b) => b.status === 'pendiente_pago' && b.provider === 'liteapi' && now - Date.parse(b.createdAt) >= RECONCILE_AFTER);
+    for (const b of pending) {
+      const flight = b.type === 'flight';
+      if (flight && !liveFlights) continue;
+      const busy = flight ? confirmingFlights : confirming;
+      if (busy.has(b.checkoutId)) continue;
+      busy.add(b.checkoutId);
+      try {
+        await (flight ? confirmFlight(b) : confirmHotel(b));
+        result.confirmed += 1;
+      } catch (err) {
+        if (err instanceof PaymentPendingError) {
+          if (now - Date.parse(b.createdAt) >= EXPIRE_AFTER) {
+            await store.update(b.code, { status: 'caducada', expiredAt: new Date(now).toISOString() });
+            result.expired += 1;
+          }
+        } else if (!b.alertedAt) {
+          console.error('[conciliación]', b.code, err.message);
+          notify('paymentWithoutBooking', { ...b, error: err.message });
+          await store.update(b.code, { alertedAt: new Date(now).toISOString() });
+          result.alerted += 1;
+        }
+      } finally {
+        busy.delete(b.checkoutId);
+      }
+    }
+    return result;
+  };
+  app.locals.reconcilePending = reconcilePending;
+  if (live && reconcileEveryMs > 0) {
+    setInterval(() => reconcilePending().catch((err) => console.error('[conciliación]', err.message)), reconcileEveryMs).unref();
+  }
 
   app.post('/api/bookings', bookingLimit, async (req, res) => {
     const body = req.body || {};
@@ -994,7 +1046,7 @@ export function createApp({
     const user = await me(req);
     const email = String(req.query.email || '').trim().toLowerCase();
     const code = String(req.query.code || '').trim().toUpperCase();
-    const list = async (e) => res.json((await store.listByEmail(e)).filter((b) => b.status !== 'pendiente_pago').map(publicBooking));
+    const list = async (e) => res.json((await store.listByEmail(e)).filter((b) => b.status !== 'pendiente_pago' && b.status !== 'caducada').map(publicBooking));
     if (user && (!email || email === user.email)) return list(user.email);
     if (!email) return res.status(400).json({ error: 'Indica tu email.' });
     if (!code) return res.status(401).json({ error: 'Escribe también el código de una de tus reservas (DL-…), que te enviamos por email, o entra con tu cuenta.' });
