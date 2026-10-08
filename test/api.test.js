@@ -92,6 +92,12 @@ test('búsqueda IA (intérprete local) entiende frases en español', async () =>
   assert.equal(fl.destination, 'FCO');
   assert.equal(fl.maxPrice, 120);
 
+  // Ciudades que no están en nuestras listas: van por su nombre y el servidor busca el aeropuerto.
+  const cix = localParse('vuelo de lima a chiclayo el 20 de octubre para 2');
+  assert.deepEqual([cix.origin, cix.destination, cix.adults], ['LIM', 'Chiclayo', 2]);
+  assert.deepEqual([localParse('vuelo a trujillo desde lima').origin, localParse('vuelo a trujillo desde lima').destination], ['LIM', 'Trujillo']);
+  assert.equal(localParse('vuelo de madrid a santa cruz de la sierra').destination, 'Santa Cruz de la Sierra');
+
   assert.equal(localParse('algo en gandía este finde').destination, 'Gandía');
   assert.equal(localParse('hoteles en santiago de compostela').destination, 'Santiago de Compostela');
   assert.equal(localParse('escapada a la playa en julio').destination ?? null, null);
