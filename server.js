@@ -15,7 +15,7 @@ import { Mailer } from './src/mail.js';
 import { Accounts, COOKIE, publicUser, mergeHistory } from './src/accounts.js';
 import { recommend } from './src/recommend.js';
 import { railOption, railFrom, railBookUrl, DOOR_FLIGHT } from './src/rail.js';
-import { LiteApi, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS, STAY_TYPES } from './src/liteapi.js';
+import { LiteApi, LiteApiError, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS, STAY_TYPES } from './src/liteapi.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -65,6 +65,9 @@ export function createApp({
   const aiLimit = rateLimit({ max: limits.aiSearch, windowMs: limits.windowMs, message: 'Has hecho muchas búsquedas seguidas. Prueba dentro de unos minutos.' });
   const checkoutLimit = rateLimit({ max: limits.checkout, windowMs: limits.windowMs, message: 'Demasiados intentos de pago seguidos. Prueba dentro de unos minutos.' });
   const bookingLimit = rateLimit({ max: limits.demoBooking, windowMs: limits.windowMs, message: 'Demasiadas reservas seguidas. Prueba dentro de unos minutos.' });
+  // Qué se le enseña al cliente de un error: los mensajes propios (en español, pensados para él) tal cual; los que llegan
+  // en crudo del proveedor o de un fallo interno, uno genérico. El detalle queda en el registro del servidor.
+  const shown = (err, fallback) => (err instanceof LiteApiError && !err.provider ? err.message : fallback);
   // Las reservas de un mismo hotel o vuelo, de una en una: entre leer la disponibilidad y guardar hay esperas (código,
   // base de datos), y dos reservas simultáneas de la última plaza veían las dos hueco. Vale para una sola instancia.
   const locks = new Map();
@@ -548,7 +551,7 @@ export function createApp({
       res.json(v);
     } catch (err) {
       console.error('[liteapi vuelos]', err.message);
-      res.status(409).json({ error: err.message });
+      res.status(409).json({ error: shown(err, 'No se pudo comprobar la tarifa con la aerolínea. Inténtalo de nuevo o elige otro vuelo.') });
     }
   });
 
@@ -636,7 +639,7 @@ export function createApp({
       });
     } catch (err) {
       console.error('[liteapi vuelos]', err.message);
-      res.status(409).json({ error: err.message });
+      res.status(409).json({ error: shown(err, 'No se pudo comprobar la tarifa con la aerolínea. Inténtalo de nuevo o elige otro vuelo.') });
     }
   });
 
@@ -700,7 +703,8 @@ export function createApp({
         const { item, offerId, ...rest } = q;
         return res.json(rest);
       } catch (err) {
-        return res.status(400).json({ error: err.message });
+        console.error('[liteapi]', err.message);
+        return res.status(400).json({ error: shown(err, 'No se pudo comprobar la habitación con el hotel. Inténtalo de nuevo o elige otra.') });
       }
     }
     try {
@@ -763,7 +767,7 @@ export function createApp({
       });
     } catch (err) {
       console.error('[liteapi]', err.message);
-      res.status(409).json({ error: err.message, ...(err instanceof PriceChangedError ? { newTotal: err.total } : {}) });
+      res.status(409).json({ error: shown(err, 'No se pudo comprobar la habitación con el hotel. Inténtalo de nuevo o elige otra.'), ...(err instanceof PriceChangedError ? { newTotal: err.total } : {}) });
     }
   });
 
@@ -788,7 +792,8 @@ export function createApp({
       if (err instanceof PaymentPendingError) return res.status(402).json({ error: 'El pago no se ha completado. No se ha hecho ningún cargo ni reserva.' });
       // El cliente ha pagado y no hay reserva: hay que avisar al titular para resolverlo.
       notify('paymentWithoutBooking', { ...b, error: err.message });
-      res.status(502).json({ error: 'El pago se recibió, pero el hotel no confirmó la reserva: ' + err.message + ' Escríbenos con tu código ' + b.code + '.' });
+      const why = shown(err, '');
+      res.status(502).json({ error: 'El pago se recibió, pero el hotel no confirmó la reserva' + (why ? ': ' + why : '.') + ' Escríbenos con tu código ' + b.code + '.' });
     } finally {
       confirming.delete(id);
     }
@@ -841,7 +846,7 @@ export function createApp({
         return res.status(201).json(publicBooking(booking));
       } catch (err) {
         console.error('[liteapi]', err.message);
-        return res.status(409).json({ error: err.message, ...(err instanceof PriceChangedError ? { newTotal: err.total } : {}) });
+        return res.status(409).json({ error: shown(err, 'No se pudo comprobar la habitación con el hotel. Inténtalo de nuevo o elige otra.'), ...(err instanceof PriceChangedError ? { newTotal: err.total } : {}) });
       }
     }
     try {
@@ -1034,7 +1039,9 @@ export function createApp({
       try {
         cancellation = found.type === 'flight' ? await live.flightCancel(found.providerBookingId) : await live.cancel(found.providerBookingId);
       } catch (err) {
-        return res.status(502).json({ error: (found.type === 'flight' ? 'La aerolínea' : 'El hotel') + ' no ha aceptado la cancelación: ' + err.message });
+        console.error('[liteapi cancelar]', found.code, err.message);
+        const why = shown(err, 'Inténtalo de nuevo más tarde o escríbenos con tu código.');
+        return res.status(502).json({ error: (found.type === 'flight' ? 'La aerolínea' : 'El hotel') + ' no ha aceptado la cancelación: ' + why });
       }
       // La aerolínea a veces confirma la cancelación más tarde.
       if (cancellation.pending) {

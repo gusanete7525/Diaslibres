@@ -185,6 +185,8 @@ export class LiteApi {
           const msg = data.error?.description || data.error?.message || `El proveedor respondió ${res.status}`;
           this.lastError = { at: new Date().toISOString(), status: res.status, message: String(msg).slice(0, 200) };
           const err = new LiteApiError(msg);
+          // Mensaje tal cual del proveedor (a menudo en inglés y técnico): el servidor no se lo enseña al cliente.
+          err.provider = true;
           err.status = res.status;
           err.code = data.error?.code ?? null;
           throw err;
