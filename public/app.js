@@ -89,10 +89,26 @@ function setFooter(live) {
 }
 
 // ---------- Navegación ----------
+// Teclado en las pestañas (patrón de pestañas de ARIA): flechas, Inicio y Fin mueven el foco y abren la pestaña.
+document.querySelector('.tabs')?.addEventListener('keydown', (e) => {
+  const tabs = [...document.querySelectorAll('.tabs button')].filter((b) => !b.hidden);
+  const at = tabs.indexOf(document.activeElement);
+  if (at < 0) return;
+  const next = { ArrowRight: at + 1, ArrowDown: at + 1, ArrowLeft: at - 1, ArrowUp: at - 1, Home: 0, End: tabs.length - 1 }[e.key];
+  if (next === undefined) return;
+  e.preventDefault();
+  const tab = tabs[(next + tabs.length) % tabs.length];
+  tab.focus();
+  tab.click();
+});
 function setView(view) {
   state.view = view;
   document.body.dataset.view = view;
-  document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === view)));
+  // Pestañas con una sola parada del tabulador (la activa); las flechas mueven entre ellas.
+  document.querySelectorAll('.tabs button').forEach((b) => {
+    b.setAttribute('aria-selected', String(b.dataset.view === view));
+    b.tabIndex = b.dataset.view === view ? 0 : -1;
+  });
   $('#mine').hidden = view !== 'mine';
   $('#searchSection').hidden = view === 'mine';
   results.hidden = view === 'mine';
