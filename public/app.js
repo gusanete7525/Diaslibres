@@ -2262,12 +2262,6 @@ $('#accountDialog').addEventListener('click', async (e) => {
   await loadMe();
   await configReady.catch(() => {});
   loadForYou();
-  // Primera visita: pantalla de acceso (cuenta o invitado). No se repite una vez elegido,
-  // ni al volver de un pago.
-  if (!state.user && !store.get('dl-guest') && !store.get('dl-welcomed') && !params.get('pago') && !params.get('vuelo')) {
-    store.set('dl-welcomed', '1');
-    openAccount();
-  }
 })();
 
 // App instalable (Android, escritorio): funciona sin conexión con la última versión vista.

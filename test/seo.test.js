@@ -35,10 +35,12 @@ test('portada: título y descripción nuevos, H1 con IA y traducidos', async () 
   assert.equal(title(es.body), 'DíasLibres · Vuelos y hoteles baratos con calendario e IA');
   assert.match(es.body, /<meta name="description" content="Busca vuelos y hoteles, mira en un calendario/);
   assert.match(h1(es.body), /inteligencia artificial/);
+  assert.match(es.body, /verde = libre/);
   assert.equal(canonical(es.body), base + '/');
   const en = await html('/en/');
   assert.match(title(en.body), /Cheap flights and hotels/);
   assert.match(h1(en.body), /artificial intelligence/);
+  assert.match(en.body, /green = available/);
   assert.match(en.body, /<html lang="en">/);
   for (const l of LANG_CODES) assert.ok(title((await html(LANGS[l].prefix + '/')).body).length <= 70, `título largo en ${l}`);
 });
