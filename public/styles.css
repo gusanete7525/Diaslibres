@@ -578,3 +578,104 @@ button.best-box:hover .best-dates { color: var(--brand); }
 }
 .ai-ask button.chip { background: var(--surface); cursor: pointer; margin: 6px 4px 0 0; font: inherit; font-size: 14px; color: var(--text); }
 .ai-ask button.chip:hover { border-color: var(--brand); }
+
+/* ---------- Rediseño 2026-10: tipografía propia, portada en tarjeta con foto y calendario más claro ---------- */
+:root {
+  --brand: #1f5fbf;
+  --series-1: #1f5fbf;
+  --sel: #1f5fbf;
+  --cheap: #f2b33d;
+  --cheap-ink: #101318;
+  --cheap-line: #c98a14;
+  --full-bg: #e3e1da;
+  --full-ink: #5c5f66;
+  --full-line: #b9b7af;
+  --display: "Bricolage Grotesque", system-ui, sans-serif;
+  --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --brand: #4a90e8; --series-1: #4a90e8; --sel: #3a7fd8; --full-bg: #2c2c29; --full-ink: #a3a299; --full-line: #4a4a45; }
+}
+:root[data-theme="dark"] { --brand: #4a90e8; --series-1: #4a90e8; --sel: #3a7fd8; --full-bg: #2c2c29; --full-ink: #a3a299; --full-line: #4a4a45; }
+
+body { font-family: Figtree, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+h1, h2, .logo, .best-night, .fl-side .price, .deal-price b, .hotel-info h3 { font-family: var(--display); letter-spacing: -0.02em; }
+.logo { font-weight: 700; }
+.tagline { display: none; }
+.btn { border-radius: 12px; }
+.btn.primary:hover { filter: brightness(1.08); }
+
+/* Portada: la foto va en una tarjeta redondeada con el buscador encima */
+.hero { padding-top: 24px; }
+.hero::before, .hero-quote { display: none; }
+.hero-card {
+  position: relative; isolation: isolate; overflow: hidden; border-radius: 28px; min-height: 440px;
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 14px; padding: 48px;
+  background: #0b1220 url("/img/hero.jpg") center / cover no-repeat; color: #fff;
+}
+.hero-card::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgb(10 16 30 / 25%) 0%, rgb(10 16 30 / 62%) 100%); }
+.hero-kicker { align-self: flex-start; background: var(--cheap); color: var(--cheap-ink); font-weight: 700; font-size: 13px; padding: 5px 12px; border-radius: 999px; }
+.hero-card h1 { margin: 0; max-width: 760px; font-size: clamp(30px, 5vw, 62px); line-height: 1.03; color: #fff; }
+.hero-card .sub { margin: 0; max-width: 640px; font-size: 18px; color: #eef1f7; }
+.hero-card .pill { font-size: 14px; }
+.pill.full { background: var(--full-bg); color: var(--full-ink); }
+.hero-card .ai-box { max-width: 900px; margin-top: 6px; border: 0; border-radius: 18px; padding: 8px 8px 8px 16px; background: #fff; color: #101318; box-shadow: 0 12px 40px rgb(0 0 0 / 28%); }
+.hero-card .ai-box:focus-within { outline: 3px solid #f2b33d; outline-offset: 2px; }
+.hero-card .ai-box input { color: #101318; font-size: 17px; padding: 12px 6px; }
+.hero-card .ai-box input::placeholder { color: #5c5f66; }
+svg.ai-badge { width: 22px; height: 22px; fill: none; stroke: #1f5fbf; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.hero-card .ai-box .btn.primary { border-radius: 14px; padding: 14px 22px; font-size: 16px; background: #1f5fbf; border-color: #1f5fbf; color: #fff; }
+#examples { margin-top: 20px; gap: 14px; }
+.ex-card { aspect-ratio: 4 / 3; border-radius: 20px; }
+.ex-card span { padding: 34px 14px 12px; }
+.ex-card span b { font-size: 17px; }
+
+/* Calendario: verde libre, amarillo el más barato, gris tachado completo (se distinguen también por claridad) */
+.day { border-radius: 9px; min-height: 42px; }
+.day.full { background: var(--full-bg); color: var(--full-ink); }
+.day.cheap { background: var(--cheap); color: var(--cheap-ink); box-shadow: inset 0 0 0 1px var(--cheap-line); }
+.day.cheap::after { content: none; }
+.day.cheap.sel, .day.cheap.in-range { box-shadow: none; }
+.day.sel { background: var(--sel); color: #fff; }
+.chart .bar.full { fill: var(--full-line); }
+
+/* Tarjetas */
+.card, .deal, .booking, .more-filters { border-radius: var(--radius); }
+.hotel-photo { border-radius: 14px; }
+.hotel-panel { border-radius: 16px; background: var(--surface); }
+.deal { padding: 18px 20px; gap: 8px; }
+.deal-route { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; font-size: 17px; }
+.deal-best { background: var(--cheap); color: var(--cheap-ink); font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px; font-family: Figtree, system-ui, sans-serif; }
+.deal-price b { font-size: 28px; }
+
+/* Así funciona */
+.how { max-width: 1440px; margin: 24px auto 0; padding: 0 16px; }
+.how h2 { font-size: 30px; margin: 0 0 16px; }
+.how ol { list-style: none; counter-reset: how; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.how li { counter-increment: how; display: grid; grid-template-columns: 40px 1fr; gap: 4px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.how li::before { content: counter(how); grid-row: span 2; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: var(--brand); background: color-mix(in srgb, var(--brand) 12%, var(--surface)); }
+.how li b { font-size: 17px; }
+.how li span { color: var(--text-2); }
+
+/* Pie oscuro */
+.popular { max-width: 1440px; }
+.footer { margin-top: 40px; background: #101318; color: #c9ccd4; font-size: 13px; padding: 32px 16px; }
+.footer a { color: #8db8f5; }
+
+@media (max-width: 760px) {
+  .hero { padding-top: 12px; }
+  .hero-card { min-height: 0; padding: 120px 16px 16px; border-radius: 22px; gap: 10px; }
+  .hero-card h1 { font-size: 30px; }
+  .hero-card .sub { font-size: 14px; }
+  .hero-card .ai-box { flex-wrap: wrap; padding: 6px; }
+  .hero-card .ai-box input { flex: 1 1 calc(100% - 40px); font-size: 16px; padding: 10px 4px; }
+  .hero-card .ai-box .btn.primary { flex: 1 1 100%; padding: 13px; }
+  svg.ai-badge { margin-left: 8px; }
+  .ex-card { aspect-ratio: 4 / 5; width: 42%; }
+  .how h2 { font-size: 24px; }
+}
+.hero-card h1 em { background: none; color: var(--cheap); -webkit-text-fill-color: currentColor; }
+/* En el móvil las fichas no deben ensanchar la página */
+.results { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 760px) { .card { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .card.hotel-card { grid-template-columns: minmax(0, 1fr); } }

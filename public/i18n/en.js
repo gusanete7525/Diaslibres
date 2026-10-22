@@ -655,5 +655,14 @@ export default {
  "Diversión en familia": "Family fun",
  "Algo de playa barato para una semana en julio": "Something cheap by the beach for a week in July",
  "Tu estancia": "Your stay",
- "Ver detalles del hotel": "See hotel details"
+ "Ver detalles del hotel": "See hotel details",
+
+ "Mira qué días están libres y cuál es el más barato: <span class=\"pill good\">verde = libre</span> <span class=\"pill full\">gris = completo</span>. Sin elegir fechas antes de buscar.": "See which days are free and which is cheapest: <span class=\"pill good\">green = available</span> <span class=\"pill full\">grey = fully booked</span>. No need to pick dates before you search.",
+ "Así funciona": "How it works",
+ "Cuéntanos qué buscas": "Tell us what you want",
+ "Con tus palabras o con filtros. No hace falta saber las fechas.": "In your own words or with filters. You don't need to know the dates.",
+ "Elige un día libre": "Pick a free day",
+ "En verde los días con plaza y su precio. Marcamos el más barato.": "Days with availability show in green with their price. We mark the cheapest.",
+ "Reserva y paga seguro": "Book and pay securely",
+ "Pago con tarjeta y confirmación al momento por email.": "Card payment and instant confirmation by email."
 };
