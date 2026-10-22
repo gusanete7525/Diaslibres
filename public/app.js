@@ -744,8 +744,8 @@ function renderCalendar(item, ui) {
     <div class="cal-grid">${cells}</div>
     <div class="cal-legend">
       <span><i style="background:var(--good-bg);outline:1px solid var(--good)"></i>${t('Libre (precio €)')}</span>
-      <span><i style="background:var(--bad-bg);outline:1px solid var(--bad)"></i>${item.liveFlight ? t('Sin plazas o no vuela') : t('Completo')}</span>
-      <span>★ ${t('Más barato')}</span>
+      <span><i style="background:var(--full-bg);outline:1px solid var(--full-line)"></i>${item.liveFlight ? t('Sin plazas o no vuela') : t('Completo')}</span>
+      <span><i style="background:var(--cheap);outline:1px solid var(--cheap-line)"></i>${t('Más barato')}</span>
     </div>
   </div>`;
 }
@@ -1538,9 +1538,9 @@ function renderDeals(d) {
     results.innerHTML = head + `<p class="empty">${d.pending ? t('Buscando las ofertas más baratas…') : t('Ahora mismo no hay ofertas. Escribe el origen y el destino para buscar vuelos.')}</p>`;
     return;
   }
-  results.innerHTML = head + `<div class="deals">${list.map((x) => `
+  results.innerHTML = head + `<div class="deals">${list.map((x, i) => `
     <button type="button" class="deal" data-o="${esc(x.origin.name)}" data-d="${esc(x.destination.name)}" data-date="${esc(x.date)}">
-      <span class="deal-route">${esc(x.origin.name)} → ${esc(x.destination.name)}</span>
+      <span class="deal-route">${esc(x.origin.name)} → ${esc(x.destination.name)}${i === 0 && list.length > 1 ? ` <span class="deal-best">${t('Más barato')}</span>` : ''}</span>
       <span class="meta">${esc(x.airlines.join(', '))} · ${stopsText(x.stops)} · ${t('sale {time}', { time: hhmm(x.departure) })}</span>
       <span class="deal-price">${t('desde <b>{price}</b>', { price: eur2(x.total) })}</span>
     </button>`).join('')}</div>${d.pending ? `<p class="count">${t('Cargando más ofertas…')}</p>` : ''}`;

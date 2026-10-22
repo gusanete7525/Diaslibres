@@ -655,5 +655,14 @@ export default {
  "Diversión en familia": "Plezier met het gezin",
  "Algo de playa barato para una semana en julio": "Iets goedkoops aan het strand voor een week in juli",
  "Tu estancia": "Jouw verblijf",
- "Ver detalles del hotel": "Hoteldetails bekijken"
+ "Ver detalles del hotel": "Hoteldetails bekijken",
+
+ "Mira qué días están libres y cuál es el más barato: <span class=\"pill good\">verde = libre</span> <span class=\"pill full\">gris = completo</span>. Sin elegir fechas antes de buscar.": "Zie welke dagen vrij zijn en welke het goedkoopst is: <span class=\"pill good\">groen = vrij</span> <span class=\"pill full\">grijs = volgeboekt</span>. Zonder eerst data te kiezen.",
+ "Así funciona": "Zo werkt het",
+ "Cuéntanos qué buscas": "Vertel ons wat je zoekt",
+ "Con tus palabras o con filtros. No hace falta saber las fechas.": "In je eigen woorden of met filters. Je hoeft de data niet te weten.",
+ "Elige un día libre": "Kies een vrije dag",
+ "En verde los días con plaza y su precio. Marcamos el más barato.": "In het groen de dagen met plek en hun prijs. We markeren de goedkoopste.",
+ "Reserva y paga seguro": "Boek en betaal veilig",
+ "Pago con tarjeta y confirmación al momento por email.": "Betalen met kaart en directe bevestiging per e-mail."
 };

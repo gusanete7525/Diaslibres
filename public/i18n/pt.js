@@ -655,5 +655,14 @@ export default {
  "Diversión en familia": "Diversão em família",
  "Algo de playa barato para una semana en julio": "Algo barato na praia para uma semana em julho",
  "Tu estancia": "A sua estadia",
- "Ver detalles del hotel": "Ver detalhes do hotel"
+ "Ver detalles del hotel": "Ver detalhes do hotel",
+
+ "Mira qué días están libres y cuál es el más barato: <span class=\"pill good\">verde = libre</span> <span class=\"pill full\">gris = completo</span>. Sin elegir fechas antes de buscar.": "Veja que dias estão livres e qual é o mais barato: <span class=\"pill good\">verde = livre</span> <span class=\"pill full\">cinzento = esgotado</span>. Sem escolher datas antes de pesquisar.",
+ "Así funciona": "Como funciona",
+ "Cuéntanos qué buscas": "Diga-nos o que procura",
+ "Con tus palabras o con filtros. No hace falta saber las fechas.": "Com as suas palavras ou com filtros. Não precisa de saber as datas.",
+ "Elige un día libre": "Escolha um dia livre",
+ "En verde los días con plaza y su precio. Marcamos el más barato.": "A verde, os dias com vaga e o seu preço. Assinalamos o mais barato.",
+ "Reserva y paga seguro": "Reserve e pague com segurança",
+ "Pago con tarjeta y confirmación al momento por email.": "Pagamento com cartão e confirmação imediata por email."
 };
