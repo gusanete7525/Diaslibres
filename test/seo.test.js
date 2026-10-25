@@ -29,18 +29,20 @@ const h1 = (b) => pick(b, /<h1[^>]*>([\s\S]*?)<\/h1>/);
 const ld = (b) => JSON.parse(pick(b, /<script type="application\/ld\+json">([\s\S]*?)<\/script>/).replace(/\\u003c/g, '<'));
 const hreflangs = (b) => Object.fromEntries([...b.matchAll(/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)"/g)].map((m) => [m[1], m[2]]));
 
-test('portada: título y descripción nuevos, H1 con IA y traducidos', async () => {
+test('portada: título y descripción nuevos, H1 de la propuesta Figma y traducciones', async () => {
   const es = await html('/');
   assert.equal(es.status, 200);
   assert.equal(title(es.body), 'DíasLibres · Vuelos y hoteles baratos con calendario e IA');
   assert.match(es.body, /<meta name="description" content="Busca vuelos y hoteles, mira en un calendario/);
-  assert.match(h1(es.body), /inteligencia artificial/);
-  assert.match(es.body, /verde = libre/);
+  assert.match(h1(es.body), /Menos buscar\./);
+  assert.match(h1(es.body), /Más escaparte\./);
+  assert.match(es.body, /Encontrar mi viaje/);
+  assert.match(es.body, /figma\.css/);
   assert.equal(canonical(es.body), base + '/');
   const en = await html('/en/');
   assert.match(title(en.body), /Cheap flights and hotels/);
-  assert.match(h1(en.body), /artificial intelligence/);
-  assert.match(en.body, /green = available/);
+  assert.match(h1(en.body), /Less searching\./);
+  assert.match(en.body, /Find my trip/);
   assert.match(en.body, /<html lang="en">/);
   for (const l of LANG_CODES) assert.ok(title((await html(LANGS[l].prefix + '/')).body).length <= 70, `título largo en ${l}`);
 });

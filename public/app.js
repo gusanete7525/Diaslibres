@@ -453,7 +453,7 @@ async function aiSearchSubmit() {
     toast(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = `${t('Buscar con IA')} →`;
+    btn.textContent = `${t('Encontrar mi viaje')} →`;
   }
 }
 onSend($('#aiForm'), aiSearchSubmit);
@@ -472,6 +472,13 @@ function setManual(open) {
   $('#manualToggle span').textContent = open ? t('Ocultar búsqueda manual') : t('Búsqueda manual');
 }
 $('#manualToggle').addEventListener('click', () => setManual(!document.body.classList.contains('manual-open')));
+document.querySelectorAll('[data-manual-view]').forEach(button => button.addEventListener('click', () => {
+  setView(button.dataset.manualView);
+  setManual(true);
+  filters.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  filters.destination.focus({ preventScroll: true });
+}));
+
 
 // ---------- Render ----------
 function renderResults() {

@@ -11,8 +11,9 @@
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&amp;family=Figtree:wght@400;500;600;700&amp;display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" />
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/figma.css" />
 </head>
 <body>
   <header class="topbar">
@@ -33,24 +34,30 @@
   </header>
 
   <section class="hero" id="searchSection">
-    <div class="hero-card">
-      <span class="hero-kicker" data-i18n>Viaja más. Vive mejor.</span>
-      <h1 data-i18n>Encuentra tu próximo viaje con <em>inteligencia artificial</em></h1>
-      <p class="sub" data-i18n>Mira qué días están libres y cuál es el más barato: <span class="pill good">verde = libre</span> <span class="pill full">gris = completo</span>. Sin elegir fechas antes de buscar.</p>
-
-      <form id="aiForm" class="ai-box" autocomplete="off">
-        <svg class="ai-badge" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z"/></svg>
-        <input id="aiQuery" type="search" placeholder="Ej.: una semana en Canarias con niños, hotel todo incluido y playa" aria-label="Describe tu viaje" />
-        <button type="button" data-send class="btn primary"><span data-i18n>Buscar con IA</span> →</button>
-      </form>
+    <div class="hero-intro">
+      <div class="hero-copy">
+        <p class="eyebrow" data-i18n>TUS DÍAS LIBRES EMPIEZAN AQUÍ</p>
+        <h1><span data-i18n>Menos buscar.</span><br /><span data-i18n>Más escaparte.</span></h1>
+        <p class="sub" data-i18n>Cuéntanos el viaje que imaginas. Encuentra hoteles, vuelos y los días que mejor te vienen.</p>
+        <form id="aiForm" class="ai-box" autocomplete="off">
+          <label class="sr-only" for="aiQuery" data-i18n>Describe tu viaje</label>
+          <input id="aiQuery" type="search" placeholder="Una semana en Canarias, playa y hotel para dos…" aria-label="Describe tu viaje" />
+          <div class="ai-actions"><span class="ai-badge">✦ <span data-i18n>Con ayuda de IA</span></span><button type="button" data-send class="btn primary"><span data-i18n>Encontrar mi viaje</span> →</button></div>
+        </form>
+        <div class="manual-links"><span data-i18n>¿Ya sabes adónde?</span><button type="button" data-manual-view="hotels" data-i18n>Buscar hoteles</button><button type="button" data-manual-view="flights" data-i18n>Buscar vuelos</button></div>
+      </div>
+      <figure class="hero-visual"><img src="/img/hero.jpg" width="574" height="350" alt="Playa al atardecer" fetchpriority="high" /><figcaption><span aria-hidden="true">↗</span><div><strong data-i18n>Tu destino. Tus fechas. Tu mejor precio.</strong><p data-i18n>El calendario te ayuda a elegir cuándo viajar.</p></div></figcaption></figure>
     </div>
+    <div class="travel-benefits"><span data-i18n>✓ Fechas flexibles</span><span data-i18n>✓ Precios por día</span><span data-i18n>✓ Hoteles y vuelos en un lugar</span></div>
+    <div class="ideas-heading" id="inspiracion"><h2 data-i18n>¿Qué te apetece hacer?</h2><p data-i18n>Empieza por una idea. El destino lo encontramos juntos.</p></div>
     <div class="examples" id="examples">
-      <button type="button" class="ex-card" data-q="Algo de playa barato para una semana en julio"><img src="/img/ex-playa.jpg" alt="" loading="lazy" /><span><b data-i18n>Escapadas de playa</b><small data-i18n>Sol, mar y relax</small></span></button>
-      <button type="button" class="ex-card" data-q="Escapada romántica de fin de semana"><img src="/img/ex-romantica.jpg" alt="" loading="lazy" /><span><b data-i18n>Escapadas románticas</b><small data-i18n>Momentos especiales</small></span></button>
-      <button type="button" class="ex-card" data-q="Hotel de montaña menos de 100 €"><img src="/img/ex-montana.jpg" alt="" loading="lazy" /><span><b data-i18n>Montaña y naturaleza</b><small data-i18n>Aire puro y aventura</small></span></button>
-      <button type="button" class="ex-card" data-kind="flight" data-q="Vuelos directos de Madrid a Lisboa"><img src="/img/ex-vuelos.jpg" alt="" loading="lazy" /><span><b data-i18n>Vuelos al mejor precio</b><small data-i18n>Tu próxima ciudad te espera</small></span></button>
+      <button type="button" class="ex-card" data-q="Algo de playa barato para una semana en julio"><img src="/img/ex-playa.jpg" alt="" loading="lazy" /><span><b data-i18n>Sol y playa</b><small data-i18n>Desconecta junto al mar</small></span></button>
+      <button type="button" class="ex-card" data-q="Escapada romántica de fin de semana"><img src="/img/ex-romantica.jpg" alt="" loading="lazy" /><span><b data-i18n>Una escapada para dos</b><small data-i18n>Tiempo para vosotros</small></span></button>
+      <button type="button" class="ex-card" data-q="Hotel de montaña menos de 100 €"><img src="/img/ex-montana.jpg" alt="" loading="lazy" /><span><b data-i18n>Montaña y naturaleza</b><small data-i18n>Respira fuera de la rutina</small></span></button>
+      <button type="button" class="ex-card" data-kind="flight" data-q="Vuelos directos de Madrid a Lisboa"><img src="/img/ex-vuelos.jpg" alt="" loading="lazy" /><span><b data-i18n>Tu próxima ciudad</b><small data-i18n>Cultura, calles y nuevas historias</small></span></button>
       <button type="button" class="ex-card kids" data-q="Playa con niños en Canarias 5 noches"><img src="/img/ex-ninos.jpg" alt="" loading="lazy" /><span><b data-i18n>Escapadas con niños</b><small data-i18n>Diversión en familia</small></span></button>
     </div>
+    <section class="travel-steps" aria-label="Cómo funciona"><div><h2><span data-i18n>¿Y si el mejor día</span><br /><span data-i18n>aún está por llegar?</span></h2><p data-i18n>Compara el precio de cada día antes de decidir.</p></div><div><span class="step-number">01</span><h3 data-i18n>Imagina tu viaje</h3><p data-i18n>Escríbelo con tus palabras.</p></div><div><span class="step-number">02</span><h3 data-i18n>Encuentra tus días</h3><p data-i18n>Compara fechas en el calendario.</p></div><div><span class="step-number">03</span><h3 data-i18n>Elige y reserva</h3><p data-i18n>Consulta el total antes de pagar.</p></div></section>
     <section id="forYou" class="for-you" hidden>
       <h2>Para ti <span class="meta" id="forYouWhy">según tus últimas búsquedas</span></h2>
       <div class="examples" id="forYouList"></div>
@@ -227,7 +234,7 @@
   </section>
 
   <nav class="popular" aria-label="Destinos populares"><!--POPULAR--></nav>
-  <footer class="footer">DíasLibres · <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL). · <a href="/legal.html">Información legal</a> · <a href="https://gusansoft.com/" rel="noopener">Gusansoft</a></footer>
+  <footer class="footer"><strong class="footer-brand">DíasLibre</strong><p class="footer-tagline" data-i18n>Viaja más. Vive mejor.</p> <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL). · <a href="/legal.html">Información legal</a> · <a href="https://gusansoft.com/" rel="noopener">Gusansoft</a></footer>
 
   <script type="module" src="/app.js"></script>
 </body>
