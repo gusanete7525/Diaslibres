@@ -14,6 +14,7 @@ import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
 import { Accounts, COOKIE, publicUser, mergeHistory } from './src/accounts.js';
+import { METRIC_EVENTS, metricsHtml } from './src/metrics.js';
 import { recommend } from './src/recommend.js';
 import { railOption, railFrom, railBookUrl, DOOR_FLIGHT } from './src/rail.js';
 import { LiteApi, LiteApiError, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS, STAY_TYPES } from './src/liteapi.js';
@@ -96,6 +97,18 @@ export function createApp({
     throw new Error('No se pudo generar un código de reserva.');
   };
   app.use(express.json({ limit: '20kb' }));
+  const metricLimit = rateLimit({max:120,windowMs:60000});
+  app.post('/api/metrics', metricLimit, async (req,res) => {
+    res.set('Cache-Control','no-store');
+    const origin = req.get('origin');
+    if (req.get('sec-fetch-site') === 'cross-site' || (origin && origin !== new URL(siteUrl(req)).origin)) return res.sendStatus(403);
+    const event = req.body?.event;
+    if (!METRIC_EVENTS.includes(event) || Object.keys(req.body || {}).some(k=>k !== 'event')) return res.sendStatus(400);
+    if (/bot|crawler|spider|headless/i.test(req.get('user-agent') || '')) return res.sendStatus(204);
+    try { await store.recordMetric(new Date().toISOString().slice(0,10),event); }
+    catch { console.error('[metrics] No se pudo guardar el contador'); return res.sendStatus(503); }
+    res.sendStatus(204);
+  });
   // ---------- Buscadores y app Android ----------
   const indexHtml = readFileSync(join(root, 'public', 'index.html'), 'utf8');
   // La dirección pública: SITE_URL o, en Render, la que da Render. Solo en local se usa la cabecera Host, porque se puede
@@ -104,11 +117,12 @@ export function createApp({
   // Con dominio propio (SITE_URL), las demás direcciones (onrender.com, www.) redirigen a él.
   // El archivo de verificación de Google no: la propiedad antigua debe seguir verificada.
   app.use((req, res, next) => {
-    const site = process.env.SITE_URL?.trim();
+    const site = (process.env.SITE_URL || process.env.PUBLIC_URL)?.trim();
     if (!site || !['GET', 'HEAD'].includes(req.method) || req.path.startsWith('/api/') || req.path.startsWith('/.well-known/') || /^\/google[0-9a-f]+\.html$/.test(req.path)) return next();
     let host;
     try { host = new URL(site).host; } catch { return next(); }
-    if (req.get('host') === host || /^localhost(:|$)|^127\./.test(req.get('host') || '')) return next();
+    if (/^localhost(:|$)|^127\./.test(req.get('host') || '')) return next();
+    if (req.get('host') === host && req.protocol === new URL(site).protocol.slice(0, -1)) return next();
     res.redirect(301, site.replace(/\/$/, '') + req.originalUrl);
   });
   // Los avisos de index.html están escritos para el modo demostración. Con LiteAPI se entregan ya
@@ -137,7 +151,7 @@ export function createApp({
   const statsQueue = [];
   const statsLoaded = Promise.resolve(store.kvList?.('seo:') || []).then((rows) => {
     // Los datos de antes de contar los apartamentos se vuelven a calcular.
-    for (const [k, v] of rows) if (v?.stay) seoStats.set(k.slice(4), v);
+    for (const [k, v] of rows) if (v?.stay && v.geoVersion === 2) seoStats.set(k.slice(4), v);
   }).catch((err) => console.error('[seo]', err.message));
   // Pide los datos de una ciudad (las que se visitan van primero).
   // Los datos sin foto de portada (de antes de «Para ti») se renuevan poco a poco.
@@ -155,8 +169,8 @@ export function createApp({
     if (!city) return;
     statsBusy = true;
     try {
-      const hotels = await live.hotels(city.es, { keep: false });
-      const s = cityStats(hotels);
+      const hotels = await live.hotels(city.es, { keep: false, country: city.country });
+      const s = { ...cityStats(hotels), geoVersion: 2, country: city.country };
       seoStats.set(cityKey(city), s);
       await store.kvSet?.('seo:' + cityKey(city), s);
     } catch (err) {
@@ -1007,7 +1021,23 @@ export function createApp({
   });
   app.get('/api/me', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ user: publicUser(await me(req)) });
+    const user = await me(req);
+    res.json({ user: user ? { ...publicUser(user), ...(isOwner(user) ? {admin:true} : {}) } : null });
+  });
+  const isOwner = user => user?.email?.toLowerCase() === (process.env.ADMIN_EMAIL || 'contact@gusansoft.com').trim().toLowerCase();
+  const metricReport = async () => {
+    const end = new Date().toISOString().slice(0,10), start = addDays(end,-6);
+    const rows = await store.listMetrics(start,end);
+    const confirmedBookings = (await store.all()).filter(b=>b.status === 'confirmada' && b.provider === 'liteapi' && !b.sandbox && String(b.createdAt || '').slice(0,10) >= start && String(b.createdAt || '').slice(0,10) <= end).length;
+    return {start,end,rows,confirmedBookings};
+  };
+  for (const path of ['/api/admin/metrics','/estadisticas']) app.get(path, async (req,res) => {
+    res.set('Cache-Control','no-store').set('X-Robots-Tag','noindex, nofollow');
+    const user = await me(req);
+    if (!user) return res.status(401).type('text').send('Entra con tu cuenta de administrador en DíasLibre.');
+    if (!isOwner(user)) return res.sendStatus(403);
+    const data = await metricReport();
+    if (path.startsWith('/api/')) res.json(data); else res.type('html').send(metricsHtml(data));
   });
   app.delete('/api/me', async (req, res) => {
     const user = await me(req);

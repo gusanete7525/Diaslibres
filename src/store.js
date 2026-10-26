@@ -20,6 +20,22 @@ export class BookingStore {
       this.bookings = [];
     }
     this.kv = new Map(); // solo en memoria
+    this.metrics = new Map();
+    if (file) { try { this.metrics = new Map(JSON.parse(readFileSync(file + '.metrics.json','utf8'))); } catch {} }
+  }
+
+  async recordMetric(day, event) {
+    const key = `${day}|${event}`;
+    this.metrics.set(key, (this.metrics.get(key) || 0) + 1);
+    if (this.file) {
+      mkdirSync(dirname(this.file),{recursive:true});
+      const target = this.file + '.metrics.json';
+      writeFileSync(target + '.tmp', JSON.stringify([...this.metrics]));
+      renameSync(target + '.tmp', target);
+    }
+  }
+  async listMetrics(start, end) {
+    return [...this.metrics].map(([key,count]) => { const [day,event] = key.split('|'); return {day,event,count}; }).filter(r => r.day >= start && r.day <= end);
   }
 
   async kvSet(key, value) {
@@ -109,6 +125,12 @@ export class PgBookingStore {
         value jsonb NOT NULL,
         updated_at timestamptz NOT NULL DEFAULT now()
       );
+      CREATE TABLE IF NOT EXISTS metric_counts (
+        day text NOT NULL,
+        event text NOT NULL,
+        count integer NOT NULL DEFAULT 0,
+        PRIMARY KEY (day, event)
+      );
     `);
     await this.ready;
   }
@@ -156,6 +178,15 @@ export class PgBookingStore {
   async kvSet(key, value) {
     await this.#init();
     await this.pool.query('INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = now()', [key, JSON.stringify(value)]);
+  }
+
+  async recordMetric(day, event) {
+    await this.#init();
+    await this.pool.query('INSERT INTO metric_counts (day, event, count) VALUES ($1, $2, 1) ON CONFLICT (day, event) DO UPDATE SET count = metric_counts.count + 1', [day,event]);
+  }
+  async listMetrics(start, end) {
+    await this.#init();
+    return (await this.pool.query('SELECT day, event, count FROM metric_counts WHERE day >= $1 AND day <= $2 ORDER BY day, event', [start,end])).rows;
   }
 
   async kvGet(key) {

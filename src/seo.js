@@ -3,6 +3,7 @@
 //   (en inglés /en/hotels/…, /en/flights/…; en francés /fr/hotels/…, /fr/vols/…; etc.).
 // Sirven la misma web con título, textos, datos de la ciudad, preguntas frecuentes y enlaces propios.
 import { CITIES, ROUTES } from './places.js';
+import { RAIL_TABLE } from './rail-data.js';
 import { LANGS, LANG_CODES, tr, translateHtml } from './i18n.js';
 
 const norm = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -198,6 +199,10 @@ export function routePage(lang, o, d) {
   const to = cityName(d, lang);
   const t = (k, v = {}) => tr(lang, k, { from, to, city: to, ...v });
   const parts = [`<p>${esc(t('Compara el precio de los vuelos de {from} a {to} día a día y reserva el más barato.'))}</p>`];
+  parts.push(`<h2>${esc(t('Aeropuertos de referencia'))}</h2><p>${esc(t('Origen: {from} ({code}). Destino: {to} ({arrival}). Los aeropuertos concretos se confirman en la oferta elegida.', {code:o.iata,arrival:d.iata}))}</p>`);
+  const train = RAIL_TABLE.find(([a,b]) => (a === o.es && b === d.es) || (b === o.es && a === d.es));
+  if (train) parts.push(`<h2>${esc(t('Alternativa en tren'))}</h2><p>${esc(t('Duración orientativa del tren directo: {minutes} min. Operadores: {operators}. Consulta horarios y disponibilidad antes de reservar.', {minutes:num(lang,train[2]),operators:train[3]}))}</p>`);
+  parts.push(`<h2>${esc(t('Antes de elegir tu vuelo'))}</h2><p>${esc(t('Compara el importe total para todos los pasajeros y revisa el equipaje, las escalas y las condiciones de cambios y cancelación de cada tarifa. El precio final se comprueba de nuevo antes del pago.'))}</p>`);
   const back = ROUTE_CITIES.find(([a, b]) => a.iata === d.iata && b.iata === o.iata);
   const others = ROUTE_CITIES.filter(([a, b]) => a.iata === o.iata && b.iata !== d.iata).slice(0, 12);
   parts.push(`<h2>${esc(t('Hoteles en {city}'))}</h2>${links([[cityUrl(lang, d), t('Hoteles en {city}')], ...FILTERS.filter((f) => !f.types || f.types.includes(d.type)).slice(0, 5).map((f) => [cityUrl(lang, d, f), t(f.title)])])}`);

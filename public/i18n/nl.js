@@ -1,4 +1,11 @@
 export default {
+  "Aeropuertos de referencia": "Referentieluchthavens",
+  "Origen: {from} ({code}). Destino: {to} ({arrival}). Los aeropuertos concretos se confirman en la oferta elegida.": "Vertrek: {from} ({code}). Bestemming: {to} ({arrival}). De exacte luchthavens worden bevestigd in de gekozen aanbieding.",
+  "Alternativa en tren": "Alternatief met de trein",
+  "Duración orientativa del tren directo: {minutes} min. Operadores: {operators}. Consulta horarios y disponibilidad antes de reservar.": "Indicatieve duur van de rechtstreekse trein: {minutes} min. Vervoerders: {operators}. Controleer dienstregeling en beschikbaarheid voordat je boekt.",
+  "Antes de elegir tu vuelo": "Voordat je een vlucht kiest",
+  "Compara el importe total para todos los pasajeros y revisa el equipaje, las escalas y las condiciones de cambios y cancelación de cada tarifa. El precio final se comprueba de nuevo antes del pago.": "Vergelijk het totaal voor alle reizigers en controleer bagage, tussenstops en wijzigings- en annuleringsvoorwaarden van elk tarief. De definitieve prijs wordt vóór de betaling opnieuw gecontroleerd.",
+  "Ahorras {amount}": "Je bespaart {amount}",
  "Error de conexión": "Verbindingsfout",
  "Precios y disponibilidad en tiempo real.": "Prijzen en beschikbaarheid in realtime.",
  "Entorno de pruebas: las reservas son de prueba y no se cobran.": "Testomgeving: boekingen zijn testboekingen en worden niet in rekening gebracht.",

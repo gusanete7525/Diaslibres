@@ -41,6 +41,13 @@ const state = {
   config: {}, // { liveFlights, sandbox } del servidor
 };
 
+// Aggregate first-party actions, without cookies, visitor IDs, URLs or search text.
+function metric(event) {
+  if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return;
+  fetch('/api/metrics', {method:'POST',credentials:'omit',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({event})}).catch(()=>{});
+}
+metric('page_view');
+
 const results = $('#results');
 const filters = $('#filters');
 const tooltip = $('#tooltip');
@@ -153,6 +160,7 @@ function filterParams() {
 
 let searchToken = 0;
 async function search() {
+  metric('search');
   const token = ++searchToken;
   recordSearch();
   if (state.view === 'flights') await configReady;
@@ -875,6 +883,7 @@ function dayText(d, isFlight) {
 }
 
 function pickDay(item, ui, iso, isFlight) {
+  metric('calendar_view');
   const cal = item.calendar;
   const idx = diffDays(state.data.start, iso);
   const d = cal[idx];
@@ -1000,7 +1009,12 @@ function showOffer(q) {
     : '';
   // Tasas que no van en el total y se pagan en el hotel (p. ej. tasa turística).
   if (q.payAtHotel?.length) extra.textContent += ' · ' + t('además, a pagar en el hotel: {list}', { list: payAtHotelText(q.payAtHotel) });
-  extra.hidden = !q.roomName;
+  if (q.promotion) extra.insertAdjacentHTML('beforeend', promotionHtml(q.promotion));
+  extra.hidden = !q.roomName && !q.promotion && !q.payAtHotel?.length;
+}
+function promotionHtml(p) {
+  if (!p || p.currency !== 'EUR' || !(p.originalTotal > p.total) || !(p.savings > 0)) return '';
+  return `<span class="rate-promotion" style="display:block;font-size:.85em"><del>${eur2(p.originalTotal)}</del> · ${esc(t('Ahorras {amount}', {amount:eur2(p.savings)}))}${p.names?.length ? ' · ' + p.names.map(esc).join(' · ') : ''}</span>`;
 }
 const cancelText = (o) => (o.refundable ? (o.freeCancellationUntil ? t('cancelación gratuita hasta el {day}', { day: fmtDay.format(new Date(o.freeCancellationUntil.replace(' ', 'T') + 'Z')) }) : t('cancelación gratuita')) : t('no reembolsable'));
 
@@ -1032,7 +1046,7 @@ async function renderRooms(q) {
         ${facts ? `<span class="meta">${esc(facts)}</span>` : ''}
         ${r ? `<button type="button" class="link-title small" data-room="${i}">${t('Ver fotos y detalles')}</button>` : ''}
       </span>
-      <span class="room-price">${eur2(o.total)}</span>
+      <span class="room-price">${eur2(o.total)}${promotionHtml(o.promotion)}</span>
     </label>`;
   }).join('');
   box.hidden = false;
@@ -1052,6 +1066,7 @@ async function renderRooms(q) {
 }
 
 function openBooking(item, ui, isFlight) {
+  metric('booking_start');
   state.booking = { item, isFlight, start: ui.start, end: ui.end, room: null };
   $('#roomBox').hidden = true;
   $('#bookTitle').textContent = isFlight ? t('Reservar vuelo') : t('Reservar hotel');
@@ -1088,6 +1103,7 @@ $('#bookCancel').addEventListener('click', () => dialog.close());
 const PAYMENT_SDK = 'https://payment-wrapper.liteapi.travel/dist/liteAPIPayment.js?v=a1';
 let sdkPromise;
 function loadPaymentSdk() {
+  metric('checkout_start');
   sdkPromise ??= new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = PAYMENT_SDK;
@@ -1139,6 +1155,7 @@ async function finishPayment(id) {
   toast(t('Confirmando tu reserva…'));
   try {
     const b = await api(`/api/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
+    metric('confirmation_view');
     toast(`✅ ${t('Pago recibido.')} ${b.sandbox ? t('Reserva de prueba confirmada') : t('Reserva confirmada')} · ${t('código {code}', { code: b.code })} · ${eur2(b.total)}`);
     rememberBooking(b);
     setView('mine');
@@ -1171,6 +1188,7 @@ onSend(bookForm, async () => {
     });
     store.set('dl-email', booking.email);
     dialog.close();
+    metric('confirmation_view');
     toast(`✅ ${booking.sandbox ? t('Reserva de prueba confirmada') : t('Reserva confirmada')} · ${t('código {code}', { code: booking.code })} · ${eur(booking.total)}`);
     rememberBooking(booking);
     await search();
@@ -1697,6 +1715,7 @@ async function payFlightWithWrapper(co) {
 }
 
 async function openFlightBooking(trip, data) {
+  metric('booking_start');
   state.flight = { trip, adults: data.adults, stripe: null, elements: null, checkout: null };
   store.set('dl-trip', JSON.stringify(tripFromFlight(trip, data)));
   $('#flightSummary').innerHTML = `<b>${esc(data.origin.name)} → ${esc(data.destination.name)}</b><br>${t('Ida')} ${fmtDay.format(toDate(trip.outbound.departure.slice(0, 10)))} · ${legText(trip.outbound)}${trip.inbound ? `<br>${t('Vuelta')} ${fmtDay.format(toDate(trip.inbound.departure.slice(0, 10)))} · ${legText(trip.inbound)}` : ''}<br>${tn(data.adults, '{n} pasajero', '{n} pasajeros')} · ${esc(trip.outbound.airlines.join(', '))}`;
@@ -1744,6 +1763,7 @@ function flightCustomer() {
 
 let stripePromise;
 function loadStripe() {
+  metric('checkout_start');
   stripePromise ??= new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://js.stripe.com/v3/';
@@ -1800,6 +1820,7 @@ async function finishFlightPayment(id, redirectStatus) {
   toast(t('Confirmando tu billete con la aerolínea…'));
   try {
     const b = await api(`/api/flights/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
+    metric('confirmation_view');
     toast(`✅ ${b.sandbox ? t('Reserva de prueba confirmada') : t('Vuelo reservado')} · ${t('código {code}', { code: b.code })}${b.pnr ? ' · ' + t('localizador {pnr}', { pnr: b.pnr }) : ''}`, 8000);
     rememberBooking(b);
     await loadMine(b.email);
@@ -2175,6 +2196,7 @@ function openAccount() {
   if (u) {
     body.innerHTML = `<h2>${t('Mi cuenta')}</h2>
       <p><b>${esc(u.email)}</b></p>
+      ${u.admin ? '<p><a href="/estadisticas">Estadísticas de DíasLibre</a></p>' : ''}
       <p class="meta">${t('Usamos tus últimas búsquedas para proponerte destinos en «Para ti».')}</p>
       <div class="actions"><button type="button" class="btn" data-act="mine">${t('Mis reservas')}</button><button type="button" class="btn" data-act="logout">${t('Cerrar sesión')}</button></div>
       <p><button type="button" class="link-danger" data-act="delete">${t('Borrar mi cuenta y mis búsquedas')}</button></p>

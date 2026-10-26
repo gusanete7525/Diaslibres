@@ -2,6 +2,10 @@
 // Se activa con la variable de entorno LITEAPI_KEY. Con una clave «sand_…» todo
 // ocurre en el entorno de pruebas de LiteAPI: no se cobra nada.
 
+import { CITIES } from './places.js';
+import { countryCode } from './resolve.js';
+import { offerPromotion } from './promotions.js';
+
 const API = process.env.LITEAPI_URL || 'https://api.liteapi.travel/v3.0';
 const BOOK = process.env.LITEAPI_BOOK_URL || 'https://book.liteapi.travel/v3.0';
 const DAY = 86400000;
@@ -212,14 +216,31 @@ export class LiteApi {
 
   // Todos los hoteles de una ciudad, con descripción y país en `lang`.
   // keep: false para consultas de fondo (datos para buscadores) que no deben llenar la memoria.
-  async hotels(city, { lang = 'es', keep = true } = {}) {
-    const key = `${lang}|${norm(city)}`;
+  async hotels(city, { lang = 'es', keep = true, country: selectedCountry } = {}) {
+    const parts = String(city).split(',').map(s => s.trim());
+    const explicitCountry = parts.length > 1 ? countryCode(parts.at(-1)) : null;
+    const text = explicitCountry ? parts.slice(0, -1).join(', ') : String(city).trim();
+    const known = CITIES.find(c => Object.entries(c).some(([k,v]) => ['es','en','fr','de','it','pt','nl'].includes(k) && norm(v) === norm(text)));
+    const country = countryCode(selectedCountry) || explicitCountry || known?.country || null;
+    const cityQuery = known?.country === country ? known.en || known.es : text;
+    const key = `${lang}|${country || ''}|${norm(cityQuery)}`;
     const hit = this.hotelLists.get(key);
     if (hit && Date.now() - hit.at < HOTELS_TTL) return hit.value;
-    const placeId = await this.#placeId(city, lang, keep);
-    if (!placeId) return [];
-    const { data = [] } = await this.#request('GET', `${API}/data/hotels?placeId=${encodeURIComponent(placeId)}&limit=${MAX_HOTELS}&language=${lang}`, null, { priority: keep });
-    const hotels = data.map((h) => this.#toHotel(h, lang, keep));
+    let location;
+    if (country) location = `countryCode=${encodeURIComponent(country)}&cityName=${encodeURIComponent(cityQuery)}`;
+    else {
+      const placeId = await this.#placeId(text, lang, keep);
+      if (!placeId) return [];
+      location = `placeId=${encodeURIComponent(placeId)}`;
+    }
+    let { data = [] } = await this.#request('GET', `${API}/data/hotels?${location}&limit=${MAX_HOTELS}&language=${lang}`, null, { priority: keep });
+    // Islands and smaller destinations may not be a city in the hotel catalogue.
+    // Keep geographic search, qualified by country, instead of silently losing them.
+    if (country && !data.length) {
+      const placeId = await this.#placeId(`${text}, ${countryName(country,'en')}`,lang,keep);
+      if (placeId) ({data = []} = await this.#request('GET', `${API}/data/hotels?placeId=${encodeURIComponent(placeId)}&countryCode=${encodeURIComponent(country)}&limit=${MAX_HOTELS}&language=${lang}`,null,{priority:keep}));
+    }
+    const hotels = data.filter(h => !country || !h.country || countryCode(h.country) === country).map((h) => this.#toHotel(h, lang, keep));
     if (keep) {
       this.hotelLists.delete(key);
       this.hotelLists.set(key, { at: Date.now(), value: hotels });
@@ -374,6 +395,7 @@ export class LiteApi {
         refundable,
         freeCancellationUntil: refundable ? rate.cancellationPolicies?.cancelPolicyInfos?.[0]?.cancelTime || null : null,
         total,
+        promotion: offerPromotion(o, rooms),
         payAtHotel: payAtHotel(o.rates),
       });
     }
@@ -391,6 +413,7 @@ export class LiteApi {
       units: rooms,
       nights: Math.round((Date.parse(checkOut) - Date.parse(checkIn)) / DAY),
       total: chosen.total,
+      promotion: chosen.promotion,
       room: chosen.key,
       roomName: chosen.roomName,
       board: chosen.board,

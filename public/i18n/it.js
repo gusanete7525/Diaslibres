@@ -1,4 +1,11 @@
 export default {
+  "Aeropuertos de referencia": "Aeroporti di riferimento",
+  "Origen: {from} ({code}). Destino: {to} ({arrival}). Los aeropuertos concretos se confirman en la oferta elegida.": "Partenza: {from} ({code}). Destinazione: {to} ({arrival}). Gli aeroporti esatti sono confermati nell’offerta scelta.",
+  "Alternativa en tren": "Alternativa in treno",
+  "Duración orientativa del tren directo: {minutes} min. Operadores: {operators}. Consulta horarios y disponibilidad antes de reservar.": "Durata indicativa del treno diretto: {minutes} min. Operatori: {operators}. Controlla orari e disponibilità prima di prenotare.",
+  "Antes de elegir tu vuelo": "Prima di scegliere il volo",
+  "Compara el importe total para todos los pasajeros y revisa el equipaje, las escalas y las condiciones de cambios y cancelación de cada tarifa. El precio final se comprueba de nuevo antes del pago.": "Confronta il totale per tutti i passeggeri e controlla bagagli, scali e condizioni di modifica e cancellazione di ogni tariffa. Il prezzo finale viene ricontrollato prima del pagamento.",
+  "Ahorras {amount}": "Risparmi {amount}",
  "Error de conexión": "Errore di connessione",
  "Precios y disponibilidad en tiempo real.": "Prezzi e disponibilità in tempo reale.",
  "Entorno de pruebas: las reservas son de prueba y no se cobran.": "Ambiente di prova: le prenotazioni sono di prova e non vengono addebitate.",

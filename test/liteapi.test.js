@@ -29,7 +29,7 @@ function fakeLiteApi(log) {
       assert.equal(body.occupancies.length, 1);
       return Response.json({ data: [{ hotelId: 'lpA', roomTypes: [
         { offerId: 'caro', offerRetailRate: { amount: 500 }, rates: [{ name: 'Suite', boardName: 'Room Only', cancellationPolicies: { refundableTag: 'NRFN' } }] },
-        { offerId: 'barato', offerRetailRate: { amount: 241.5 }, rates: [{ name: 'Doble', boardName: 'Desayuno', retailRate: { taxesAndFees: [{ included: true, description: 'IVA', amount: 20 }, { included: false, description: 'Tasa turística', amount: 4.4, currency: 'EUR' }] }, cancellationPolicies: { refundableTag: 'RFN', cancelPolicyInfos: [{ cancelTime: '2026-12-01 12:00:00' }] } }] },
+        { offerId: 'barato', offerRetailRate: { amount: 241.5 }, offerInitialPrice: { amount: 300, currency: 'EUR' }, rates: [{ name: 'Doble', boardName: 'Desayuno', retailRate: { taxesAndFees: [{ included: true, description: 'IVA', amount: 20 }, { included: false, description: 'Tasa turística', amount: 4.4, currency: 'EUR' }] }, cancellationPolicies: { refundableTag: 'RFN', cancelPolicyInfos: [{ cancelTime: '2026-12-01 12:00:00' }] } }] },
       ] }] });
     }
     if (u.endsWith('/rates/prebook')) {
@@ -85,6 +85,9 @@ test('hoteles, precios por noche, reserva y cancelación con LiteAPI', async () 
 
     const quote = await post('/api/quote', { type: 'hotel', itemId: a.id, checkIn: '2026-11-10', checkOut: '2026-11-12', units: 1 }).then((r) => r.json());
     assert.equal(quote.total, 241.5);
+    assert.equal(quote.promotion.originalTotal, 300);
+    assert.equal(quote.promotion.savings, 58.5);
+    assert.equal(quote.offers.find(o=>o.total===241.5).promotion.savings, 58.5);
     assert.equal(quote.roomName, 'Doble');
     assert.equal(quote.refundable, true);
     assert.equal(quote.freeCancellationUntil, '2026-12-01 12:00:00');

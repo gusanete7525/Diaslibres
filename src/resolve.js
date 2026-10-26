@@ -14,7 +14,7 @@ for (const locale of ['en', ...Object.values(LANGS).map((l) => l.locale)]) {
   const dn = new Intl.DisplayNames([locale], { type: 'region', fallback: 'none' });
   for (const c of CODES) { try { const n = dn.of(c); if (n && !CODE_BY_NAME.has(norm(n))) CODE_BY_NAME.set(norm(n), c); } catch { /* código no válido */ } }
 }
-const countryCode = (x) => (/^[A-Z]{2}$/.test(String(x || '')) ? x : CODE_BY_NAME.get(norm(x)) || null);
+export const countryCode = (x) => (/^[a-z]{2}$/i.test(String(x || '').trim()) ? String(x).trim().toUpperCase() : CODE_BY_NAME.get(norm(x)) || null);
 function countryName(code, lang, fallback) {
   try { return (code && new Intl.DisplayNames([LANGS[lang]?.locale || 'es-ES'], { type: 'region' }).of(code)) || fallback || ''; } catch { return fallback || code || ''; }
 }
