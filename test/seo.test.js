@@ -32,16 +32,16 @@ const hreflangs = (b) => Object.fromEntries([...b.matchAll(/<link rel="alternate
 test('portada: título y descripción nuevos, H1 de la propuesta Figma y traducciones', async () => {
   const es = await html('/');
   assert.equal(es.status, 200);
-  assert.equal(title(es.body), 'DíasLibres · Vuelos y hoteles baratos con calendario e IA');
-  assert.match(es.body, /<meta name="description" content="Busca vuelos y hoteles, mira en un calendario/);
-  assert.match(h1(es.body), /Menos buscar\./);
-  assert.match(h1(es.body), /Más escaparte\./);
+  assert.equal(title(es.body), 'DíasLibres · Escapadas según tus días libres y presupuesto');
+  assert.match(es.body, /<meta name="description" content="Dinos cuántos días tienes libres/);
+  assert.match(h1(es.body), /Tú pones los días\./);
+  assert.match(h1(es.body), /Nosotros, el destino\./);
   assert.match(es.body, /Encontrar mi viaje/);
   assert.match(es.body, /figma\.css/);
   assert.equal(canonical(es.body), base + '/');
   const en = await html('/en/');
-  assert.match(title(en.body), /Cheap flights and hotels/);
-  assert.match(h1(en.body), /Less searching\./);
+  assert.match(title(en.body), /Getaways for your days off/);
+  assert.match(h1(en.body), /You choose the days\./);
   assert.match(en.body, /Find my trip/);
   assert.match(en.body, /<html lang="en">/);
   for (const l of LANG_CODES) assert.ok(title((await html(LANGS[l].prefix + '/')).body).length <= 70, `título largo en ${l}`);

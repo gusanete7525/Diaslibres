@@ -1,4 +1,5 @@
 import express from 'express';
+import { makeEscapeSearch, escapePlan } from './src/escapes.js';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
@@ -417,6 +418,18 @@ export function createApp({
     } catch (err) {
       console.error('[liteapi]', err.message);
       res.status(502).json({ error: 'No se pudo cargar la ficha del hotel. Inténtalo de nuevo.' });
+    }
+  });
+
+  const escapeSearch = makeEscapeSearch(live);
+  const escapeLimit = rateLimit({ max: 20, windowMs: 10 * 60 * 1000 });
+  app.get('/api/escapes', escapeLimit, async (req, res) => {
+    try { escapePlan(req.query); }
+    catch (err) { return res.status(400).json({ error: err.message }); }
+    try {
+      res.set('Cache-Control', 'no-store').json(await escapeSearch(req.query, langOf(req)));
+    } catch {
+      res.status(502).json({ error: 'No se pudieron comprobar las escapadas. Inténtalo de nuevo.' });
     }
   });
 

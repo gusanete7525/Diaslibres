@@ -11,7 +11,8 @@
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" /></noscript>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/figma.css" />
 </head>
@@ -37,18 +38,35 @@
     <div class="hero-intro">
       <div class="hero-copy">
         <p class="eyebrow" data-i18n>TUS DÍAS LIBRES EMPIEZAN AQUÍ</p>
-        <h1><span data-i18n>Menos buscar.</span><br /><span data-i18n>Más escaparte.</span></h1>
-        <p class="sub" data-i18n>Cuéntanos el viaje que imaginas. Encuentra hoteles, vuelos y los días que mejor te vienen.</p>
+        <h1><span data-i18n>Tú pones los días.</span><br /><span data-i18n>Nosotros, el destino.</span></h1>
+        <p class="sub" data-i18n>Dinos cuántos días tienes libres y tu presupuesto; descubre a dónde puedes escaparte.</p>
+        <form id="escapeForm" class="escape-form">
+          <label><span data-i18n>¿Cuántos días libres tienes?</span><select name="kind"><option value="any" data-i18n>Días sueltos</option><option value="weekend" data-i18n>Fin de semana · 3 días</option><option value="bridge" data-i18n>Puente · 4 días</option><option value="week" data-i18n>Semana completa · 7 días</option></select></label>
+          <label><span data-i18n>Días</span><input name="days" type="number" min="2" max="15" value="3" required /></label>
+          <label><span data-i18n>Mes aproximado</span><input name="month" type="month" required /></label>
+          <label><span data-i18n>Presupuesto máximo · €</span><input name="budget" type="number" min="1" max="50000" step="1" placeholder="Sin límite" /></label>
+          <details class="escape-range"><summary data-i18n>Prefiero un rango flexible</summary><div><label><span data-i18n>Desde</span><input name="from" type="date" /></label><label><span data-i18n>Hasta</span><input name="to" type="date" /></label></div></details>
+          <p class="escape-scope" data-i18n>Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.</p>
+          <button type="submit" class="btn primary" data-i18n>Descubrir dónde puedo ir</button>
+        </form>
+        <details class="escape-ai"><summary data-i18n>O cuéntanos tu viaje con tus palabras</summary>
         <form id="aiForm" class="ai-box" autocomplete="off">
           <label class="sr-only" for="aiQuery" data-i18n>Describe tu viaje</label>
           <input id="aiQuery" type="search" placeholder="Una semana en Canarias, playa y hotel para dos…" aria-label="Describe tu viaje" />
           <div class="ai-actions"><span class="ai-badge">✦ <span data-i18n>Con ayuda de IA</span></span><button type="button" data-send class="btn primary"><span data-i18n>Encontrar mi viaje</span> →</button></div>
         </form>
+        </details>
         <div class="manual-links"><span data-i18n>¿Ya sabes adónde?</span><button type="button" data-manual-view="hotels" data-i18n>Buscar hoteles</button><button type="button" data-manual-view="flights" data-i18n>Buscar vuelos</button></div>
       </div>
       <figure class="hero-visual"><img src="/img/hero.jpg" width="574" height="350" alt="Playa al atardecer" fetchpriority="high" /><figcaption><span aria-hidden="true">↗</span><div><strong data-i18n>Tu destino. Tus fechas. Tu mejor precio.</strong><p data-i18n>El calendario te ayuda a elegir cuándo viajar.</p></div></figcaption></figure>
     </div>
     <div class="travel-benefits"><span data-i18n>✓ Fechas flexibles</span><span data-i18n>✓ Precios por día</span><span data-i18n>✓ Hoteles y vuelos en un lugar</span></div>
+    <section id="escapeFeatured" class="escape-featured" aria-labelledby="escapeHeading">
+      <h2 id="escapeHeading" data-i18n>Escapadas de 3 días para el próximo mes</h2>
+      <p data-i18n>Comparamos algunas fechas y destinos para inspirarte. No es una búsqueda exhaustiva ni incluye el transporte.</p>
+      <p id="escapeStatus" role="status" data-i18n>Comprobando precios de alojamiento…</p>
+      <div id="escapeList" class="escape-list"></div>
+    </section>
     <div class="ideas-heading" id="inspiracion"><h2 data-i18n>¿Qué te apetece hacer?</h2><p data-i18n>Empieza por una idea. El destino lo encontramos juntos.</p></div>
     <div class="examples" id="examples">
       <button type="button" class="ex-card" data-q="Algo de playa barato para una semana en julio"><img src="/img/ex-playa.jpg" alt="" loading="lazy" /><span><b data-i18n>Sol y playa</b><small data-i18n>Desconecta junto al mar</small></span></button>
@@ -237,5 +255,6 @@
   <footer class="footer"><strong class="footer-brand">DíasLibre</strong><p class="footer-tagline" data-i18n>Viaja más. Vive mejor.</p> <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL). · <a href="/legal.html">Información legal</a> · <a href="https://gusansoft.com/" rel="noopener">Gusansoft</a></footer>
 
   <script type="module" src="/app.js"></script>
+  <script type="module" src="/escapes.js"></script>
 </body>
 </html>

@@ -1934,6 +1934,14 @@ filters.checkIn.max = addDays(filters.checkIn.min, 330);
   } catch { /* datalist opcional */ }
   await configReady;
   const params = new URLSearchParams(location.search);
+  if (params.has('escape')) {
+    filters.destination.value = (params.get('destination') || '').slice(0, 120);
+    filters.checkIn.value = params.get('checkIn') || '';
+    filters.nights.value = Math.max(1, Math.min(14, Number(params.get('nights')) || 2));
+    filters.adults.value = '2';
+    setManual(true);
+    results.scrollIntoView({ block: 'start' });
+  }
   if (params.get('pago')) return finishPayment(params.get('pago'));
   if (params.get('vuelo')) return finishFlightPayment(params.get('vuelo'), params.get('redirect_status'));
   // Si ya se pulsó una pestaña mientras cargaba, no se le cambia.

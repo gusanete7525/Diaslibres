@@ -225,8 +225,8 @@ export function routePage(lang, o, d) {
 export function homePage(lang, noindex) {
   return {
     key: { type: 'home' },
-    title: tr(lang, 'DíasLibres · Vuelos y hoteles baratos con calendario e IA'),
-    description: tr(lang, 'Busca vuelos y hoteles, mira en un calendario qué días están libres y cuándo es más barato, o cuéntale a la IA cómo quieres viajar. Pago seguro.'),
+    title: tr(lang, 'DíasLibres · Escapadas según tus días libres y presupuesto'),
+    description: tr(lang, 'Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.'),
     noindex,
   };
 }
@@ -353,6 +353,12 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
     `<meta property="og:description" content="${esc(page.description)}" />`,
     `<meta property="og:url" content="${esc(url)}" />`,
     `<meta property="og:image" content="${esc(site)}/og.png" />`,
+    `<meta property="og:image:width" content="1200" />`,
+    `<meta property="og:image:height" content="630" />`,
+    `<meta property="og:image:alt" content="${esc(page.title)}" />`,
+    `<meta name="twitter:title" content="${esc(page.title)}" />`,
+    `<meta name="twitter:description" content="${esc(page.description)}" />`,
+    `<meta name="twitter:image" content="${esc(site)}/og.png" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`,
   ].filter(Boolean).join('\n  ');

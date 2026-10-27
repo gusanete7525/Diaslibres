@@ -101,3 +101,11 @@ Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la prim
 4. Comprueba `/api/health`: `"sandbox": false`, `"payment": "customer"` y `"mail": { "enabled": true, "admin": true }`.
 
 Las tasas que no van en el precio (p. ej. tasa turística) se muestran al reservar, en «Mis reservas» y en el email como «a pagar en el hotel». Cancelar una tarifa no reembolsable, o pasado el plazo gratuito, avisa de que no hay reembolso.
+
+## Descubrimiento por días libres y presupuesto
+
+La portada prioriza duración, tipo de hueco, mes o rango flexible y presupuesto total. `GET /api/escapes` compara una muestra de tres destinos (Valencia, Oporto y Málaga) y hasta tres fechas de llegada; no es una búsqueda exhaustiva. Fin de semana significa viernes a domingo; los puentes no consultan festivos. La duración incluye la salida: 3 días = 2 noches.
+
+Cada tarjeta se cotiza como una estancia completa con LiteAPI para **2 adultos, 1 habitación, sin transporte**. El presupuesto incluye las tasas conocidas en EUR a pagar en el hotel. Se excluyen del filtro de presupuesto las ofertas con tasas en otra moneda, que no pueden compararse sin conversión. Las ofertas se conservan 10 minutos en memoria y se agrupan consultas simultáneas. Sin proveedor no se inventan precios; en sandbox se indica que son pruebas y no se emiten precios estructurados. Los enlaces llevan las fechas y ocupación al buscador existente, donde se consulta de nuevo la tarifa antes de pagar.
+
+El marcado `TouristTrip`/`Offer` describe únicamente tarjetas de producción verificadas y visibles; no garantiza resultados enriquecidos en Google. Open Graph sigue renderizado en el servidor; incluye imagen 1200 × 630, texto alternativo y Twitter Cards. Las fuentes se cargan sin bloquear el primer render y ambos módulos JS son diferidos por `type="module"`.
