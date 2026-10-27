@@ -1,0 +1,17 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "diaslibres-migracion",
+  "main": "worker.js",
+  "account_id": "99622b5aac09c9cac4c89e04df32916f",
+  "compatibility_date": "2026-10-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "build": {"command":"node scripts/build-cloudflare-assets.mjs", "cwd":"."},
+  "assets": {"directory":".assets", "binding":"ASSETS", "run_worker_first":true, "html_handling":"none"},
+  "rules": [{"type":"Text", "globs":["**/*.html"], "fallthrough":true}],
+  "durable_objects": {"bindings":[{"name":"APP", "class_name":"DiasLibresApp"}]},
+  "migrations": [{"tag":"v1", "new_sqlite_classes":["DiasLibresApp"]}],
+  "d1_databases": [{"binding":"DB", "database_name":"diaslibres-migracion", "database_id":"00000000-0000-0000-0000-000000000000"}],
+  "triggers": {"crons":["*/15 * * * *"]},
+  "vars": {"MIGRATION_READ_ONLY":"1"}
+}
