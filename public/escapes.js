@@ -33,7 +33,8 @@ let requestId = 0;
 async function discover(scroll = false) {
   const id = ++requestId;
   const button = form.querySelector('button[type="submit"]');
-  button.disabled = true;
+  // Background inspiration must leave the main search available.
+  button.disabled = scroll;
   list.replaceChildren();
   document.getElementById('escapeSchema')?.remove();
   status.textContent = t('Comprobando precios de alojamiento…');
