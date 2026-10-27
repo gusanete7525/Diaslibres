@@ -1,6 +1,6 @@
 // The selected language provides inspiration, not the visitor's location or nationality.
 const MARKETS = {
-  es: { countries: ['ES', 'MX', 'CO'], hotels: ['Granada, Spain', 'Oaxaca, Mexico', 'Cartagena, Colombia'], routes: [['MAD', 'AGP'], ['MAD', 'MEX'], ['MAD', 'BOG']] },
+  es: { countries: ['ES', 'MX', 'CO'], hotels: ['Granada, Spain', 'Oaxaca, Mexico', 'Cartagena, Colombia'], routes: [['MAD', 'CUN'], ['MAD', 'PUJ'], ['MAD', 'HAV'], ['MAD', 'MEX'], ['MAD', 'BOG'], ['MAD', 'LIM'], ['MAD', 'EZE']] },
   fr: { countries: ['FR'], hotels: ['Colmar, France', 'Annecy, France', 'Nimes, France'], routes: [['CDG', 'NCE'], ['CDG', 'TLS'], ['CDG', 'AGP']] },
   en: { countries: ['GB', 'IE'], hotels: ['York, United Kingdom', 'Bath, United Kingdom', 'Galway, Ireland'], routes: [['LHR', 'EDI'], ['LHR', 'DUB'], ['LHR', 'OPO']] },
   de: { countries: ['DE', 'AT'], hotels: ['Leipzig, Germany', 'Nuremberg, Germany', 'Salzburg, Austria'], routes: [['FRA', 'BER'], ['FRA', 'VIE'], ['FRA', 'PMI']] },

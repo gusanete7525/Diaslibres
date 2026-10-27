@@ -25,7 +25,7 @@ async function load() {
       if (data.sandbox) status.textContent += ' ' + t('Entorno de pruebas: estos precios no son ofertas para reservar.');
       if (data.pending) status.textContent += ' ' + t('Comprobando precios de vuelos…');
       if (!data.deals.length && !data.pending) status.textContent = t('Ahora mismo no hay ofertas. Escribe el origen y el destino para buscar vuelos.');
-      for (const offer of data.deals.slice(0, 3)) {
+      for (const offer of data.deals.slice(0, lang === 'es' ? 7 : 3)) {
         const card = add('article', '', list, 'escape-card market-flight-card');
         add('h3', `${offer.origin.name} → ${offer.destination.name}`, card);
         add('p', date(offer.date), card);

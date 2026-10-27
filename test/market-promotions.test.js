@@ -53,7 +53,7 @@ test('todos los idiomas tienen un perfil independiente y un idioma desconocido u
     const m = promotionMarket(lang);
     assert.equal(m.language, lang);
     assert.equal(m.hotels.length, 3);
-    assert.equal(m.routes.length, 3);
+    assert.equal(m.routes.length, lang === 'es' ? 7 : 3);
     assert.ok(m.routes.every(([o, d]) => /^[A-Z]{3}$/.test(o) && /^[A-Z]{3}$/.test(d) && o !== d));
   }
   assert.equal(promotionMarket('unknown').language, 'es');
@@ -86,14 +86,16 @@ test('API de vuelos usa París en francés y Madrid en español, sin compartir c
     assert.equal(fr.market.language, 'fr');
     await app.locals.refreshDeals('es');
     const es = await get('es');
-    assert.equal(calls.length, 6);
+    assert.equal(calls.length, 10);
     assert.ok(es.deals.every(d => d.origin.code === 'MAD'));
     assert.ok(es.deals.some(d => d.destination.code === 'MEX'));
-    assert.ok(es.deals.some(d => d.destination.code === 'BOG'));
-    await get('fr'); assert.equal(calls.length, 6);
+    for (const code of ['CUN', 'PUJ', 'HAV', 'MEX', 'BOG', 'LIM', 'EZE']) {
+      assert.ok(es.deals.some(d => d.destination.code === code), `falta destino ${code}`);
+    }
+    await get('fr'); assert.equal(calls.length, 10);
     fail = true;
     await app.locals.refreshDeals('fr');
     assert.deepEqual((await get('fr')).deals, []);
-    assert.equal((await get('es')).deals.length, 3, 'un fallo francés no elimina la caché española');
+    assert.equal((await get('es')).deals.length, 7, 'un fallo francés no elimina la caché española');
   } finally { server.close(); }
 });
