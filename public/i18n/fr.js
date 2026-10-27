@@ -739,5 +739,15 @@ export default {
   "La consulta está tardando. Vuelve a intentarlo.": "La recherche prend du temps. Réessaie.",
   "No se pudieron comprobar las escapadas. Inténtalo de nuevo.": "Impossible de vérifier les escapades. Réessaie.",
   "DíasLibres · Escapadas según tus días libres y presupuesto": "DíasLibres · Escapades selon tes jours libres et ton budget",
-  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Indique tes jours libres et ton budget. Découvre des destinations à dates flexibles et compare le total de l’hébergement avant de réserver."
+  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Indique tes jours libres et ton budget. Découvre des destinations à dates flexibles et compare le total de l’hébergement avant de réserver.",
+  "Ideas según el idioma seleccionado. El idioma no determina tu ubicación.": "Des idées selon la langue choisie. La langue ne détermine pas ta localisation.",
+  "Ideas de alojamiento en {countries} según el idioma seleccionado.": "Idées de séjours en {countries}, selon la langue choisie.",
+  "Vuelos sugeridos según el idioma": "Idées de vols selon ta langue",
+  "Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.": "Départs suggérés selon la langue. Change la ville de départ dans Rechercher des vols.",
+  "Comprobando precios de vuelos…": "Vérification des prix des vols…",
+  "Solo ida · 1 adulto · precios en euros. Alojamiento no incluido.": "Aller simple · 1 adulte · prix en euros. Hébergement non inclus.",
+  "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Impossible de vérifier les vols. Essaie Rechercher des vols.",
+  "La consulta está tardando. Puedes continuar en Buscar vuelos.": "La recherche prend du temps. Continue dans Rechercher des vols.",
+  "Descuento verificado: {percent}% · antes {price}": "Réduction vérifiée : {percent}% · avant {price}",
+  "noches": "nuits"
 };

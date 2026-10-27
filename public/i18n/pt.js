@@ -739,5 +739,15 @@ export default {
   "La consulta está tardando. Vuelve a intentarlo.": "A consulta está a demorar. Tenta de novo.",
   "No se pudieron comprobar las escapadas. Inténtalo de nuevo.": "Não foi possível verificar as escapadinhas. Tenta de novo.",
   "DíasLibres · Escapadas según tus días libres y presupuesto": "DíasLibres · Escapadinhas para os teus dias livres e orçamento",
-  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Diz-nos os teus dias livres e orçamento. Descobre destinos com datas flexíveis e compara o total de alojamento antes de reservar."
+  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Diz-nos os teus dias livres e orçamento. Descobre destinos com datas flexíveis e compara o total de alojamento antes de reservar.",
+  "Ideas según el idioma seleccionado. El idioma no determina tu ubicación.": "Ideias segundo o idioma escolhido. O idioma não determina a tua localização.",
+  "Ideas de alojamiento en {countries} según el idioma seleccionado.": "Ideias de alojamento em {countries}, segundo o idioma escolhido.",
+  "Vuelos sugeridos según el idioma": "Voos sugeridos segundo o idioma",
+  "Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.": "Partidas sugeridas segundo o idioma. Altera a origem em Procurar voos.",
+  "Comprobando precios de vuelos…": "A verificar preços de voos…",
+  "Solo ida · 1 adulto · precios en euros. Alojamiento no incluido.": "Só ida · 1 adulto · preços em euros. Alojamento excluído.",
+  "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Não foi possível verificar os voos. Experimenta Procurar voos.",
+  "La consulta está tardando. Puedes continuar en Buscar vuelos.": "A consulta está a demorar. Continua em Procurar voos.",
+  "Descuento verificado: {percent}% · antes {price}": "Desconto verificado: {percent}% · antes {price}",
+  "noches": "noites"
 };

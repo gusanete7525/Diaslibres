@@ -738,5 +738,15 @@ export default {
   "La consulta está tardando. Vuelve a intentarlo.": "De zoekopdracht duurt lang. Probeer opnieuw.",
   "No se pudieron comprobar las escapadas. Inténtalo de nuevo.": "Uitstapjes konden niet worden gecontroleerd. Probeer opnieuw.",
   "DíasLibres · Escapadas según tus días libres y presupuesto": "DíasLibres · Uitstapjes voor je vrije dagen en budget",
-  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Vertel ons je vrije dagen en budget. Ontdek bestemmingen met flexibele datums en vergelijk verblijfskosten voordat je boekt."
+  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Vertel ons je vrije dagen en budget. Ontdek bestemmingen met flexibele datums en vergelijk verblijfskosten voordat je boekt.",
+  "Ideas según el idioma seleccionado. El idioma no determina tu ubicación.": "Ideeën op basis van je taalkeuze. Je taal bepaalt niet je locatie.",
+  "Ideas de alojamiento en {countries} según el idioma seleccionado.": "Verblijfideeën in {countries}, op basis van je taalkeuze.",
+  "Vuelos sugeridos según el idioma": "Vluchtsuggesties op basis van je taal",
+  "Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.": "Voorgestelde vertrekplaatsen op basis van taal. Wijzig je vertrekplaats via Vluchten zoeken.",
+  "Comprobando precios de vuelos…": "Vluchtprijzen controleren…",
+  "Solo ida · 1 adulto · precios en euros. Alojamiento no incluido.": "Enkele reis · 1 volwassene · prijzen in euro. Verblijf niet inbegrepen.",
+  "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Vluchten konden niet worden gecontroleerd. Probeer Vluchten zoeken.",
+  "La consulta está tardando. Puedes continuar en Buscar vuelos.": "De zoekopdracht duurt lang. Ga verder via Vluchten zoeken.",
+  "Descuento verificado: {percent}% · antes {price}": "Geverifieerde korting: {percent}% · voorheen {price}",
+  "noches": "nachten"
 };

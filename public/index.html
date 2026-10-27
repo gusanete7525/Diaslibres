@@ -64,8 +64,15 @@
     <section id="escapeFeatured" class="escape-featured" aria-labelledby="escapeHeading">
       <h2 id="escapeHeading" data-i18n>Escapadas de 3 días para el próximo mes</h2>
       <p data-i18n>Comparamos algunas fechas y destinos para inspirarte. No es una búsqueda exhaustiva ni incluye el transporte.</p>
+      <p id="escapeMarket" class="market-note" data-i18n>Ideas según el idioma seleccionado. El idioma no determina tu ubicación.</p>
       <p id="escapeStatus" role="status" data-i18n>Comprobando precios de alojamiento…</p>
       <div id="escapeList" class="escape-list"></div>
+    </section>
+    <section id="marketFlights" class="escape-featured" aria-labelledby="marketFlightsHeading" hidden>
+      <h2 id="marketFlightsHeading" data-i18n>Vuelos sugeridos según el idioma</h2>
+      <p data-i18n>Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.</p>
+      <p id="marketFlightStatus" role="status" data-i18n>Comprobando precios de vuelos…</p>
+      <div id="marketFlightList" class="escape-list"></div>
     </section>
     <div class="ideas-heading" id="inspiracion"><h2 data-i18n>¿Qué te apetece hacer?</h2><p data-i18n>Empieza por una idea. El destino lo encontramos juntos.</p></div>
     <div class="examples" id="examples">
@@ -256,5 +263,6 @@
 
   <script type="module" src="/app.js"></script>
   <script type="module" src="/escapes.js"></script>
+  <script type="module" src="/market-deals.js"></script>
 </body>
 </html>

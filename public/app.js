@@ -1942,11 +1942,19 @@ filters.checkIn.max = addDays(filters.checkIn.min, 330);
     setManual(true);
     results.scrollIntoView({ block: 'start' });
   }
+  if (params.has('dealFlight') && state.config.liveFlights) {
+    filters.origin.value = (params.get('origin') || '').slice(0, 120);
+    filters.destination.value = (params.get('destination') || '').slice(0, 120);
+    filters.date.value = params.get('date') || '';
+    filters.returnDate.value = '';
+    filters.passengers.value = '1';
+    setManual(true);
+  }
   if (params.get('pago')) return finishPayment(params.get('pago'));
   if (params.get('vuelo')) return finishFlightPayment(params.get('vuelo'), params.get('redirect_status'));
   // Si ya se pulsó una pestaña mientras cargaba, no se le cambia.
   // Las páginas /vuelos/<ruta> abren directamente la búsqueda de vuelos.
-  const start = document.body.dataset.startView === 'flights' && state.config.flights !== false ? 'flights' : 'hotels';
+  const start = ((params.has('dealFlight') && state.config.liveFlights) || document.body.dataset.startView === 'flights') && state.config.flights !== false ? 'flights' : 'hotels';
   // Páginas por filtro (/hoteles/<ciudad>/con-piscina…): la búsqueda empieza con el filtro puesto.
   try {
     const f = JSON.parse(document.body.dataset.startFilters || 'null');

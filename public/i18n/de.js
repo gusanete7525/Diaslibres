@@ -739,5 +739,15 @@ export default {
   "La consulta está tardando. Vuelve a intentarlo.": "Die Suche dauert länger. Bitte erneut versuchen.",
   "No se pudieron comprobar las escapadas. Inténtalo de nuevo.": "Kurzreisen konnten nicht geprüft werden. Bitte erneut versuchen.",
   "DíasLibres · Escapadas según tus días libres y presupuesto": "DíasLibres · Kurzreisen für deine freien Tage und dein Budget",
-  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Nenne deine freien Tage und dein Budget. Entdecke Ziele mit flexiblen Terminen und vergleiche Unterkunftskosten vor der Buchung."
+  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Nenne deine freien Tage und dein Budget. Entdecke Ziele mit flexiblen Terminen und vergleiche Unterkunftskosten vor der Buchung.",
+  "Ideas según el idioma seleccionado. El idioma no determina tu ubicación.": "Ideen nach ausgewählter Sprache. Die Sprache bestimmt nicht deinen Standort.",
+  "Ideas de alojamiento en {countries} según el idioma seleccionado.": "Unterkunftsideen in {countries}, nach ausgewählter Sprache.",
+  "Vuelos sugeridos según el idioma": "Flugideen nach Sprache",
+  "Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.": "Vorgeschlagene Abflüge nach Sprache. Ändere den Abflugort unter Flüge suchen.",
+  "Comprobando precios de vuelos…": "Flugpreise werden geprüft…",
+  "Solo ida · 1 adulto · precios en euros. Alojamiento no incluido.": "Nur Hinflug · 1 Erwachsener · Preise in Euro. Ohne Unterkunft.",
+  "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Flüge konnten nicht geprüft werden. Versuche Flüge suchen.",
+  "La consulta está tardando. Puedes continuar en Buscar vuelos.": "Die Suche dauert länger. Weiter unter Flüge suchen.",
+  "Descuento verificado: {percent}% · antes {price}": "Geprüfter Rabatt: {percent}% · vorher {price}",
+  "noches": "Nächte"
 };

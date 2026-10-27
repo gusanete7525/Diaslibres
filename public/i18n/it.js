@@ -739,5 +739,15 @@ export default {
   "La consulta está tardando. Vuelve a intentarlo.": "La ricerca sta impiegando tempo. Riprova.",
   "No se pudieron comprobar las escapadas. Inténtalo de nuevo.": "Impossibile verificare le fughe. Riprova.",
   "DíasLibres · Escapadas según tus días libres y presupuesto": "DíasLibres · Fughe secondo i tuoi giorni liberi e il budget",
-  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Indicaci giorni liberi e budget. Scopri destinazioni con date flessibili e confronta il totale alloggio prima di prenotare."
+  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Indicaci giorni liberi e budget. Scopri destinazioni con date flessibili e confronta il totale alloggio prima di prenotare.",
+  "Ideas según el idioma seleccionado. El idioma no determina tu ubicación.": "Idee in base alla lingua scelta. La lingua non determina la tua posizione.",
+  "Ideas de alojamiento en {countries} según el idioma seleccionado.": "Idee di soggiorno in {countries}, in base alla lingua scelta.",
+  "Vuelos sugeridos según el idioma": "Voli suggeriti in base alla lingua",
+  "Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.": "Partenze suggerite in base alla lingua. Cambia la città di partenza in Cerca voli.",
+  "Comprobando precios de vuelos…": "Verifica dei prezzi dei voli…",
+  "Solo ida · 1 adulto · precios en euros. Alojamiento no incluido.": "Solo andata · 1 adulto · prezzi in euro. Alloggio escluso.",
+  "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Impossibile verificare i voli. Prova Cerca voli.",
+  "La consulta está tardando. Puedes continuar en Buscar vuelos.": "La ricerca sta impiegando tempo. Continua in Cerca voli.",
+  "Descuento verificado: {percent}% · antes {price}": "Sconto verificato: {percent}% · prima {price}",
+  "noches": "notti"
 };

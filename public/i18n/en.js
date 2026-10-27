@@ -738,5 +738,15 @@ export default {
   "La consulta está tardando. Vuelve a intentarlo.": "This is taking longer than expected. Please try again.",
   "No se pudieron comprobar las escapadas. Inténtalo de nuevo.": "Could not check getaways. Please try again.",
   "DíasLibres · Escapadas según tus días libres y presupuesto": "DíasLibres · Getaways for your days off and budget",
-  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Tell us your days off and budget. Discover destinations with flexible dates and compare accommodation totals before booking."
+  "Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.": "Tell us your days off and budget. Discover destinations with flexible dates and compare accommodation totals before booking.",
+  "Ideas según el idioma seleccionado. El idioma no determina tu ubicación.": "Ideas based on your selected language. Language does not determine your location.",
+  "Ideas de alojamiento en {countries} según el idioma seleccionado.": "Accommodation ideas in {countries}, based on your selected language.",
+  "Vuelos sugeridos según el idioma": "Flight ideas based on your language",
+  "Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.": "Suggested departures based on language. Change your departure city in Search flights.",
+  "Comprobando precios de vuelos…": "Checking flight prices…",
+  "Solo ida · 1 adulto · precios en euros. Alojamiento no incluido.": "One way · 1 adult · prices in euros. Accommodation excluded.",
+  "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Could not check flights now. Try Search flights.",
+  "La consulta está tardando. Puedes continuar en Buscar vuelos.": "This is taking longer. Continue in Search flights.",
+  "Descuento verificado: {percent}% · antes {price}": "Verified discount: {percent}% · previously {price}",
+  "noches": "nights"
 };

@@ -47,6 +47,11 @@ async function discover(scroll = false) {
     const data = await response.json();
     if (id !== requestId) return;
     if (!response.ok) throw new Error(data.error || t('No se pudieron comprobar las escapadas. Inténtalo de nuevo.'));
+    if (data.market?.countries?.length) {
+      const names = new Intl.DisplayNames([lang], { type: 'region' });
+      const countries = new Intl.ListFormat(lang).format(data.market.countries.map(c => names.of(c)));
+      document.getElementById('escapeMarket').textContent = t('Ideas de alojamiento en {countries} según el idioma seleccionado.', { countries });
+    }
     if (data.unavailable) {
       status.textContent = t('Los precios de escapadas no están disponibles ahora. Puedes explorar destinos con la búsqueda manual.');
       return;
@@ -68,6 +73,9 @@ async function discover(scroll = false) {
       element('p', `${date(offer.checkIn)} – ${date(offer.checkOut)} · ${data.nights} ${t('noches')}`, card);
       element('p', money(offer.total), card, 'escape-total');
       element('small', t('Total a pagar online · 2 adultos · 1 habitación'), card);
+      if (offer.promotion?.percent > 0 && offer.promotion.originalTotal > offer.total) {
+        element('small', t('Descuento verificado: {percent}% · antes {price}', { percent: offer.promotion.percent, price: money(offer.promotion.originalTotal) }), card, 'market-discount');
+      }
       if (offer.roomName) element('small', offer.roomName, card);
       for (const tax of offer.payAtHotel) element('small', `${t('A pagar en el hotel')}: ${tax.amount} ${tax.currency} · ${tax.description}`, card);
       if (offer.knownTotal > offer.total) element('small', t('Total con tasas conocidas: {price}', { price: money(offer.knownTotal) }), card);

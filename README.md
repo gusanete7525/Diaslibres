@@ -104,8 +104,15 @@ Las tasas que no van en el precio (p. ej. tasa turística) se muestran al reserv
 
 ## Descubrimiento por días libres y presupuesto
 
-La portada prioriza duración, tipo de hueco, mes o rango flexible y presupuesto total. `GET /api/escapes` compara una muestra de tres destinos (Valencia, Oporto y Málaga) y hasta tres fechas de llegada; no es una búsqueda exhaustiva. Fin de semana significa viernes a domingo; los puentes no consultan festivos. La duración incluye la salida: 3 días = 2 noches.
+La portada prioriza duración, tipo de hueco, mes o rango flexible y presupuesto total. `GET /api/escapes` compara una muestra de tres destinos según el idioma y hasta tres fechas de llegada, comparando hasta dos alojamientos modestos bien valorados por destino; no es una búsqueda exhaustiva. Fin de semana significa viernes a domingo; los puentes no consultan festivos. La duración incluye la salida: 3 días = 2 noches.
 
 Cada tarjeta se cotiza como una estancia completa con LiteAPI para **2 adultos, 1 habitación, sin transporte**. El presupuesto incluye las tasas conocidas en EUR a pagar en el hotel. Se excluyen del filtro de presupuesto las ofertas con tasas en otra moneda, que no pueden compararse sin conversión. Las ofertas se conservan 10 minutos en memoria y se agrupan consultas simultáneas. Sin proveedor no se inventan precios; en sandbox se indica que son pruebas y no se emiten precios estructurados. Los enlaces llevan las fechas y ocupación al buscador existente, donde se consulta de nuevo la tarifa antes de pagar.
 
-El marcado `TouristTrip`/`Offer` describe únicamente tarjetas de producción verificadas y visibles; no garantiza resultados enriquecidos en Google. Open Graph sigue renderizado en el servidor; incluye imagen 1200 × 630, texto alternativo y Twitter Cards. Las fuentes se cargan sin bloquear el primer render y ambos módulos JS son diferidos por `type="module"`.
+El marcado `TouristTrip`/`Offer` describe únicamente tarjetas de producción verificadas y visibles; no garantiza resultados enriquecidos en Google. Open Graph sigue renderizado en el servidor; incluye imagen 1200 × 630, texto alternativo y Twitter Cards. Las fuentes se cargan sin bloquear el primer render y los módulos JS son diferidos por `type="module"`.
+
+
+## Promociones según el idioma
+
+Los perfiles de `src/markets.js` aportan inspiración según el idioma, sin inferir ubicación ni nacionalidad. Francés propone Colmar, Annecy y Nîmes, con vuelos desde París; español incluye Granada, Oaxaca y Cartagena, con vuelos desde Madrid a Málaga, México y Bogotá. También hay perfiles para inglés, alemán, italiano, portugués y neerlandés. El origen puede cambiarse en Buscar vuelos.
+
+`/api/escapes` y `/api/flights/deals` usan `X-Lang` y cachés independientes por idioma. Las tarjetas de alojamiento muestran descuentos solo si la cotización incluye una promoción verificada. Los vuelos son sugerencias independientes de solo ida para un adulto, a 14 días, con el precio más bajo de los resultados del proveedor por ruta; no forman un paquete con el hotel ni usan su presupuesto. Las tarifas se renuevan tras dos horas y se vacían si la actualización no obtiene resultados, para evitar mantener precios antiguos indefinidamente. Los enlaces conservan idioma, ruta y fecha, y abren una nueva consulta de disponibilidad.

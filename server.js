@@ -1,3 +1,4 @@
+import { promotionMarket, marketInfo } from './src/markets.js';
 import express from 'express';
 import { makeEscapeSearch, escapePlan } from './src/escapes.js';
 import { randomBytes } from 'node:crypto';
@@ -551,34 +552,44 @@ export function createApp({
   });
 
   // ---------- Ofertas: el vuelo más barato de rutas populares (se renuevan cada 2 h) ----------
-  const DEAL_ROUTES = [['MAD', 'BCN'], ['MAD', 'LIS'], ['MAD', 'CDG'], ['MAD', 'FCO'], ['MAD', 'TFN'], ['BCN', 'AGP'], ['BCN', 'LHR'], ['VLC', 'PMI'], ['VLC', 'AMS']];
   const DEALS_TTL = 2 * 60 * 60 * 1000;
-  const deals = { at: 0, date: null, list: [], running: null };
-  function refreshDeals() {
+  const dealsByLanguage = new Map();
+  function dealsFor(language) {
+    const market = promotionMarket(language);
+    if (!dealsByLanguage.has(market.language)) dealsByLanguage.set(market.language, { at: 0, date: null, list: [], running: null });
+    return { market, deals: dealsByLanguage.get(market.language) };
+  }
+  function refreshDeals(language = 'es') {
+    const { market, deals } = dealsFor(language);
     if (!liveFlights || deals.running) return deals.running;
     const date = addDays(todayISO(), 14);
     const fresh = [];
-    const place = (code) => ({ code, name: AIRPORTS[code] || code });
-    deals.running = Promise.all(DEAL_ROUTES.map(async ([o, d]) => {
+    const place = code => ({ code, name: AIRPORTS[code] || code });
+    deals.running = Promise.all(market.routes.map(async ([o, d]) => {
       try {
-        const [t] = await live.flightSearch({ origin: o, destination: d, date, adults: 1 }, { priority: false });
+        const trips = await live.flightSearch({ origin: o, destination: d, date, adults: 1 }, { priority: false });
+        const t = trips.filter(t => Number.isFinite(t.total) && t.total > 0 && t.currency === 'EUR').sort((a, b) => a.total - b.total)[0];
         if (t) fresh.push({ origin: place(o), destination: place(d), date, total: t.total, currency: t.currency, airlines: t.outbound.airlines, departure: t.outbound.departure, stops: t.outbound.stops, minutes: t.outbound.minutes });
       } catch (err) {
         console.error('[liteapi ofertas]', o, d, err.message);
       }
-      if (!deals.at) { deals.list = [...fresh]; deals.date = date; } // la primera vez se van enseñando según llegan
+      if (!deals.at) { deals.list = [...fresh]; deals.date = date; }
     })).then(() => {
-      if (fresh.length) Object.assign(deals, { list: fresh, date, at: Date.now() });
+      // Empty results replace expired prices too; never keep an old fare indefinitely.
+      Object.assign(deals, { list: fresh, date, at: Date.now() });
     }).finally(() => { deals.running = null; });
     return deals.running;
   }
   app.locals.refreshDeals = refreshDeals;
   app.get('/api/flights/deals', (req, res) => {
     if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
-    if (Date.now() - deals.at > DEALS_TTL) refreshDeals();
     const lang = langOf(req);
-    const named = (p) => ({ ...p, name: placeName(p.code, lang, p.name) });
-    res.json({ date: deals.date, deals: [...deals.list].sort((a, b) => a.total - b.total).map((d) => ({ ...d, origin: named(d.origin), destination: named(d.destination) })), pending: !deals.at && !!deals.running });
+    const { deals } = dealsFor(lang);
+    if (Date.now() - deals.at > DEALS_TTL) refreshDeals(lang);
+    const named = p => ({ ...p, name: placeName(p.code, lang, p.name) });
+    // A previous day's price must not masquerade as a current offer during refresh.
+    const visible = deals.date >= todayISO() ? deals.list : [];
+    res.set('Cache-Control', 'no-store').json({ date: deals.date, checkedAt: deals.at ? new Date(deals.at).toISOString() : null, sandbox: !!live.sandbox, market: marketInfo(lang), deals: [...visible].sort((a, b) => a.total - b.total).map(d => ({ ...d, origin: named(d.origin), destination: named(d.destination) })), pending: !!deals.running });
   });
 
   app.post('/api/flights/quote', async (req, res) => {

@@ -102,4 +102,10 @@ h1,h2,h3,.logo { font-family:inherit; }
 .escape-card .escape-total { font-size:24px; font-weight:700; color:var(--brand); }
 .escape-card small { display:block; color:var(--text-2); line-height:1.5; margin:8px 0; }
 .escape-card a { display:inline-block; text-decoration:none; margin-top:10px; }
+.market-note { padding-left:12px; border-left:3px solid var(--brand); }
+.market-flight-card { display:flex; flex-direction:column; }
+.market-flight-card h3 { margin-top:0; overflow-wrap:anywhere; }
+.market-flight-card a { align-self:flex-start; margin-top:auto; }
+.market-flight-card small:last-of-type { padding-bottom:18px; }
+.escape-card .market-discount { color:var(--brand); font-weight:600; }
 @media(max-width:700px) { .escape-list { grid-template-columns:1fr; } .escape-form { padding:14px; } .escape-form label { font-size:13px; } .escape-featured h2 { font-size:24px; } }

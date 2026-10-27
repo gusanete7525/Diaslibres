@@ -1,3 +1,4 @@
+import { promotionMarket, marketInfo } from './markets.js';
 import { todayISO, addDays, isISODate, daysBetween } from './availability.js';
 
 // Bounded discovery: sample three arrival dates, never claim an exhaustive cheapest fare.
@@ -35,7 +36,10 @@ export function makeEscapeSearch(live) {
   const cache = new Map();
   return async (q, lang = 'es') => {
     const plan = escapePlan(q);
-    if (!live) return { ...plan, results: [], unavailable: true, sandbox: false };
+    const market = promotionMarket(lang);
+    lang = market.language;
+    const context = marketInfo(lang);
+    if (!live) return { ...plan, results: [], unavailable: true, sandbox: false, market: context };
     const key = JSON.stringify([plan, lang]);
     const found = cache.get(key);
     if (found && found.expires > Date.now()) return found.value;
@@ -43,12 +47,14 @@ export function makeEscapeSearch(live) {
     if (cache.size >= 100) cache.delete(cache.keys().next().value);
     const value = (async () => {
       const checkedAt = new Date().toISOString();
-      const lists = await Promise.all(['Valencia, Spain', 'Porto, Portugal', 'Malaga, Spain'].map(async city => {
+      const lists = await Promise.all(market.hotels.map(async city => {
         try {
           const hotels = await live.hotels(city, { lang });
-          const hotel = hotels.find(h => h.rating >= 8) || hotels[0];
-          if (!hotel) return [];
-          const offers = await Promise.all(plan.dates.map(async checkIn => {
+          // Prefer well-rated modest properties, but compare actual stay totals before ranking.
+          const modest = hotels.filter(h => h.rating >= 7 && h.stars > 0 && h.stars <= 3);
+          const pool = modest.length ? modest : hotels.filter(h => h.rating >= 8);
+          const selected = (pool.length ? pool : hotels).slice(0, 2);
+          const offers = await Promise.all(selected.flatMap(hotel => plan.dates.map(async checkIn => {
             try {
               const checkOut = addDays(checkIn, plan.nights);
               const rate = await live.quote({ itemId: hotel.id, checkIn, checkOut, units: 1, adults: 2, children: [] });
@@ -57,13 +63,13 @@ export function makeEscapeSearch(live) {
               const knownTotal = Math.round((rate.total + taxes.filter(t => t.currency === 'EUR').reduce((s, t) => s + t.amount, 0)) * 100) / 100;
               // Unknown-currency extras cannot honestly be compared to a euro budget.
               if (plan.budget !== null && (knownTotal > plan.budget || taxes.some(t => t.currency !== 'EUR'))) return null;
-              return { id: hotel.id, name: hotel.name, city: hotel.city, photo: hotel.photo, checkIn, checkOut, total: rate.total, knownTotal, payAtHotel: taxes, room: rate.room, roomName: rate.roomName, board: rate.board, checkedAt };
+              return { id: hotel.id, name: hotel.name, city: hotel.city, photo: hotel.photo, checkIn, checkOut, total: rate.total, knownTotal, payAtHotel: taxes, room: rate.room, roomName: rate.roomName, board: rate.board, checkedAt, promotion: rate.promotion || null };
             } catch { return null; }
-          }));
+          })));
           return offers.filter(Boolean).sort((a, b) => a.knownTotal - b.knownTotal).slice(0, 1);
         } catch { return []; }
       }));
-      return { ...plan, results: lists.flat().sort((a, b) => a.knownTotal - b.knownTotal), checkedAt, sandbox: !!live.sandbox, sampled: true, citiesChecked: 3, datesChecked: plan.dates.length };
+      return { ...plan, results: lists.flat().sort((a, b) => a.knownTotal - b.knownTotal), checkedAt, sandbox: !!live.sandbox, sampled: true, citiesChecked: market.hotels.length, datesChecked: plan.dates.length, market: context };
     })();
     cache.set(key, { value, expires: Date.now() + 10 * 60 * 1000 });
     try {
