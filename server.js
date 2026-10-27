@@ -21,7 +21,8 @@ import { recommend } from './src/recommend.js';
 import { railOption, railFrom, railBookUrl, DOOR_FLIGHT } from './src/rail.js';
 import { LiteApi, LiteApiError, PriceChangedError, PaymentPendingError, occupancy, FACILITIES, BOARDS, STAY_TYPES } from './src/liteapi.js';
 
-const root = dirname(fileURLToPath(import.meta.url));
+const nodeEntry = import.meta.url ? fileURLToPath(import.meta.url) : null;
+const root = nodeEntry ? dirname(nodeEntry) : '/bundle';
 
 // Códigos de reserva: 8 caracteres de un alfabeto sin confusiones (sin 0/O ni 1/I), unos 10^12 combinaciones, para que
 // no se puedan adivinar a partir de un email.
@@ -29,8 +30,8 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const randomCode = () => 'DL-' + [...randomBytes(8)].map((byte) => CODE_ALPHABET[byte % 32]).join('');
 
 // Límite de peticiones por IP en una ventana de tiempo (en memoria; vale para una sola instancia).
-export function rateLimit({ max, windowMs, message = 'Demasiadas peticiones. Prueba dentro de un rato.' }) {
-  const hits = new Map(); // ip → [marcas de tiempo]
+export function rateLimit({ max, windowMs, message = 'Demasiadas peticiones. Prueba dentro de un rato.', storage = new Map() }) {
+  const hits = storage; // ip → [marcas de tiempo]
   return (req, res, next) => {
     const now = Date.now();
     const recent = (hits.get(req.ip) || []).filter((t) => now - t < windowMs);
@@ -56,9 +57,15 @@ export function createApp({
   limits = { aiSearch: 30, checkout: 20, demoBooking: 20, windowMs: 10 * 60 * 1000 },
   // Cada cuánto se revisan los pagos que se quedaron a medias (0 = nunca; las pruebas lo llaman a mano).
   reconcileEveryMs = 15 * 60 * 1000,
+  indexHtml: suppliedIndexHtml,
+  serveStatic = true,
+  backgroundTask = promise => promise,
+  limiterFactory = rateLimit,
+  searchAi = aiSearch,
+  lookupFailures = new Map(),
 } = {}) {
   // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
-  const notify = (fn, b) => { if (b && mailer?.[fn]) Promise.resolve().then(() => mailer[fn](b)).catch(() => {}); };
+  const notify = (fn, b) => { if (b && mailer?.[fn]) backgroundTask(Promise.resolve().then(() => mailer[fn](b)).catch(() => {})); };
   const app = express();
   // Solo el proxy de Render (un salto): con `true`, cualquiera podría poner su propia X-Forwarded-For y cambiar su IP,
   // y los límites de intentos por IP no servirían. TRUST_PROXY permite otro número de saltos.
@@ -68,9 +75,9 @@ export function createApp({
     res.set({ 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'SAMEORIGIN', 'Referrer-Policy': 'strict-origin-when-cross-origin' });
     next();
   });
-  const aiLimit = rateLimit({ max: limits.aiSearch, windowMs: limits.windowMs, message: 'Has hecho muchas búsquedas seguidas. Prueba dentro de unos minutos.' });
-  const checkoutLimit = rateLimit({ max: limits.checkout, windowMs: limits.windowMs, message: 'Demasiados intentos de pago seguidos. Prueba dentro de unos minutos.' });
-  const bookingLimit = rateLimit({ max: limits.demoBooking, windowMs: limits.windowMs, message: 'Demasiadas reservas seguidas. Prueba dentro de unos minutos.' });
+  const aiLimit = limiterFactory({ max: limits.aiSearch, windowMs: limits.windowMs, message: 'Has hecho muchas búsquedas seguidas. Prueba dentro de unos minutos.' });
+  const checkoutLimit = limiterFactory({ max: limits.checkout, windowMs: limits.windowMs, message: 'Demasiados intentos de pago seguidos. Prueba dentro de unos minutos.' });
+  const bookingLimit = limiterFactory({ max: limits.demoBooking, windowMs: limits.windowMs, message: 'Demasiadas reservas seguidas. Prueba dentro de unos minutos.' });
   // Qué se le enseña al cliente de un error: los mensajes propios (en español, pensados para él) tal cual; los que llegan
   // en crudo del proveedor o de un fallo interno, uno genérico. El detalle queda en el registro del servidor.
   const shown = (err, fallback) => (err instanceof LiteApiError && !err.provider ? err.message : fallback);
@@ -99,7 +106,7 @@ export function createApp({
     throw new Error('No se pudo generar un código de reserva.');
   };
   app.use(express.json({ limit: '20kb' }));
-  const metricLimit = rateLimit({max:120,windowMs:60000});
+  const metricLimit = limiterFactory({max:120,windowMs:60000});
   app.post('/api/metrics', metricLimit, async (req,res) => {
     res.set('Cache-Control','no-store');
     const origin = req.get('origin');
@@ -112,7 +119,7 @@ export function createApp({
     res.sendStatus(204);
   });
   // ---------- Buscadores y app Android ----------
-  const indexHtml = readFileSync(join(root, 'public', 'index.html'), 'utf8');
+  const indexHtml = suppliedIndexHtml ?? readFileSync(join(root, 'public', 'index.html'), 'utf8');
   // La dirección pública: SITE_URL o, en Render, la que da Render. Solo en local se usa la cabecera Host, porque se puede
   // falsear: con ella, un enlace de inicio de sesión pedido para otra persona podría apuntar a una web ajena.
   const siteUrl = (req) => (process.env.SITE_URL?.trim() || process.env.PUBLIC_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim() || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
@@ -281,7 +288,7 @@ export function createApp({
   });
   // El código del navegador se sirve compacto y sin comentarios (más ligero y menos legible).
   let appJs = null;
-  app.get('/app.js', async (_req, res, next) => {
+  if (serveStatic) app.get('/app.js', async (_req, res, next) => {
     try {
       appJs ??= minify(readFileSync(join(root, 'public', 'app.js'), 'utf8'), {
         module: true, compress: { passes: 2 }, mangle: { toplevel: true }, format: { comments: false },
@@ -293,7 +300,7 @@ export function createApp({
       next(); // si falla, el archivo original
     }
   });
-  app.use(express.static(join(root, 'public'), { index: false }));
+  if (serveStatic) app.use(express.static(join(root, 'public'), { index: false }));
 
   const list = (v) => (Array.isArray(v) ? v : v ? String(v).split(',') : []);
 
@@ -423,7 +430,7 @@ export function createApp({
   });
 
   const escapeSearch = makeEscapeSearch(live);
-  const escapeLimit = rateLimit({ max: 20, windowMs: 10 * 60 * 1000 });
+  const escapeLimit = limiterFactory({ max: 20, windowMs: 10 * 60 * 1000 });
   app.get('/api/escapes', escapeLimit, async (req, res) => {
     try { escapePlan(req.query); }
     catch (err) { return res.status(400).json({ error: err.message }); }
@@ -744,14 +751,14 @@ export function createApp({
     facilities: Object.fromEntries(Object.entries(FACILITIES).map(([k, f]) => [k, { label: f.label, icon: f.icon }])),
     boards: BOARDS,
   }));
-  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store instanceof PgBookingStore ? 'postgres' : 'file', payment: live ? livePayment : null, flights: liveFlights, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
+  app.get('/api/health', (_req, res) => res.json({ ok: true, live: !!live, sandbox: live?.sandbox ?? null, storage: store.kind || (store instanceof PgBookingStore ? 'postgres' : 'file'), payment: live ? livePayment : null, flights: liveFlights, lastLiteApiError: live?.lastError ?? null, mail: mailer?.status ?? null }));
 
   // «¿Qué Cartagena?», «¿Querías decir Chiclayo?»: la IA pregunta si no puede decidir la ciudad.
   const resolvePlaces = makeResolver(live);
   app.post('/api/ai-search', aiLimit, async (req, res) => {
     try {
       const lang = langOf(req);
-      res.json(await resolvePlaces(await aiSearch(req.body?.query, lang), lang, String(req.body?.query || '')));
+      res.json(await resolvePlaces(await searchAi(req.body?.query, lang), lang, String(req.body?.query || '')));
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -1088,7 +1095,7 @@ export function createApp({
   // «Mis reservas»: solo con la sesión de la cuenta de ese email o con email + código de una
   // de sus reservas (el código llega por email). Así nadie ve ni cancela reservas ajenas
   // sabiendo solo un email. Los intentos fallidos se limitan por IP.
-  const lookupFails = new Map(); // ip → [marcas de tiempo]
+  const lookupFails = lookupFailures; // ip → [marcas de tiempo]
   const failsOf = (ip) => (lookupFails.get(ip) || []).filter((x) => Date.now() - x < 60 * 60 * 1000);
   const blocked = (req, res) => {
     if (failsOf(req.ip).length < 20) return false;
@@ -1176,7 +1183,7 @@ export function createApp({
   return app;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (nodeEntry && process.argv[1] === nodeEntry) {
   const port = Number(process.env.PORT) || 3000;
   const store = await createStore({ file: join(root, 'data', 'bookings.json') });
   const app = createApp({ store });

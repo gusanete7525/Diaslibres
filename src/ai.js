@@ -22,7 +22,7 @@ export const STOPS = { 0: 'solo vuelos directos', 1: 'como máximo una escala', 
 
 const nullable = (schema) => ({ anyOf: [schema, { type: 'null' }] });
 
-const FILTER_SCHEMA = {
+export const FILTER_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: ['kind', 'destination', 'origin', 'checkIn', 'nights', 'maxPrice', 'minStars', 'adults', 'tags', 'fac', 'board', 'stay', 'stops', 'sort', 'explanation'],
