@@ -6,6 +6,7 @@ import { Accounts } from '../src/accounts.js';
 import { Mailer } from '../src/mail.js';
 import { OsmHotels } from '../src/osm.js';
 import { D1BookingStore } from './d1-store.js';
+import {makeWorkersAiSearch} from './ai-search.js';
 import { SqliteMap } from './sqlite-map.js';
 import indexHtml from '../public/index.html';
 
@@ -24,7 +25,7 @@ export class DiasLibresApp extends DurableObject {
     accounts.ipHits=new SqliteMap(sql,'login-ip',5000);
     const limiterFactory=options=>rateLimit({...options,storage:new SqliteMap(sql,'rate:'+JSON.stringify(options),5000)});
     const app=createApp({store,live,mailer,accounts,osm:env.DIASLIBRES_OSM === 'off' ? null : new OsmHotels(),indexHtml,serveStatic:false,reconcileEveryMs:0,
-      backgroundTask:promise=>ctx.waitUntil(promise),limiterFactory,lookupFailures:new SqliteMap(sql,'lookup-fails',5000)});
+      backgroundTask:promise=>ctx.waitUntil(promise),searchAi:makeWorkersAiSearch(env.AI,{model:env.WORKERS_AI_MODEL}),limiterFactory,lookupFailures:new SqliteMap(sql,'lookup-fails',5000)});
     this.app=app;
     this.env=env;
     this.handler=httpServerHandler(app.listen(8080));

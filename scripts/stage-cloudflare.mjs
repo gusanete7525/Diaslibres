@@ -11,7 +11,6 @@ const run=(command,args)=>{
 const wrangler=(...args)=>run('npx',['--yes','wrangler@4.153.0',...args,'--config','cloudflare/wrangler.local.json']);
 // Fail before provisioning if credentials needed to preserve production behavior are missing.
 for(const key of ['DATABASE_URL','LITEAPI_KEY','RESEND_API_KEY']) if(!process.env[key]?.trim()) throw new Error('Falta '+key+' en el entorno del VPS.');
-if(!process.env.ANTHROPIC_API_KEY?.trim()&&!process.env.ANTHROPIC_AUTH_TOKEN?.trim()) throw new Error('Falta la credencial de Claude en el VPS.');
 run('npm',['test']);
 run(process.execPath,['scripts/prepare-cloudflare.mjs']);
 const stateFile='cloudflare/.migration-state.json';
@@ -39,6 +38,6 @@ if(blocked.status!==503) throw new Error('El bloqueo temporal de reservas no est
 const response=await fetch(base+'/api/ai-search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:'Busco hotel en Madrid para dos adultos'})});
 const ai=await response.json();
 console.log('IA:',{status:response.status,source:ai.source});
-if(!response.ok || ai.source!=='claude') throw new Error('Claude no respondió correctamente; hay que revisarlo antes de migrar el dominio.');
+if(!response.ok || ai.source!=='workers-ai') throw new Error('Workers AI no respondió correctamente; hay que revisarlo antes de migrar el dominio.');
 console.log('STAGING PREPARADO:',base);
 console.log('El dominio, el servicio VPS y los pagos de producción no se han modificado.');

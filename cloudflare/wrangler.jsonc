@@ -6,6 +6,7 @@
   "compatibility_date": "2026-10-27",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "ai": {"binding":"AI"},
   "build": {"command":"node scripts/build-cloudflare-assets.mjs", "cwd":"."},
   "assets": {"directory":".assets", "binding":"ASSETS", "run_worker_first":true, "html_handling":"none"},
   "rules": [{"type":"Text", "globs":["**/*.html"], "fallthrough":true}],

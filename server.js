@@ -61,6 +61,7 @@ export function createApp({
   serveStatic = true,
   backgroundTask = promise => promise,
   limiterFactory = rateLimit,
+  searchAi = aiSearch,
   lookupFailures = new Map(),
 } = {}) {
   // Los emails se envían en segundo plano: nunca retrasan ni deshacen una reserva.
@@ -757,7 +758,7 @@ export function createApp({
   app.post('/api/ai-search', aiLimit, async (req, res) => {
     try {
       const lang = langOf(req);
-      res.json(await resolvePlaces(await aiSearch(req.body?.query, lang), lang, String(req.body?.query || '')));
+      res.json(await resolvePlaces(await searchAi(req.body?.query, lang), lang, String(req.body?.query || '')));
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
