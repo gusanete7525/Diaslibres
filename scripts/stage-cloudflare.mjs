@@ -3,15 +3,16 @@ import {spawnSync} from 'node:child_process';
 import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {cf,ACCOUNT} from './cloudflare-api.mjs';
-const run=(command,args)=>{
-  const result=spawnSync(command,args,{stdio:'inherit'});
+import {testEnvironment} from './test-environment.mjs';
+const run=(command,args,options={})=>{
+  const result=spawnSync(command,args,{stdio:'inherit',...options});
   if(result.error) throw result.error;
   if(result.status!==0) throw new Error('Paso detenido: '+command+' '+args.join(' '));
 };
 const wrangler=(...args)=>run('npx',['--yes','wrangler@4.153.0',...args,'--config','cloudflare/wrangler.local.json']);
 // Fail before provisioning if credentials needed to preserve production behavior are missing.
 for(const key of ['DATABASE_URL','LITEAPI_KEY','RESEND_API_KEY']) if(!process.env[key]?.trim()) throw new Error('Falta '+key+' en el entorno del VPS.');
-run('npm',['test']);
+run('npm',['test'],{env:testEnvironment()});
 run(process.execPath,['scripts/prepare-cloudflare.mjs']);
 const stateFile='cloudflare/.migration-state.json';
 const state=JSON.parse(readFileSync(stateFile,'utf8'));
