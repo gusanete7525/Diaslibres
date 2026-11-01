@@ -122,3 +122,20 @@ export function marketInfo(language, day = todayISO(), country = null) {
     ? { language: lang, countries, basedOn: 'country', origin, shown: routes.length }
     : { language: lang, countries, basedOn: 'language', shown: routes.length };
 }
+
+// Names for promotion airports missing from the main catalogue (Spanish; seo.placeName
+// translates the ones it knows). Several London airports keep their name to tell them apart.
+export const DEAL_AIRPORTS = {
+  LGW: 'Londres-Gatwick', STN: 'Londres-Stansted', MAN: 'Mánchester', BHX: 'Birmingham', EDI: 'Edimburgo',
+  DUB: 'Dublín', ORK: 'Cork', FRA: 'Fráncfort', MUC: 'Múnich', DUS: 'Düsseldorf', HAM: 'Hamburgo', BER: 'Berlín',
+  CGN: 'Colonia', STR: 'Stuttgart', VIE: 'Viena', ZRH: 'Zúrich', GVA: 'Ginebra', ORY: 'París-Orly', LYS: 'Lyon',
+  MRS: 'Marsella', NTE: 'Nantes', BOD: 'Burdeos', NCE: 'Niza', TLS: 'Toulouse', BIQ: 'Biarritz', AJA: 'Ajaccio',
+  EIN: 'Eindhoven', RTM: 'Róterdam', BRU: 'Bruselas', CRL: 'Bruselas-Charleroi', MXP: 'Milán', BGY: 'Bérgamo',
+  LIN: 'Milán-Linate', NAP: 'Nápoles', CTA: 'Catania', BLQ: 'Bolonia', CAG: 'Cagliari', PMO: 'Palermo', BRI: 'Bari',
+  OPO: 'Oporto', FAO: 'Faro', FNC: 'Funchal', PDL: 'Ponta Delgada', GRU: 'São Paulo', GIG: 'Río de Janeiro', SSA: 'Salvador',
+  JFK: 'Nueva York', EWR: 'Nueva York-Newark', MIA: 'Miami', BOS: 'Boston', ORD: 'Chicago', LAX: 'Los Ángeles',
+  MEX: 'Ciudad de México', CUN: 'Cancún', BOG: 'Bogotá', MDE: 'Medellín', CTG: 'Cartagena de Indias', EZE: 'Buenos Aires',
+  LIM: 'Lima', SCL: 'Santiago de Chile', MVD: 'Montevideo', UIO: 'Quito', SDQ: 'Santo Domingo', PUJ: 'Punta Cana',
+  HAV: 'La Habana', SJO: 'San José', PTY: 'Ciudad de Panamá', TFS: 'Tenerife Sur', LPA: 'Gran Canaria',
+  ACE: 'Lanzarote', FUE: 'Fuerteventura', ALC: 'Alicante',
+};

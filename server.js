@@ -1,4 +1,4 @@
-import { promotionMarket, marketInfo } from './src/markets.js';
+import { promotionMarket, marketInfo, DEAL_AIRPORTS } from './src/markets.js';
 import { makeCountryLookup } from './src/geo.js';
 import express from 'express';
 import { makeEscapeSearch, escapePlan } from './src/escapes.js';
@@ -572,7 +572,7 @@ export function createApp({
     if (!liveFlights || deals.running) return deals.running;
     const date = addDays(todayISO(), 14);
     const fresh = [];
-    const place = code => ({ code, name: AIRPORTS[code] || code });
+    const place = code => ({ code, name: AIRPORTS[code] || DEAL_AIRPORTS[code] || code });
     deals.running = Promise.all(market.routes.map(async ([o, d]) => {
       try {
         const trips = await live.flightSearch({ origin: o, destination: d, date, adults: 1 }, { priority: false });
