@@ -1,4 +1,4 @@
-import { promotionMarket, marketInfo } from './markets.js';
+import { promotionMarket, marketInfo, rotate } from './markets.js';
 import { todayISO, addDays, isISODate, daysBetween } from './availability.js';
 
 // Bounded discovery: sample three arrival dates, never claim an exhaustive cheapest fare.
@@ -34,13 +34,13 @@ export function escapePlan(q = {}, today = todayISO()) {
 
 export function makeEscapeSearch(live) {
   const cache = new Map();
-  return async (q, lang = 'es') => {
+  return async (q, lang = 'es', country = null) => {
     const plan = escapePlan(q);
-    const market = promotionMarket(lang);
+    const market = promotionMarket(lang, undefined, country);
     lang = market.language;
-    const context = marketInfo(lang);
+    const context = marketInfo(lang, market.day, market.origin);
     if (!live) return { ...plan, results: [], unavailable: true, sandbox: false, market: context };
-    const key = JSON.stringify([plan, lang]);
+    const key = JSON.stringify([plan, market.id, lang, market.day]);
     const found = cache.get(key);
     if (found && found.expires > Date.now()) return found.value;
     // Coalesce repeated visits and keep discovery costs bounded.
@@ -53,7 +53,8 @@ export function makeEscapeSearch(live) {
           // Prefer well-rated modest properties, but compare actual stay totals before ranking.
           const modest = hotels.filter(h => h.rating >= 7 && h.stars > 0 && h.stars <= 3);
           const pool = modest.length ? modest : hotels.filter(h => h.rating >= 8);
-          const selected = (pool.length ? pool : hotels).slice(0, 2);
+          // Rotate daily through the best few so the home page does not repeat the same two hotels.
+          const selected = rotate((pool.length ? pool : hotels).slice(0, 6), 2, market.day);
           const offers = await Promise.all(selected.flatMap(hotel => plan.dates.map(async checkIn => {
             try {
               const checkOut = addDays(checkIn, plan.nights);
