@@ -100,15 +100,27 @@ const urlOf = (lang, key) => (key.type === 'city' ? cityUrl(lang, key.city, key.
 const brief = (h) => ({ name: h.name, stars: h.stars || null, rating: h.rating || null, reviews: h.reviewCount || 0 });
 const best = (list, n) => [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0))
   .filter((h) => h.rating).slice(0, n).map(brief);
+// LiteAPI a veces mete en una ciudad alojamientos de otra (p. ej. uno de Cuenca en Madrid).
+// Para los «mejor valorados» solo cuentan los que están a menos de 50 km del centro de la lista.
+const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+function nearCenter(hotels, km = 50) {
+  const geo = hotels.filter((h) => Number.isFinite(h.lat) && Number.isFinite(h.lng));
+  if (geo.length < 5) return () => true;
+  const lat = median(geo.map((h) => h.lat)), lng = median(geo.map((h) => h.lng));
+  const rad = Math.PI / 180;
+  return (h) => !Number.isFinite(h.lat) || !Number.isFinite(h.lng)
+    || 6371 * Math.hypot((h.lat - lat) * rad, (h.lng - lng) * rad * Math.cos(lat * rad)) <= km;
+}
 export function cityStats(hotels) {
-  const rated = hotels.filter((h) => h.rating);
-  const trusted = hotels.filter((h) => h.rating && (h.reviewCount || 0) >= 20);
+  const near = nearCenter(hotels);
+  const rated = hotels.filter((h) => h.rating && near(h));
+  const trusted = rated.filter((h) => (h.reviewCount || 0) >= 20);
   const fac = {};
   for (const h of hotels) for (const k of h.facilities || []) fac[k] = (fac[k] || 0) + 1;
   const filters = {};
   for (const f of FILTERS) {
     const list = checkable(f) ? hotels.filter((h) => matches(f, h)) : f.sort ? hotels.filter((h) => h.stars && h.stars <= 3) : hotels;
-    filters[f.id] = { count: checkable(f) ? list.length : null, top: best(list.filter((h) => (h.reviewCount || 0) >= 10).length >= 3 ? list.filter((h) => (h.reviewCount || 0) >= 10) : list, 8) };
+    filters[f.id] = { count: checkable(f) ? list.length : null, top: best(list.filter((h) => near(h) && (h.reviewCount || 0) >= 10).length >= 3 ? list.filter((h) => near(h) && (h.reviewCount || 0) >= 10) : list.filter(near), 8) };
   }
   return {
     at: Date.now(),

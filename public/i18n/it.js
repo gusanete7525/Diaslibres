@@ -749,5 +749,9 @@ export default {
   "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Impossibile verificare i voli. Prova Cerca voli.",
   "La consulta está tardando. Puedes continuar en Buscar vuelos.": "La ricerca sta impiegando tempo. Continua in Cerca voli.",
   "Descuento verificado: {percent}% · antes {price}": "Sconto verificato: {percent}% · prima {price}",
-  "noches": "notti"
+  "noches": "notti",
+  "Página no encontrada": "Pagina non trovata",
+  "La dirección no existe o ha cambiado.": "Questo indirizzo non esiste o è cambiato.",
+  "Ir al inicio": "Vai alla home",
+  "No encontrado.": "Non trovato."
 };

@@ -749,5 +749,9 @@ export default {
   "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Impossible de vérifier les vols. Essaie Rechercher des vols.",
   "La consulta está tardando. Puedes continuar en Buscar vuelos.": "La recherche prend du temps. Continue dans Rechercher des vols.",
   "Descuento verificado: {percent}% · antes {price}": "Réduction vérifiée : {percent}% · avant {price}",
-  "noches": "nuits"
+  "noches": "nuits",
+  "Página no encontrada": "Page introuvable",
+  "La dirección no existe o ha cambiado.": "Cette adresse n'existe pas ou a changé.",
+  "Ir al inicio": "Aller à l'accueil",
+  "No encontrado.": "Introuvable."
 };
