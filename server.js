@@ -171,7 +171,7 @@ export function createApp({
     if (!city) return;
     statsBusy = true;
     try {
-      const hotels = await live.hotels(city.es, { keep: false, country: city.country });
+      const hotels = await live.hotels(city.es, { keep: false, country: city.country, priority: 'background' });
       const s = { ...cityStats(hotels), geoVersion: 3, country: city.country };
       seoStats.set(cityKey(city), s);
       await store.kvSet?.('seo:' + cityKey(city), s);

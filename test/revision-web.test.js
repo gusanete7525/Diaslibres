@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createApp} from '../server.js';
 import {BookingStore} from '../src/store.js';
 import {cityStats} from '../src/seo.js';
+import {LiteApi} from '../src/liteapi.js';
 
 async function withServer(fn){
  const server=createApp({store:new BookingStore(null),osm:null,live:null}).listen(0);
@@ -41,4 +42,28 @@ test('los mejor valorados de una ciudad no incluyen alojamientos de otra ciudad'
  assert.equal(s.total,7);
  assert.ok(!s.top.some(x=>x.name.includes('Cuenca')));
  assert.equal(s.top.length,6);
+});
+
+test('las peticiones de fondo (escapadas) no dejan sin precios al calendario',async()=>{
+ const order=[];let release;const gate=new Promise(r=>release=r);
+ const fetchImpl=async(url,opts)=>{
+  const u=String(url);
+  if(u.includes('/data/hotels'))return Response.json({data:[{id:'h1',name:'Hotel',city:'Madrid',country:'es'}]});
+  order.push(u.endsWith('/min-rates')?'calendario':JSON.parse(opts.body).checkin);
+  if(order.length<=3)await gate;
+  return Response.json({data:[]});
+ };
+ const live=new LiteApi({key:'sand_test',fetchImpl});
+ const [hotel]=await live.hotels('Madrid');
+ const quote=(checkIn,priority)=>live.quote({itemId:hotel.id,checkIn,checkOut:'2027-01-20',priority}).catch(()=>{});
+ // Dos presupuestos normales llenan los 3 huecos (2 peticiones cada uno); luego llegan uno de fondo y el calendario.
+ const busy=[quote('2027-01-10'),quote('2027-01-11')];
+ await new Promise(r=>setTimeout(r,5));
+ const bg=quote('2027-01-12','background');
+ const cal=live.nightlyPrices([hotel.id],'2027-01-15',1);
+ await new Promise(r=>setTimeout(r,5));
+ release();
+ await Promise.all([...busy,bg,cal]);
+ const i=order.indexOf('calendario'),j=order.indexOf('2027-01-12');
+ assert.ok(i>=0&&j>=0&&i<j,JSON.stringify(order));
 });
