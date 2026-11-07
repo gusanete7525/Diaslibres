@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "express": "^5.2.1",
+    "maxmind": "^4.3.29",
     "pg": "^8.23.1",
     "terser": "^5.51.2"
   },

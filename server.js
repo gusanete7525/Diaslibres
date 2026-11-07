@@ -1,4 +1,5 @@
-import { promotionMarket, marketInfo } from './src/markets.js';
+import { promotionMarket, marketInfo, DEAL_AIRPORTS } from './src/markets.js';
+import { makeCountryLookup } from './src/geo.js';
 import express from 'express';
 import { makeEscapeSearch, escapePlan } from './src/escapes.js';
 import { randomBytes } from 'node:crypto';
@@ -43,6 +44,8 @@ export function rateLimit({ max, windowMs, message = 'Demasiadas peticiones. Pru
 }
 
 export function createApp({
+  // País aproximado del visitante (cabecera del proxy o base DB-IP local) para elegir promociones.
+  countryOf = makeCountryLookup(),
   store = new BookingStore(join(root, 'data', 'bookings.json')),
   osm = process.env.DIASLIBRES_OSM === 'off' ? null : new OsmHotels({ file: join(root, 'data', 'osm-cache.json') }),
   live = process.env.LITEAPI_KEY?.trim() ? new LiteApi({ key: process.env.LITEAPI_KEY }) : null,
@@ -428,7 +431,7 @@ export function createApp({
     try { escapePlan(req.query); }
     catch (err) { return res.status(400).json({ error: err.message }); }
     try {
-      res.set('Cache-Control', 'no-store').json(await escapeSearch(req.query, langOf(req)));
+      res.set('Cache-Control', 'no-store').json(await escapeSearch(req.query, langOf(req), countryOf(req)));
     } catch {
       res.status(502).json({ error: 'No se pudieron comprobar las escapadas. Inténtalo de nuevo.' });
     }
@@ -554,17 +557,22 @@ export function createApp({
   // ---------- Ofertas: el vuelo más barato de rutas populares (se renuevan cada 2 h) ----------
   const DEALS_TTL = 2 * 60 * 60 * 1000;
   const dealsByLanguage = new Map();
-  function dealsFor(language) {
-    const market = promotionMarket(language);
-    if (!dealsByLanguage.has(market.language)) dealsByLanguage.set(market.language, { at: 0, date: null, list: [], running: null });
-    return { market, deals: dealsByLanguage.get(market.language) };
+  function dealsFor(language, country = null) {
+    const market = promotionMarket(language, todayISO(), country);
+    // One cache per market (language or visitor country) and day, since routes rotate daily.
+    const key = market.id + ':' + market.day;
+    if (!dealsByLanguage.has(key)) {
+      if (dealsByLanguage.size >= 60) dealsByLanguage.delete(dealsByLanguage.keys().next().value);
+      dealsByLanguage.set(key, { at: 0, date: null, list: [], running: null });
+    }
+    return { market, deals: dealsByLanguage.get(key) };
   }
-  function refreshDeals(language = 'es') {
-    const { market, deals } = dealsFor(language);
+  function refreshDeals(language = 'es', country = null) {
+    const { market, deals } = dealsFor(language, country);
     if (!liveFlights || deals.running) return deals.running;
     const date = addDays(todayISO(), 14);
     const fresh = [];
-    const place = code => ({ code, name: AIRPORTS[code] || code });
+    const place = code => ({ code, name: AIRPORTS[code] || DEAL_AIRPORTS[code] || code });
     deals.running = Promise.all(market.routes.map(async ([o, d]) => {
       try {
         const trips = await live.flightSearch({ origin: o, destination: d, date, adults: 1 }, { priority: false });
@@ -584,12 +592,13 @@ export function createApp({
   app.get('/api/flights/deals', (req, res) => {
     if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
     const lang = langOf(req);
-    const { deals } = dealsFor(lang);
-    if (Date.now() - deals.at > DEALS_TTL) refreshDeals(lang);
+    const country = countryOf(req);
+    const { deals } = dealsFor(lang, country);
+    if (Date.now() - deals.at > DEALS_TTL) refreshDeals(lang, country);
     const named = p => ({ ...p, name: placeName(p.code, lang, p.name) });
     // A previous day's price must not masquerade as a current offer during refresh.
     const visible = deals.date >= todayISO() ? deals.list : [];
-    res.set('Cache-Control', 'no-store').json({ date: deals.date, checkedAt: deals.at ? new Date(deals.at).toISOString() : null, sandbox: !!live.sandbox, market: marketInfo(lang), deals: [...visible].sort((a, b) => a.total - b.total).map(d => ({ ...d, origin: named(d.origin), destination: named(d.destination) })), pending: !!deals.running });
+    res.set('Cache-Control', 'no-store').json({ date: deals.date, checkedAt: deals.at ? new Date(deals.at).toISOString() : null, sandbox: !!live.sandbox, market: marketInfo(lang, todayISO(), country), deals: [...visible].sort((a, b) => a.total - b.total).map(d => ({ ...d, origin: named(d.origin), destination: named(d.destination) })), pending: !!deals.running });
   });
 
   app.post('/api/flights/quote', async (req, res) => {
