@@ -47,7 +47,10 @@ async function discover(scroll = false) {
     const data = await response.json();
     if (id !== requestId) return;
     if (!response.ok) throw new Error(data.error || t('No se pudieron comprobar las escapadas. Inténtalo de nuevo.'));
-    if (data.market?.countries?.length) {
+    if (data.market?.basedOn === 'country') {
+      const origin = new Intl.DisplayNames([lang], { type: 'region' }).of(data.market.origin);
+      document.getElementById('escapeMarket').textContent = t('Ideas de alojamiento pensadas para viajeros desde {country}.', { country: origin });
+    } else if (data.market?.countries?.length) {
       const names = new Intl.DisplayNames([lang], { type: 'region' });
       const countries = new Intl.ListFormat(lang).format(data.market.countries.map(c => names.of(c)));
       document.getElementById('escapeMarket').textContent = t('Ideas de alojamiento en {countries} según el idioma seleccionado.', { countries });

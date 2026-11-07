@@ -13,6 +13,7 @@ const PRICE_TTL = 3 * 3600 * 1000; // los precios caducan a las 3 h
 const HOTELS_TTL = 24 * 3600 * 1000;
 const MAX_HOTELS = 2000; // todos los de la ciudad (Madrid tiene ~1.300); se muestran por páginas
 const MAX_FLIGHTS = 20;
+const BACKGROUND_MAX_WAIT = 3000; // ms que espera como mucho una petición de fondo
 const OFFER_TTL = 30 * 60 * 1000; // las ofertas de vuelo caducan pronto
 const SEARCH_TTL = 8 * 60 * 1000; // las ofertas de LiteAPI caducan a los ~10 minutos
 const CONCURRENCY = 3; // el entorno de pruebas responde 429 con más peticiones a la vez
@@ -167,13 +168,17 @@ export class LiteApi {
   // detrás de todo: si no, cada visita a la portada dejaba sin precios a las fichas.
   async #slot(priority) {
     if (this.active < CONCURRENCY) return void this.active++;
-    await new Promise((r) => (priority === 'background' ? this.background.push(r) : priority ? this.waiting.unshift(r) : this.waiting.push(r)));
+    await new Promise((r) => (priority === 'background' ? this.background.push({ r, at: Date.now() }) : priority ? this.waiting.unshift(r) : this.waiting.push(r)));
     this.active++;
   }
 
+  // Una de fondo que ya lleva BACKGROUND_MAX_WAIT esperando pasa delante, para que
+  // la portada no se quede sin escapadas mientras haya precios del calendario en cola.
   #release() {
     this.active--;
-    (this.waiting.shift() || this.background.shift())?.();
+    const old = this.background.length && Date.now() - this.background[0].at >= BACKGROUND_MAX_WAIT;
+    if (old || !this.waiting.length) return void this.background.shift()?.r();
+    this.waiting.shift()();
   }
 
   async #request(method, url, body, { priority = true } = {}) {
