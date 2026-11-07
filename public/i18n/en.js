@@ -748,5 +748,9 @@ export default {
   "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Could not check flights now. Try Search flights.",
   "La consulta está tardando. Puedes continuar en Buscar vuelos.": "This is taking longer. Continue in Search flights.",
   "Descuento verificado: {percent}% · antes {price}": "Verified discount: {percent}% · previously {price}",
-  "noches": "nights"
+  "noches": "nights",
+  "Página no encontrada": "Page not found",
+  "La dirección no existe o ha cambiado.": "This address doesn't exist or has changed.",
+  "Ir al inicio": "Go to the home page",
+  "No encontrado.": "Not found."
 };

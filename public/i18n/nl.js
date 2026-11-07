@@ -748,5 +748,9 @@ export default {
   "No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.": "Vluchten konden niet worden gecontroleerd. Probeer Vluchten zoeken.",
   "La consulta está tardando. Puedes continuar en Buscar vuelos.": "De zoekopdracht duurt lang. Ga verder via Vluchten zoeken.",
   "Descuento verificado: {percent}% · antes {price}": "Geverifieerde korting: {percent}% · voorheen {price}",
-  "noches": "nachten"
+  "noches": "nachten",
+  "Página no encontrada": "Pagina niet gevonden",
+  "La dirección no existe o ha cambiado.": "Dit adres bestaat niet of is gewijzigd.",
+  "Ir al inicio": "Naar de startpagina",
+  "No encontrado.": "Niet gevonden."
 };

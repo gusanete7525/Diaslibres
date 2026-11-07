@@ -25,7 +25,7 @@ test('estadísticas geográficas antiguas no vuelven a mostrar hoteles del país
   assert.doesNotMatch(await fetch(base+'/hoteles/cuenca').then(r=>r.text()),/HOTEL ECUADOR ERRONEO/);
   await app.locals.statsTick();
   assert.match(await fetch(base+'/hoteles/cuenca').then(r=>r.text()),/Hotel verificado España/);
-  assert.equal((await store.kvGet('seo:'+cityKey(city))).geoVersion,2);
+  assert.equal((await store.kvGet('seo:'+cityKey(city))).geoVersion,3);
   const route=await fetch(base+'/vuelos/madrid-barcelona').then(r=>r.text());
   assert.match(route,/MAD/);assert.match(route,/BCN/);assert.match(route,/Alternativa en tren/);assert.match(route,/150 min/);
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));}

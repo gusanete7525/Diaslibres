@@ -49,7 +49,7 @@ export function makeEscapeSearch(live) {
       const checkedAt = new Date().toISOString();
       const lists = await Promise.all(market.hotels.map(async city => {
         try {
-          const hotels = await live.hotels(city, { lang });
+          const hotels = await live.hotels(city, { lang, priority: 'background' });
           // Prefer well-rated modest properties, but compare actual stay totals before ranking.
           const modest = hotels.filter(h => h.rating >= 7 && h.stars > 0 && h.stars <= 3);
           const pool = modest.length ? modest : hotels.filter(h => h.rating >= 8);
@@ -57,7 +57,7 @@ export function makeEscapeSearch(live) {
           const offers = await Promise.all(selected.flatMap(hotel => plan.dates.map(async checkIn => {
             try {
               const checkOut = addDays(checkIn, plan.nights);
-              const rate = await live.quote({ itemId: hotel.id, checkIn, checkOut, units: 1, adults: 2, children: [] });
+              const rate = await live.quote({ itemId: hotel.id, checkIn, checkOut, units: 1, adults: 2, children: [], priority: 'background' });
               if (!Number.isFinite(rate.total) || rate.total <= 0) return null;
               const taxes = rate.payAtHotel || [];
               const knownTotal = Math.round((rate.total + taxes.filter(t => t.currency === 'EUR').reduce((s, t) => s + t.amount, 0)) * 100) / 100;

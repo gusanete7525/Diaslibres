@@ -152,8 +152,8 @@ export function createApp({
   const statsOf = (city) => seoStats.get(cityKey(city)) || null;
   const statsQueue = [];
   const statsLoaded = Promise.resolve(store.kvList?.('seo:') || []).then((rows) => {
-    // Los datos de antes de contar los apartamentos se vuelven a calcular.
-    for (const [k, v] of rows) if (v?.stay && v.geoVersion === 2) seoStats.set(k.slice(4), v);
+    // Los datos de antes de quitar de los «mejor valorados» los alojamientos de otra ciudad se vuelven a calcular.
+    for (const [k, v] of rows) if (v?.stay && v.geoVersion === 3) seoStats.set(k.slice(4), v);
   }).catch((err) => console.error('[seo]', err.message));
   // Pide los datos de una ciudad (las que se visitan van primero).
   // Los datos sin foto de portada (de antes de «Para ti») se renuevan poco a poco.
@@ -171,8 +171,8 @@ export function createApp({
     if (!city) return;
     statsBusy = true;
     try {
-      const hotels = await live.hotels(city.es, { keep: false, country: city.country });
-      const s = { ...cityStats(hotels), geoVersion: 2, country: city.country };
+      const hotels = await live.hotels(city.es, { keep: false, country: city.country, priority: 'background' });
+      const s = { ...cityStats(hotels), geoVersion: 3, country: city.country };
       seoStats.set(cityKey(city), s);
       await store.kvSet?.('seo:' + cityKey(city), s);
     } catch (err) {
@@ -1058,7 +1058,7 @@ export function createApp({
   for (const path of ['/api/admin/metrics','/estadisticas']) app.get(path, async (req,res) => {
     res.set('Cache-Control','no-store').set('X-Robots-Tag','noindex, nofollow');
     const user = await me(req);
-    if (!user) return res.status(401).type('text').send('Entra con tu cuenta de administrador en DíasLibre.');
+    if (!user) return res.status(401).type('text').send('Entra con tu cuenta de administrador en DíasLibres.');
     if (!isOwner(user)) return res.sendStatus(403);
     const data = await metricReport();
     if (path.startsWith('/api/')) res.json(data); else res.type('html').send(metricsHtml(data));
@@ -1171,6 +1171,15 @@ export function createApp({
     const cancelled = cancellation ? await store.update(b.code, { cancellation }) : b;
     notify('bookingCancelled', cancelled);
     res.json(publicBooking(cancelled));
+  });
+
+  // Página no encontrada: con la marca y enlaces para seguir, en el idioma de la dirección.
+  app.use((req, res) => {
+    const lang = LANG_CODES.find((l) => l !== 'es' && (req.path === '/' + l || req.path.startsWith('/' + l + '/'))) || 'es';
+    if (req.path.startsWith('/api/') || !req.accepts('html')) return res.status(404).json({ error: trText(lang, 'No encontrado.') });
+    const L = LANGS[lang];
+    const t = (s) => trText(lang, s);
+    res.status(404).type('html').send(`<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${t('Página no encontrada')} · DíasLibres</title><link rel="icon" type="image/png" href="/icon-192.png"><link rel="stylesheet" href="/styles.css"></head><body><header class="topbar"><a class="logo" href="${L.prefix}/" translate="no">Días<span>Libres</span></a></header><main style="max-width:640px;margin:48px auto;padding:0 16px"><h1>${t('Página no encontrada')}</h1><p>${t('La dirección no existe o ha cambiado.')}</p><p><a class="btn primary" href="${L.prefix}/">${t('Ir al inicio')}</a></p><ul><li><a href="${L.prefix}/${L.hotels}">${t('Hoteles')}</a></li><li><a href="${L.prefix}/${L.flights}">${t('Vuelos')}</a></li><li><a href="${L.prefix}/${L.escapes}">${t('Escapadas')}</a></li></ul></main></body></html>`);
   });
 
   return app;
