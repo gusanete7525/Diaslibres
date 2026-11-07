@@ -1,0 +1,118 @@
+# DíasLibres
+
+Agencia de reservas de **hoteles y vuelos** donde no hace falta elegir fechas para ver qué hay.
+
+- **Calendario de disponibilidad en cada hotel y vuelo**: los días libres salen en **verde** (con su precio) y los completos en **rojo**. Tocas un día verde para la entrada y otro para la salida, y listo.
+- **Gráfica de precios**: barras con el precio de cada día de los próximos 60 días; se marca el día más barato, y al pasar el ratón ves precio y plazas libres.
+- **«Días más baratos»**: un botón calcula las noches seguidas libres más económicas para la estancia que buscas.
+- **Precios, disponibilidad y reservas reales con LiteAPI** (opcional): con `LITEAPI_KEY` definida, los hoteles de la ciudad buscada, sus fotos, estrellas y opiniones vienen de [LiteAPI](https://liteapi.travel/). El calendario se rellena con el precio real de cada noche (sin tarifa esa noche = día en rojo), cargado por semanas y guardado 3 h en caché. Reservar pide el presupuesto exacto (habitación, régimen y si es reembolsable), bloquea la tarifa y confirma la reserva; «Mis reservas» la cancela también en LiteAPI. Con una clave `sand_…` todo ocurre en el entorno de pruebas de LiteAPI: no se cobra nada.
+- **Vuelos reales con LiteAPI**: con `LITEAPI_KEY`, la pestaña Vuelos busca vuelos reales (origen, destino, ida y vuelta opcional, hasta 6 adultos). Reservar comprueba el precio, pide los datos de cada pasajero (como en el documento), bloquea la tarifa y el cliente paga con Stripe; Nuitée cobra como comerciante. Al volver del pago (`/?vuelo=<id>`) se confirma el billete con la aerolínea. «Mis reservas» muestra el localizador y, antes de cancelar, el reembolso estimado. `LITEAPI_FLIGHTS=off` vuelve a los vuelos simulados. Por ahora no se reservan niños ni bebés, ni asientos o maletas extra.
+- **Hoteles reales de cualquier ciudad** vía OpenStreetMap (sin registro ni clave): al buscar un destino, el servidor localiza la ciudad con Nominatim y pide a Overpass los hoteles con nombre de la zona (hasta 30), con estrellas, dirección y web si figuran. Se guardan en caché una semana (`data/osm-cache.json`) y las peticiones se espacian ≥1 s para respetar las [normas de uso](https://operations.osmfoundation.org/policies/api/). Si OSM no responde, se muestran los hoteles del catálogo con un aviso. Desactivable con `DIASLIBRES_OSM=off`; URLs configurables con `NOMINATIM_URL`, `OVERPASS_URL` y `OSM_USER_AGENT` (pon uno que te identifique, p. ej. con tu email).
+- **Búsqueda con IA**: escribe en lenguaje natural («playa con niños en Canarias 5 noches», «vuelos de Madrid a Lisboa») y se rellenan los filtros solos.
+  - Con `ANTHROPIC_API_KEY` usa Claude (modelo `claude-opus-5-5`, configurable con `DIASLIBRES_MODEL`) con salida estructurada.
+  - Sin clave funciona igualmente con un intérprete local de palabras clave.
+- **Reserva directa**: la reserva se confirma al momento con un código (`DL-XXXXXX`), se comprueba la disponibilidad noche a noche y el día pasa a rojo cuando se llena. En «Mis reservas» puedes consultarlas y cancelarlas por email.
+
+## Arrancar
+
+```bash
+npm install
+npm start               # http://localhost:3000
+# opcional:
+ANTHROPIC_API_KEY=sk-ant-... npm start
+LITEAPI_KEY=sand_... npm start   # hoteles con datos de LiteAPI
+```
+
+Detrás de un proxy (`HTTPS_PROXY`), arranca con `NODE_USE_ENV_PROXY=1` para que Node lo use (Node ≥ 22.21).
+
+Tests: `npm test`
+
+## Estructura
+
+| Ruta | Qué hace |
+|---|---|
+| `server.js` | API Express + estáticos |
+| `src/catalog.js` | Hoteles, vuelos y modelo de demanda/temporada |
+| `src/availability.js` | Calendario diario (precio, plazas libres), búsqueda, ventana más barata y validación de reservas |
+| `src/liteapi.js` | LiteAPI: hoteles (precio por noche, presupuesto, reserva y cancelación) y vuelos (búsqueda, verificación, prebook, reserva y cancelación) |
+| `src/osm.js` | Hoteles de OpenStreetMap (Nominatim + Overpass) con caché |
+| `src/ai.js` | Búsqueda en lenguaje natural (Claude o intérprete local) |
+| `src/store.js` | Reservas guardadas en `data/bookings.json` |
+| `public/` | Interfaz (HTML/CSS/JS sin dependencias, modo claro y oscuro) |
+
+### API
+
+- `GET /api/hotels?destination=&nights=&maxPrice=&sort=price|stars&tags=&days=`
+- `GET /api/flights?origin=&destination=&maxPrice=&days=`
+- `POST /api/ai-search` `{ query }`
+- `POST /api/quote` · `POST /api/bookings` `{ type: "hotel"|"flight", itemId, checkIn, checkOut | date, units, name, email }`
+- `GET /api/bookings?email=` · `POST /api/bookings/:code/cancel` `{ email }`
+
+## Notas
+
+Los **24 hoteles son reales** (2 por ciudad): nombre, categoría, dirección, web oficial y una fuente pública de verificación están en `src/catalog.js`. Lo que **no** es real es el inventario: precios y ocupación de «otros clientes» se generan de forma determinista según temporada y fin de semana, y se suman las reservas reales hechas en la web. Las reservas no se envían al hotel y no hay pasarela de pago; para producción haría falta una base de datos, pagos y conexión a proveedores reales (channel manager / GDS).
+
+## Seguridad
+
+- **IP de los visitantes:** solo se confía en un proxy (el de Render), así que nadie puede inventarse su IP con `X-Forwarded-For` para saltarse los límites de intentos. Con otro número de saltos, `TRUST_PROXY=<n>`.
+- **Códigos de reserva:** `DL-` y 8 caracteres sin confusiones (sin 0/O ni 1/I), unos 10¹² combinaciones; se comprueba que no estén ya en uso. Los códigos antiguos de 6 caracteres siguen funcionando.
+- **Límites por IP** cada 10 minutos: 30 búsquedas con IA, 20 intentos de pago y 20 reservas de prueba (`limits` en `createApp`). Además, 20 consultas o cancelaciones fallidas por hora en «Mis reservas» y 10 enlaces de inicio de sesión por hora.
+- Cabeceras `X-Content-Type-Options`, `X-Frame-Options` y `Referrer-Policy`; sin `X-Powered-By`.
+- Las fechas que no existen (31 de febrero) o mal escritas se ignoran; «hoy» es el día en España.
+
+## Pago y reservas
+
+- **Pago del cliente (por defecto con LiteAPI):** «Pagar y reservar» bloquea la habitación al precio mostrado (`/api/checkout`), muestra el formulario de tarjeta de la pasarela de LiteAPI y, al pagar, el cliente vuelve a `/?pago=<id>`, donde la reserva se confirma con el pago (`/api/checkout/:id/confirm`). Sin pago completado no hay reserva ni cargo. En el entorno de pruebas se paga con la tarjeta `4242 4242 4242 4242`, cualquier fecha futura y cualquier CVC.
+- **Pagos a medias:** si el cliente paga y no vuelve a la web (cierra la pestaña, pierde la conexión), cada 15 minutos el servidor intenta confirmar las reservas «pendiente de pago» con más de 10 minutos, como si hubiera vuelto. Si el pago se completó, la reserva se confirma y le llega el correo. Si a las 24 horas sigue sin pagar, pasa a «caducada» (no hubo cargo y no sale en «Mis reservas»). Si el hotel o la aerolínea fallan, se avisa una vez a `ADMIN_EMAIL`.
+- `LITEAPI_PAYMENT=account` vuelve al modo anterior (se carga a la cuenta de LiteAPI del titular); con la clave real solo funciona con `ALLOW_REAL_BOOKINGS=1`.
+- `PUBLIC_URL` (opcional): dirección pública de la web para la vuelta del pago, si no se deduce bien de la petición.
+- **Emails al cliente:** confirmación y cancelación con [Resend](https://resend.com) si defines `RESEND_API_KEY`. `MAIL_FROM` es el remitente (por ejemplo `DíasLibres <reservas@tudominio.es>`, con el dominio verificado en Resend); sin dominio propio, Resend solo deja enviar a tu propio email desde `onboarding@resend.dev`. Un fallo del email nunca anula la reserva. `ADMIN_EMAIL` recibe un aviso si un cliente paga y el hotel no confirma la reserva (hay que devolver el pago o rehacerla en el panel de LiteAPI).
+- **Reservas guardadas:** en PostgreSQL si hay `DATABASE_URL` (Render la crea con `render.yaml`); si no, en `data/bookings.json`.
+
+## Publicar en internet (Render)
+
+El repositorio incluye `render.yaml` para desplegar en [Render](https://render.com) con su plan gratuito:
+
+1. Crea una cuenta en Render y conecta tu GitHub.
+2. **New → Blueprint** y elige este repositorio (rama `main`).
+3. Render pedirá los valores de `LITEAPI_KEY` (y opcionalmente `ANTHROPIC_API_KEY`). No se guardan en el repositorio.
+4. Al terminar, la web queda en `https://diaslibres.onrender.com` (o un nombre parecido).
+
+Notas del plan gratuito: el servicio se duerme tras un rato sin visitas (la primera visita tarda ~1 min en despertar). Las reservas se guardan en la base de datos PostgreSQL que crea `render.yaml`; consulta en Render los límites de su plan gratuito de bases de datos.
+
+**Clave real de LiteAPI:** con una clave que no empieza por `sand_` los precios, la disponibilidad y los cobros son reales: el cliente paga con su tarjeta en la pasarela de LiteAPI y la reserva se hace en el hotel.
+
+## Dominio propio y plan
+
+1. En Render, cambia el servicio al plan **Starter** (de pago) para que la web no se duerma. En `render.yaml` sería `plan: starter`.
+2. Compra el dominio (por ejemplo `diaslibres.es`) en un registrador.
+3. En Render → servicio → **Settings → Custom Domains**, añade el dominio y crea en tu registrador los registros DNS que te indique. Render pone el certificado HTTPS solo.
+4. Define `SITE_URL=https://tudominio.es` (o `PUBLIC_URL`, que también vale) para que los enlaces de inicio de sesión, la vuelta del pago y las páginas para buscadores usen el dominio. Sin ninguna de las dos, en Render se usa la dirección que da Render (`RENDER_EXTERNAL_URL`); la cabecera `Host` de la petición solo se usa en local, porque se puede falsear.
+
+## Información legal
+
+`public/legal.html` es una **plantilla** de aviso legal, condiciones de reserva, privacidad y cookies. Complétala con los datos marcados entre corchetes y revísala con un asesor antes de vender. Al reservar, el cliente debe aceptar las condiciones y la política de privacidad.
+
+## Paso a la clave real de LiteAPI
+
+1. Rellena los datos marcados en `public/legal.html` y quita el aviso de borrador.
+2. En el panel de LiteAPI: margen (comisión) y datos de cobro de la cuenta.
+3. En Render → Environment: `ADMIN_EMAIL` con tu email y `LITEAPI_KEY` con la clave de producción (sin `sand_`). No definas `LITEAPI_PAYMENT=account` ni `ALLOW_REAL_BOOKINGS`.
+4. Comprueba `/api/health`: `"sandbox": false`, `"payment": "customer"` y `"mail": { "enabled": true, "admin": true }`.
+
+Las tasas que no van en el precio (p. ej. tasa turística) se muestran al reservar, en «Mis reservas» y en el email como «a pagar en el hotel». Cancelar una tarifa no reembolsable, o pasado el plazo gratuito, avisa de que no hay reembolso.
+
+## Descubrimiento por días libres y presupuesto
+
+La portada prioriza duración, tipo de hueco, mes o rango flexible y presupuesto total. `GET /api/escapes` compara una muestra de tres destinos según el idioma y hasta tres fechas de llegada, comparando hasta dos alojamientos modestos bien valorados por destino; no es una búsqueda exhaustiva. Fin de semana significa viernes a domingo; los puentes no consultan festivos. La duración incluye la salida: 3 días = 2 noches.
+
+Cada tarjeta se cotiza como una estancia completa con LiteAPI para **2 adultos, 1 habitación, sin transporte**. El presupuesto incluye las tasas conocidas en EUR a pagar en el hotel. Se excluyen del filtro de presupuesto las ofertas con tasas en otra moneda, que no pueden compararse sin conversión. Las ofertas se conservan 10 minutos en memoria y se agrupan consultas simultáneas. Sin proveedor no se inventan precios; en sandbox se indica que son pruebas y no se emiten precios estructurados. Los enlaces llevan las fechas y ocupación al buscador existente, donde se consulta de nuevo la tarifa antes de pagar.
+
+El marcado `TouristTrip`/`Offer` describe únicamente tarjetas de producción verificadas y visibles; no garantiza resultados enriquecidos en Google. Open Graph sigue renderizado en el servidor; incluye imagen 1200 × 630, texto alternativo y Twitter Cards. Las fuentes se cargan sin bloquear el primer render y los módulos JS son diferidos por `type="module"`.
+
+
+## Promociones según el idioma
+
+Los perfiles de `src/markets.js` aportan inspiración según el idioma, sin inferir ubicación ni nacionalidad. Francés propone Colmar, Annecy y Nîmes, con vuelos desde París; español incluye Granada, Oaxaca y Cartagena, con vuelos desde Madrid al Caribe (Cancún, Punta Cana y La Habana) y a Ciudad de México, Bogotá, Lima y Buenos Aires. En español se muestran las siete rutas disponibles para que las opciones caribeñas y latinoamericanas no queden ocultas por un límite de tres tarjetas. También hay perfiles para inglés, alemán, italiano, portugués y neerlandés. El origen puede cambiarse en Buscar vuelos.
+
+`/api/escapes` y `/api/flights/deals` usan `X-Lang` y cachés independientes por idioma. Las tarjetas de alojamiento muestran descuentos solo si la cotización incluye una promoción verificada. Los vuelos son sugerencias independientes de solo ida para un adulto, a 14 días, con el precio más bajo de los resultados del proveedor por ruta; no forman un paquete con el hotel ni usan su presupuesto. Las tarifas se renuevan tras dos horas y se vacían si la actualización no obtiene resultados, para evitar mantener precios antiguos indefinidamente. Los enlaces conservan idioma, ruta y fecha, y abren una nueva consulta de disponibilidad.

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DíasLibres · Hoteles y vuelos</title>
+  <meta name="description" content="Reserva hoteles y vuelos viendo de un vistazo qué días están libres y cuándo es más barato." />
+  <link rel="icon" type="image/png" href="/icon-192.png" />
+  <meta name="theme-color" content="#1f5fbf" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" /></noscript>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/figma.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="/" data-view="hotels" data-home>Días<span>Libres</span></a>
+    <span class="tagline" data-i18n>Viaja más. Vive mejor.</span>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-view="hotels" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18V7m0 7h18v4m0-4v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/></svg><span>Hoteles</span></button>
+      <button role="tab" data-view="flights" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 13.5 4 11l1.5-1.5 7 1 4-4a2.1 2.1 0 0 1 3 3l-4 4 1 7L15 22l-2.5-6.5L9 19v2.5L7.5 23 6 19.5 2.5 18 4 16.5h2.5z"/></svg><span>Vuelos</span></button>
+      <button role="tab" data-view="trains" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 21l1.5-4m4.5 4-1.5-4"/><circle cx="9" cy="14" r="0.8"/><circle cx="15" cy="14" r="0.8"/></svg><span>Trenes</span></button>
+      <button role="tab" data-view="mine" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6m-6 4h6"/></svg><span>Mis reservas</span></button>
+    </nav>
+    <details class="lang-menu">
+      <summary aria-label="Idioma"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg><span>ES</span></summary>
+      <nav><!--LANG_LINKS--></nav>
+    </details>
+    <button class="theme-toggle account-btn" id="accountBtn" type="button" aria-label="Mi cuenta"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span id="accountInitial" hidden></span></button>
+    <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/><g class="sun"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg></button>
+  </header>
+
+  <section class="hero" id="searchSection">
+    <div class="hero-intro">
+      <div class="hero-copy">
+        <p class="eyebrow" data-i18n>TUS DÍAS LIBRES EMPIEZAN AQUÍ</p>
+        <h1><span data-i18n>Tú pones los días.</span><br /><span data-i18n>Nosotros, el destino.</span></h1>
+        <p class="sub" data-i18n>Dinos cuántos días tienes libres y tu presupuesto; descubre a dónde puedes escaparte.</p>
+        <form id="escapeForm" class="escape-form">
+          <label><span data-i18n>¿Cuántos días libres tienes?</span><select name="kind"><option value="any" data-i18n>Días sueltos</option><option value="weekend" data-i18n>Fin de semana · 3 días</option><option value="bridge" data-i18n>Puente · 4 días</option><option value="week" data-i18n>Semana completa · 7 días</option></select></label>
+          <label><span data-i18n>Días</span><input name="days" type="number" min="2" max="15" value="3" required /></label>
+          <label><span data-i18n>Mes aproximado</span><input name="month" type="month" required /></label>
+          <label><span data-i18n>Presupuesto máximo · €</span><input name="budget" type="number" min="1" max="50000" step="1" placeholder="Sin límite" /></label>
+          <details class="escape-range"><summary data-i18n>Prefiero un rango flexible</summary><div><label><span data-i18n>Desde</span><input name="from" type="date" /></label><label><span data-i18n>Hasta</span><input name="to" type="date" /></label></div></details>
+          <p class="escape-scope" data-i18n>Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.</p>
+          <button type="submit" class="btn primary" data-i18n>Descubrir dónde puedo ir</button>
+        </form>
+        <details class="escape-ai"><summary data-i18n>O cuéntanos tu viaje con tus palabras</summary>
+        <form id="aiForm" class="ai-box" autocomplete="off">
+          <label class="sr-only" for="aiQuery" data-i18n>Describe tu viaje</label>
+          <input id="aiQuery" type="search" placeholder="Una semana en Canarias, playa y hotel para dos…" aria-label="Describe tu viaje" />
+          <div class="ai-actions"><span class="ai-badge">✦ <span data-i18n>Con ayuda de IA</span></span><button type="button" data-send class="btn primary"><span data-i18n>Encontrar mi viaje</span> →</button></div>
+        </form>
+        </details>
+        <div class="manual-links"><span data-i18n>¿Ya sabes adónde?</span><button type="button" data-manual-view="hotels" data-i18n>Buscar hoteles</button><button type="button" data-manual-view="flights" data-i18n>Buscar vuelos</button></div>
+      </div>
+      <figure class="hero-visual"><img src="/img/hero.jpg" width="574" height="350" alt="Playa al atardecer" fetchpriority="high" /><figcaption><span aria-hidden="true">↗</span><div><strong data-i18n>Tu destino. Tus fechas. Tu mejor precio.</strong><p data-i18n>El calendario te ayuda a elegir cuándo viajar.</p></div></figcaption></figure>
+    </div>
+    <div class="travel-benefits"><span data-i18n>✓ Fechas flexibles</span><span data-i18n>✓ Precios por día</span><span data-i18n>✓ Hoteles y vuelos en un lugar</span></div>
+    <section id="escapeFeatured" class="escape-featured" aria-labelledby="escapeHeading">
+      <h2 id="escapeHeading" data-i18n>Escapadas de 3 días para el próximo mes</h2>
+      <p data-i18n>Comparamos algunas fechas y destinos para inspirarte. No es una búsqueda exhaustiva ni incluye el transporte.</p>
+      <p id="escapeMarket" class="market-note" data-i18n>Ideas según el idioma seleccionado. El idioma no determina tu ubicación.</p>
+      <p id="escapeStatus" role="status" data-i18n>Comprobando precios de alojamiento…</p>
+      <div id="escapeList" class="escape-list"></div>
+    </section>
+    <section id="marketFlights" class="escape-featured" aria-labelledby="marketFlightsHeading" hidden>
+      <h2 id="marketFlightsHeading" data-i18n>Vuelos sugeridos según el idioma</h2>
+      <p id="marketFlightIntro" data-i18n>Salidas orientativas según el idioma. Puedes cambiar el origen en Buscar vuelos.</p>
+      <p id="marketFlightStatus" role="status" data-i18n>Comprobando precios de vuelos…</p>
+      <div id="marketFlightList" class="escape-list"></div>
+    </section>
+    <div class="ideas-heading" id="inspiracion"><h2 data-i18n>¿Qué te apetece hacer?</h2><p data-i18n>Empieza por una idea. El destino lo encontramos juntos.</p></div>
+    <div class="examples" id="examples">
+      <button type="button" class="ex-card" data-q="Algo de playa barato para una semana en julio"><img src="/img/ex-playa.jpg" alt="" loading="lazy" /><span><b data-i18n>Sol y playa</b><small data-i18n>Desconecta junto al mar</small></span></button>
+      <button type="button" class="ex-card" data-q="Escapada romántica de fin de semana"><img src="/img/ex-romantica.jpg" alt="" loading="lazy" /><span><b data-i18n>Una escapada para dos</b><small data-i18n>Tiempo para vosotros</small></span></button>
+      <button type="button" class="ex-card" data-q="Hotel de montaña menos de 100 €"><img src="/img/ex-montana.jpg" alt="" loading="lazy" /><span><b data-i18n>Montaña y naturaleza</b><small data-i18n>Respira fuera de la rutina</small></span></button>
+      <button type="button" class="ex-card" data-kind="flight" data-q="Vuelos directos de Madrid a Lisboa"><img src="/img/ex-vuelos.jpg" alt="" loading="lazy" /><span><b data-i18n>Tu próxima ciudad</b><small data-i18n>Cultura, calles y nuevas historias</small></span></button>
+      <button type="button" class="ex-card kids" data-q="Playa con niños en Canarias 5 noches"><img src="/img/ex-ninos.jpg" alt="" loading="lazy" /><span><b data-i18n>Escapadas con niños</b><small data-i18n>Diversión en familia</small></span></button>
+    </div>
+    <section class="travel-steps" aria-label="Cómo funciona"><div><h2><span data-i18n>¿Y si el mejor día</span><br /><span data-i18n>aún está por llegar?</span></h2><p data-i18n>Compara el precio de cada día antes de decidir.</p></div><div><span class="step-number">01</span><h3 data-i18n>Imagina tu viaje</h3><p data-i18n>Escríbelo con tus palabras.</p></div><div><span class="step-number">02</span><h3 data-i18n>Encuentra tus días</h3><p data-i18n>Compara fechas en el calendario.</p></div><div><span class="step-number">03</span><h3 data-i18n>Elige y reserva</h3><p data-i18n>Consulta el total antes de pagar.</p></div></section>
+    <section id="forYou" class="for-you" hidden>
+      <h2>Para ti <span class="meta" id="forYouWhy">según tus últimas búsquedas</span></h2>
+      <div class="examples" id="forYouList"></div>
+    </section>
+    <p id="aiExplain" class="ai-explain" hidden></p>
+
+    <button type="button" class="btn manual-toggle" id="manualToggle" aria-expanded="false" aria-controls="filters"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> <span>Búsqueda manual</span></button>
+    <form id="filters" class="filters">
+      <label class="flight-only f-origin">Origen
+        <input name="origin" list="destList" placeholder="Cualquiera" />
+      </label>
+      <label class="f-dest">Destino
+        <input name="destination" placeholder="Escribe cualquier ciudad" autocomplete="off" />
+        <datalist id="destList"></datalist>
+      </label>
+      <label class="flight-only live-only f-half f-ida">Ida
+        <input name="date" type="date" />
+      </label>
+      <label class="flight-only live-only f-half f-ret">Vuelta <span class="meta">(opcional)</span>
+        <input name="returnDate" type="date" />
+      </label>
+      <label class="flight-only live-only f-half f-pax">Pasajeros
+        <select name="passengers"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+      </label>
+      <label class="hotel-only f-date">Entrada
+        <input name="checkIn" type="date" />
+      </label>
+      <label class="hotel-only f-third f-guests">Noches
+        <input name="nights" type="number" min="1" max="30" value="3" />
+      </label>
+      <label class="hotel-only f-third f-guests">Adultos
+        <select name="adults"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
+      </label>
+      <label class="hotel-only f-third f-guests">Niños
+        <select name="kids"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      </label>
+      <span id="kidAges" class="hotel-only kid-ages"></span>
+      <label class="flight-only live-only f-half f-stops">Escalas
+        <select name="stops"><option value="">Cualquiera</option><option value="0">Solo directos</option><option value="1">Hasta 1 escala</option><option value="many">Con escalas</option></select>
+      </label>
+      <label class="f-half f-price">Precio máx.
+        <input name="maxPrice" type="number" min="0" step="10" placeholder="€" />
+      </label>
+      <label class="hotel-only f-half">Ordenar
+        <select name="sort">
+          <option value="stars">Más estrellas</option>
+          <option value="rating">Mejor puntuación</option>
+          <option value="reviews">Más opiniones</option>
+          <option value="price">Más baratos</option>
+        </select>
+      </label>
+      <button class="btn hotel-only f-btn" type="button" id="moreFiltersBtn" aria-expanded="false" aria-controls="moreFilters"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10m4 0h2M4 12h4m4 0h8M4 18h12m4 0h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg> Más filtros <span id="moreCount" class="count-badge" hidden></span></button>
+      <div id="moreFilters" class="more-filters hotel-only" hidden>
+        <div class="mf-row">
+          <label>Alojamiento
+            <select name="stay"><option value="">Todos</option><option value="hotel">Hoteles</option><option value="apartment">Apartamentos</option><option value="house">Casas y villas</option><option value="hostel">Hostales y pensiones</option></select>
+          </label>
+          <label>Estrellas
+            <select name="minStars"><option value="">Cualquiera</option><option value="2">2 o más ★</option><option value="3">3 o más ★</option><option value="4">4 o más ★</option><option value="5">5 ★</option></select>
+          </label>
+          <label>Puntuación
+            <select name="minRating"><option value="">Cualquiera</option><option value="7">7 o más</option><option value="8">8 o más (muy bien)</option><option value="9">9 o más (fantástico)</option></select>
+          </label>
+          <label>Comidas
+            <select name="board"><option value="">Cualquiera</option><option value="BI">Desayuno incluido</option><option value="HB">Media pensión</option><option value="FB">Pensión completa</option><option value="AI">Todo incluido</option></select>
+          </label>
+        </div>
+        <fieldset class="mf-facilities"><legend>Servicios</legend><div id="facilityList"></div></fieldset>
+      </div>
+      <input type="hidden" name="tags" />
+      <button class="btn primary f-btn" type="button" data-send>Aplicar</button>
+      <button class="btn ghost f-btn" type="button" id="clearFilters">Limpiar</button>
+    </form>
+  </section>
+
+  <main id="results" class="results" aria-live="polite"></main>
+
+  <section id="mine" class="mine" hidden>
+    <h2>Mis reservas</h2>
+    <form id="mineForm" class="filters">
+      <label>Email <input name="email" type="email" required placeholder="tu@email.com" /></label>
+      <label class="mine-code">Código de reserva <input name="code" autocomplete="off" placeholder="DL-…" maxlength="12" /></label>
+      <button class="btn primary" type="button" data-send>Ver reservas</button>
+    </form>
+    <div id="mineList"></div>
+  </section>
+
+  <dialog id="bookDialog" class="dialog">
+    <form id="bookForm">
+      <h2 id="bookTitle">Reservar</h2>
+      <div id="bookSummary" class="summary"></div>
+      <div id="roomBox" class="rooms" hidden></div>
+      <label><span id="unitsLabel">Habitaciones</span>
+        <select name="units"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+      </label>
+      <label>Nombre completo <input name="name" required minlength="2" autocomplete="name" /></label>
+      <label>Email <input name="email" type="email" required autocomplete="email" /></label>
+      <label class="check"><input name="terms" type="checkbox" required /> <span data-i18n>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a> y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+      <p class="total">Total: <strong id="bookTotal">—</strong></p>
+      <p id="bookExtra" class="meta" hidden></p>
+      <p id="bookNote" class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
+      <div id="payBox" class="paybox" hidden>
+        <p class="meta" id="payHint"></p>
+        <div id="paymentElement"></div>
+      </div>
+      <p id="bookError" class="error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="bookCancel" class="btn ghost">Cancelar</button>
+        <button type="button" data-send id="bookConfirm" class="btn primary">Confirmar reserva</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="hotelDialog" class="dialog wide sheet">
+    <div class="sheet-body" id="hotelBody"></div>
+    <div class="actions sheet-actions">
+      <button type="button" class="btn ghost" data-close>Cerrar</button>
+      <button type="button" class="btn primary" id="hotelDates">Ver fechas y precios</button>
+    </div>
+  </dialog>
+
+  <dialog id="accountDialog" class="dialog">
+    <div class="account-body" id="accountBody"></div>
+  </dialog>
+
+  <dialog id="roomDialog" class="dialog wide sheet">
+    <div class="sheet-body" id="roomBody"></div>
+    <div class="actions sheet-actions">
+      <button type="button" class="btn ghost" data-close>Cerrar</button>
+    </div>
+  </dialog>
+
+  <dialog id="flightDialog" class="dialog wide">
+    <form id="flightForm" autocomplete="on">
+      <h2>Reservar vuelo</h2>
+      <div id="flightSummary" class="summary"></div>
+      <p class="total">Total: <strong id="flightTotal">—</strong></p>
+      <p id="flightExtra" class="meta" hidden></p>
+      <div id="flightFields" class="flight-fields">
+        <fieldset>
+          <legend>Contacto</legend>
+          <label>Email <input name="email" type="email" required autocomplete="email" /></label>
+          <div class="row">
+            <label class="code">Prefijo <input name="phoneCountryCode" inputmode="numeric" value="34" required pattern="\+?[0-9]{1,4}" /></label>
+            <label>Teléfono <input name="phoneNumber" type="tel" required minlength="6" autocomplete="tel-national" /></label>
+          </div>
+        </fieldset>
+        <div id="paxList"></div>
+        <p class="meta">Escribe los datos tal y como aparecen en el pasaporte o DNI. La aerolínea los necesita para emitir el billete.</p>
+        <label class="check"><input name="terms" type="checkbox" required /> <span data-i18n>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a>, las condiciones de la tarifa de la aerolínea y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+      </div>
+      <div id="flightPayBox" class="paybox" hidden>
+        <p class="meta" id="flightPayHint"></p>
+        <div id="flightPayment"></div>
+      </div>
+      <p id="flightError" class="error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="flightCancel" class="btn ghost">Cancelar</button>
+        <button type="button" data-send id="flightConfirm" class="btn primary">Continuar al pago</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <section class="how" aria-labelledby="howTitle">
+    <h2 id="howTitle" data-i18n>Así funciona</h2>
+    <ol>
+      <li><b data-i18n>Cuéntanos qué buscas</b><span data-i18n>Con tus palabras o con filtros. No hace falta saber las fechas.</span></li>
+      <li><b data-i18n>Elige un día libre</b><span data-i18n>En verde los días con plaza y su precio. Marcamos el más barato.</span></li>
+      <li><b data-i18n>Reserva y paga seguro</b><span data-i18n>Pago con tarjeta y confirmación al momento por email.</span></li>
+    </ol>
+  </section>
+
+  <nav class="popular" aria-label="Destinos populares"><!--POPULAR--></nav>
+  <footer class="footer"><strong class="footer-brand">DíasLibre</strong><p class="footer-tagline" data-i18n>Viaja más. Vive mejor.</p> <span id="footerNote" data-default="Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.">Hoteles reales (datos públicos); precios, disponibilidad y vuelos son simulados y las reservas no se envían al hotel.</span> Datos de hoteles adicionales © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">colaboradores de OpenStreetMap</a> (ODbL). · <a href="/legal.html">Información legal</a> · <a href="https://gusansoft.com/" rel="noopener">Gusansoft</a></footer>
+
+  <script type="module" src="/app.js"></script>
+  <script type="module" src="/escapes.js"></script>
+  <script type="module" src="/market-deals.js"></script>
+</body>
+</html>
