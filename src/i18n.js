@@ -1,11 +1,12 @@
 // Idiomas de la web. Los textos se escriben en español y se traducen con
 // diccionarios { 'frase en español': 'traducción' } en public/i18n/<idioma>.js
 // (los mismos que usa el navegador). Lo que falta en un diccionario sale en español.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { join, dirname } from 'node:path';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+import en from '../public/i18n/en.js';
+import fr from '../public/i18n/fr.js';
+import de from '../public/i18n/de.js';
+import it from '../public/i18n/it.js';
+import pt from '../public/i18n/pt.js';
+import nl from '../public/i18n/nl.js';
 
 // prefix: delante de cada dirección; hotels/flights/escapes/whereTo: la palabra de la dirección
 // (hotels y flights también son las páginas generales /hoteles y /vuelos).
@@ -21,16 +22,8 @@ export const LANGS = {
 export const LANG_CODES = Object.keys(LANGS);
 export const isLang = (x) => Object.hasOwn(LANGS, x);
 
-// Los diccionarios son módulos del navegador («export default {...}»): se leen como JSON.
-const DICTS = { es: {} };
-for (const code of LANG_CODES.slice(1)) {
-  try {
-    const src = readFileSync(join(root, 'public', 'i18n', `${code}.js`), 'utf8');
-    DICTS[code] = JSON.parse(src.slice(src.indexOf('{'), src.lastIndexOf('}') + 1));
-  } catch {
-    DICTS[code] = {};
-  }
-}
+// Shared ES modules work both in Node and in Cloudflare without filesystem access.
+const DICTS = { es: {}, en, fr, de, it, pt, nl };
 export const dict = (lang) => DICTS[lang] || {};
 
 const fill = (s, vars) => Object.entries(vars).reduce((out, [k, v]) => out.replaceAll(`{${k}}`, v), s);

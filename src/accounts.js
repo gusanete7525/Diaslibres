@@ -134,9 +134,9 @@ export class Accounts {
   // Canjea el enlace del email por una sesión.
   async verifyLoginLink(token) {
     const key = 'login:' + hash(token);
-    const row = await this.store.kvGet(key);
+    const row = this.store.kvTake ? await this.store.kvTake(key) : await this.store.kvGet(key);
     if (!row) throw Object.assign(new Error('El enlace no es válido o ya se usó. Pide otro.'), { status: 400 });
-    await this.store.kvDelete(key);
+    if (!this.store.kvTake) await this.store.kvDelete(key);
     if (row.exp < this.now()) throw Object.assign(new Error('El enlace ha caducado. Pide otro.'), { status: 400 });
     await this.store.kvDelete('mailrate:' + row.email);
     let user = await this.#upsertUser(row.email, { provider: 'email' });
