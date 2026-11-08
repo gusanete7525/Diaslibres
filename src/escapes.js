@@ -37,7 +37,7 @@ const STALE_MS = 6 * 60 * 60 * 1000; // hasta 6 h se sirven al instante mientras
 const RECENT_MS = 24 * 60 * 60 * 1000; // búsquedas pedidas en las últimas 24 h se mantienen calientes
 const WARM_MAX = 8; // como mucho tantas búsquedas distintas por ronda, para no gastar LiteAPI
 
-export function makeEscapeSearch(live, { now = () => Date.now() } = {}) {
+export function makeEscapeSearch(live, { now = () => Date.now(), freshMs = FRESH_MS } = {}) {
   const cache = new Map(); // clave -> { promise, result, at }
   const recent = new Map(); // JSON([q, lang, country]) -> último uso
   async function compute(plan, market, lang, context) {
@@ -90,7 +90,7 @@ export function makeEscapeSearch(live, { now = () => Date.now() } = {}) {
     let entry = cache.get(key);
     if (entry?.result) {
       const age = now() - entry.at;
-      if (age >= FRESH_MS && !entry.promise) refresh(key, entry, plan, market, lang, context).catch(() => {});
+      if (age >= freshMs && !entry.promise) refresh(key, entry, plan, market, lang, context).catch(() => {});
       if (age < STALE_MS) return entry.result; // al instante, aunque se esté renovando
     }
     if (entry?.promise) return entry.promise;
@@ -102,11 +102,12 @@ export function makeEscapeSearch(live, { now = () => Date.now() } = {}) {
   }
   // Renueva por adelantado las búsquedas que la gente ha hecho hace poco (y la de la portada
   // en español), para que el visitante casi nunca espere a LiteAPI.
-  search.warm = async (defaults = [[{}, 'es', null]]) => {
+  // recent: false renueva solo las de defaults; maxAge: edad a partir de la que se renueva.
+  search.warm = async (defaults = [[{}, 'es', null]], { recent: withRecent = true, maxAge = freshMs - 2 * 60 * 1000 } = {}) => {
     if (!live) return;
     const t = now();
     for (const [args, at] of recent) if (t - at > RECENT_MS) recent.delete(args);
-    const list = [...recent.keys()].reverse().map(a => JSON.parse(a));
+    const list = withRecent ? [...recent.keys()].reverse().map(a => JSON.parse(a)) : [];
     for (const d of defaults) if (!list.some(a => JSON.stringify(a) === JSON.stringify(d))) list.push(d);
     for (const [q, lang, country] of list.slice(0, WARM_MAX)) {
       try {
@@ -114,7 +115,7 @@ export function makeEscapeSearch(live, { now = () => Date.now() } = {}) {
         const market = promotionMarket(lang, undefined, country);
         const key = JSON.stringify([plan, market.id, market.language, market.day]);
         const entry = cache.get(key);
-        if (entry?.promise || (entry?.result && t - entry.at < FRESH_MS - 2 * 60 * 1000)) continue;
+        if (entry?.promise || (entry?.result && t - entry.at < maxAge)) continue;
         if (!entry) {
           if (cache.size >= 100) cache.delete(cache.keys().next().value);
           cache.set(key, { promise: null, result: null, at: 0 });

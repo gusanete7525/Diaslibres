@@ -106,3 +106,12 @@ test('warm calcula por adelantado la portada y lo pedido hace poco', async () =>
   assert.equal(live.calls.length, calls); // ya estaba calculada: ninguna petición nueva
   await makeEscapeSearch(null).warm(); // sin LiteAPI no hace nada
 });
+
+test('warm con recent: false solo renueva la portada indicada', async () => {
+  const live = provider();
+  const search = makeEscapeSearch(live);
+  await search(query(), 'fr');
+  const calls = live.calls.length;
+  await search.warm([], { recent: false, maxAge: 0 });
+  assert.equal(live.calls.length, calls);
+});

@@ -425,9 +425,11 @@ export function createApp({
     }
   });
 
-  const escapeSearch = makeEscapeSearch(live);
-  // Portada en español (visitantes de España y sin país) y lo que se haya pedido hace poco.
-  app.locals.warmEscapes = () => escapeSearch.warm([[{}, 'es', 'ES'], [{}, 'es', null]]);
+  const escapeSearch = makeEscapeSearch(live, { freshMs: 30 * 60 * 1000 });
+  // Solo la portada en español (visitantes de España y sin país), cada 30 min, para no gastar
+  // LiteAPI de más (~1.700 cotizaciones al día). Lo demás se sirve al momento y se renueva al pedirlo,
+  // como mucho una vez cada 30 min por búsqueda.
+  app.locals.warmEscapes = () => escapeSearch.warm([[{}, 'es', 'ES'], [{}, 'es', null]], { recent: false });
   const escapeLimit = rateLimit({ max: 20, windowMs: 10 * 60 * 1000 });
   app.get('/api/escapes', escapeLimit, async (req, res) => {
     try { escapePlan(req.query); }
@@ -1211,7 +1213,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     setInterval(() => app.locals.statsTick(), 20000).unref();
     // Escapadas de la portada calculadas por adelantado: el visitante no espera a LiteAPI.
     setTimeout(() => app.locals.warmEscapes(), 30 * 1000).unref();
-    setInterval(() => app.locals.warmEscapes(), 5 * 60 * 1000).unref();
+    setInterval(() => app.locals.warmEscapes(), 30 * 60 * 1000).unref();
     // Avisar a los buscadores de IndexNow pasado un rato (con los datos de las ciudades ya cargados).
     setTimeout(() => app.locals.submitIndexNow().catch((err) => console.error('[indexnow]', err.message)), 5 * 60 * 1000).unref();
   });
