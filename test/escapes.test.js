@@ -79,3 +79,30 @@ test('API valida entradas, evita caché pública y solo expone tarifas comprobad
     assert.match(html, /type="module" src="\/escapes.js"/);
   } finally { server.close(); }
 });
+
+test('pasados 10 min sirve el último resultado al instante y lo renueva en segundo plano', async () => {
+  let t = 0, total = 100, slow = null;
+  const live = provider();
+  live.quote = async () => { if (slow) await slow; return { total, payAtHotel: [] }; };
+  const search = makeEscapeSearch(live, { now: () => t });
+  assert.equal((await search(query())).results[0].total, 100);
+  t += 11 * 60 * 1000; total = 150;
+  let release; slow = new Promise(r => (release = r));
+  const stale = await search(query()); // no espera a LiteAPI
+  assert.equal(stale.results[0].total, 100);
+  release(); slow = null;
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal((await search(query())).results[0].total, 150);
+});
+
+test('warm calcula por adelantado la portada y lo pedido hace poco', async () => {
+  const live = provider();
+  const search = makeEscapeSearch(live);
+  await search.warm([[{}, 'es', 'ES']]);
+  const calls = live.calls.length;
+  assert.ok(calls > 0);
+  const data = await search({}, 'es', 'ES');
+  assert.ok(data.results.length > 0);
+  assert.equal(live.calls.length, calls); // ya estaba calculada: ninguna petición nueva
+  await makeEscapeSearch(null).warm(); // sin LiteAPI no hace nada
+});
