@@ -2212,7 +2212,7 @@ function openAccount() {
   if (u) {
     body.innerHTML = `<h2>${t('Mi cuenta')}</h2>
       <p><b>${esc(u.email)}</b></p>
-      ${u.admin ? '<p><a href="/estadisticas">Estadísticas de DíasLibre</a></p>' : ''}
+      ${u.admin ? '<p><a href="/estadisticas">Estadísticas de DíasLibres</a></p>' : ''}
       <p class="meta">${t('Usamos tus últimas búsquedas para proponerte destinos en «Para ti».')}</p>
       <div class="actions"><button type="button" class="btn" data-act="mine">${t('Mis reservas')}</button><button type="button" class="btn" data-act="logout">${t('Cerrar sesión')}</button></div>
       <p><button type="button" class="link-danger" data-act="delete">${t('Borrar mi cuenta y mis búsquedas')}</button></p>

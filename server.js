@@ -155,8 +155,8 @@ export function createApp({
   const statsOf = (city) => seoStats.get(cityKey(city)) || null;
   const statsQueue = [];
   const statsLoaded = Promise.resolve(store.kvList?.('seo:') || []).then((rows) => {
-    // Los datos de antes de contar los apartamentos se vuelven a calcular.
-    for (const [k, v] of rows) if (v?.stay && v.geoVersion === 2) seoStats.set(k.slice(4), v);
+    // Los datos de antes de quitar de los «mejor valorados» los alojamientos de otra ciudad se vuelven a calcular.
+    for (const [k, v] of rows) if (v?.stay && v.geoVersion === 3) seoStats.set(k.slice(4), v);
   }).catch((err) => console.error('[seo]', err.message));
   // Pide los datos de una ciudad (las que se visitan van primero).
   // Los datos sin foto de portada (de antes de «Para ti») se renuevan poco a poco.
@@ -174,8 +174,8 @@ export function createApp({
     if (!city) return;
     statsBusy = true;
     try {
-      const hotels = await live.hotels(city.es, { keep: false, country: city.country });
-      const s = { ...cityStats(hotels), geoVersion: 2, country: city.country };
+      const hotels = await live.hotels(city.es, { keep: false, country: city.country, priority: 'background' });
+      const s = { ...cityStats(hotels), geoVersion: 3, country: city.country };
       seoStats.set(cityKey(city), s);
       await store.kvSet?.('seo:' + cityKey(city), s);
     } catch (err) {
@@ -425,7 +425,11 @@ export function createApp({
     }
   });
 
-  const escapeSearch = makeEscapeSearch(live);
+  const escapeSearch = makeEscapeSearch(live, { freshMs: 30 * 60 * 1000 });
+  // Solo la portada en español (visitantes de España y sin país), cada 30 min, para no gastar
+  // LiteAPI de más (~1.700 cotizaciones al día). Lo demás se sirve al momento y se renueva al pedirlo,
+  // como mucho una vez cada 30 min por búsqueda.
+  app.locals.warmEscapes = () => escapeSearch.warm([[{}, 'es', 'ES'], [{}, 'es', null]], { recent: false });
   const escapeLimit = rateLimit({ max: 20, windowMs: 10 * 60 * 1000 });
   app.get('/api/escapes', escapeLimit, async (req, res) => {
     try { escapePlan(req.query); }
@@ -1067,7 +1071,7 @@ export function createApp({
   for (const path of ['/api/admin/metrics','/estadisticas']) app.get(path, async (req,res) => {
     res.set('Cache-Control','no-store').set('X-Robots-Tag','noindex, nofollow');
     const user = await me(req);
-    if (!user) return res.status(401).type('text').send('Entra con tu cuenta de administrador en DíasLibre.');
+    if (!user) return res.status(401).type('text').send('Entra con tu cuenta de administrador en DíasLibres.');
     if (!isOwner(user)) return res.sendStatus(403);
     const data = await metricReport();
     if (path.startsWith('/api/')) res.json(data); else res.type('html').send(metricsHtml(data));
@@ -1182,6 +1186,15 @@ export function createApp({
     res.json(publicBooking(cancelled));
   });
 
+  // Página no encontrada: con la marca y enlaces para seguir, en el idioma de la dirección.
+  app.use((req, res) => {
+    const lang = LANG_CODES.find((l) => l !== 'es' && (req.path === '/' + l || req.path.startsWith('/' + l + '/'))) || 'es';
+    if (req.path.startsWith('/api/') || !req.accepts('html')) return res.status(404).json({ error: trText(lang, 'No encontrado.') });
+    const L = LANGS[lang];
+    const t = (s) => trText(lang, s);
+    res.status(404).type('html').send(`<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>${t('Página no encontrada')} · DíasLibres</title><link rel="icon" type="image/png" href="/icon-192.png"><link rel="stylesheet" href="/styles.css"></head><body><header class="topbar"><a class="logo" href="${L.prefix}/" translate="no">Días<span>Libres</span></a></header><main style="max-width:640px;margin:48px auto;padding:0 16px"><h1>${t('Página no encontrada')}</h1><p>${t('La dirección no existe o ha cambiado.')}</p><p><a class="btn primary" href="${L.prefix}/">${t('Ir al inicio')}</a></p><ul><li><a href="${L.prefix}/${L.hotels}">${t('Hoteles')}</a></li><li><a href="${L.prefix}/${L.flights}">${t('Vuelos')}</a></li><li><a href="${L.prefix}/${L.escapes}">${t('Escapadas')}</a></li></ul></main></body></html>`);
+  });
+
   return app;
 }
 
@@ -1198,6 +1211,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     app.locals.refreshDeals(); // las ofertas de vuelos ya preparadas para la primera visita
     // Datos de las ciudades para las páginas de buscadores: una ciudad cada 20 s, sin prisa.
     setInterval(() => app.locals.statsTick(), 20000).unref();
+    // Escapadas de la portada calculadas por adelantado: el visitante no espera a LiteAPI.
+    setTimeout(() => app.locals.warmEscapes(), 30 * 1000).unref();
+    setInterval(() => app.locals.warmEscapes(), 30 * 60 * 1000).unref();
     // Avisar a los buscadores de IndexNow pasado un rato (con los datos de las ciudades ya cargados).
     setTimeout(() => app.locals.submitIndexNow().catch((err) => console.error('[indexnow]', err.message)), 5 * 60 * 1000).unref();
   });

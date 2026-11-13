@@ -71,7 +71,7 @@ export function trText(lang, text) {
 const escAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 // Traduce index.html: elementos con data-i18n (su HTML entero es la clave), textos sueltos
-// entre etiquetas y los atributos de texto. No toca <script> ni <style>.
+// entre etiquetas y los atributos de texto. No toca <script>, <style> ni lo marcado con translate="no" (la marca).
 export function translateHtml(html, lang) {
   if (lang === 'es') return html;
   const d = dict(lang);
@@ -79,7 +79,7 @@ export function translateHtml(html, lang) {
     const v = d[inner.trim()];
     return v != null ? `<${tag}${attrs} data-i18n data-done>${v}</${tag}>` : all;
   });
-  out = out.replace(/(<(script|style)\b[\s\S]*?<\/\2>)|(<[^>]*\sdata-done>[\s\S]*?<\/)|>([^<>]+)(?=<)/g, (all, block, _t, done, text) => {
+  out = out.replace(/(<(script|style)\b[\s\S]*?<\/\2>)|(<[^>]*\s(?:data-done|translate="no")[^>]*>[\s\S]*?<\/)|>([^<>]+)(?=<)/g, (all, block, _t, done, text) => {
     if (block || done || !text?.trim()) return all;
     const key = text.trim();
     return d[key] != null ? '>' + text.replace(key, () => d[key]) : all;

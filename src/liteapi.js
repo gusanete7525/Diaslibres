@@ -13,9 +13,12 @@ const PRICE_TTL = 3 * 3600 * 1000; // los precios caducan a las 3 h
 const HOTELS_TTL = 24 * 3600 * 1000;
 const MAX_HOTELS = 2000; // todos los de la ciudad (Madrid tiene ~1.300); se muestran por páginas
 const MAX_FLIGHTS = 20;
+const BACKGROUND_MAX_WAIT = 3000; // ms que espera como mucho una petición de fondo
 const OFFER_TTL = 30 * 60 * 1000; // las ofertas de vuelo caducan pronto
 const SEARCH_TTL = 8 * 60 * 1000; // las ofertas de LiteAPI caducan a los ~10 minutos
 const CONCURRENCY = 3; // el entorno de pruebas responde 429 con más peticiones a la vez
+// Una petición colgada no puede ocupar para siempre uno de esos 3 huecos.
+const REQUEST_TIMEOUT = 25000;
 
 const norm = (s) =>
   String(s ?? '')
@@ -147,6 +150,7 @@ export class LiteApi {
     this.sandbox = key.startsWith('sand_');
     this.active = 0;
     this.waiting = [];
+    this.background = []; // escapadas y datos para buscadores: solo cuando no espera nadie más
     this.places = new Map(); // ciudad -> { at, value }
     this.hotelLists = new Map();
     this.details = new Map(); // fichas de hotel (fotos, habitaciones)
@@ -160,15 +164,21 @@ export class LiteApi {
 
   // Las peticiones prioritarias (buscar hoteles, presupuesto, reserva) se cuelan
   // delante de los precios del calendario, que pueden ser decenas en cola.
+  // Las de fondo ('background': escapadas de la portada, datos para buscadores) van
+  // detrás de todo: si no, cada visita a la portada dejaba sin precios a las fichas.
   async #slot(priority) {
     if (this.active < CONCURRENCY) return void this.active++;
-    await new Promise((r) => (priority ? this.waiting.unshift(r) : this.waiting.push(r)));
+    await new Promise((r) => (priority === 'background' ? this.background.push({ r, at: Date.now() }) : priority ? this.waiting.unshift(r) : this.waiting.push(r)));
     this.active++;
   }
 
+  // Una de fondo que ya lleva BACKGROUND_MAX_WAIT esperando pasa delante, para que
+  // la portada no se quede sin escapadas mientras haya precios del calendario en cola.
   #release() {
     this.active--;
-    this.waiting.shift()?.();
+    const old = this.background.length && Date.now() - this.background[0].at >= BACKGROUND_MAX_WAIT;
+    if (old || !this.waiting.length) return void this.background.shift()?.r();
+    this.waiting.shift()();
   }
 
   async #request(method, url, body, { priority = true } = {}) {
@@ -179,6 +189,7 @@ export class LiteApi {
           method,
           headers: { 'X-API-Key': this.key, accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
           body: body ? JSON.stringify(body) : undefined,
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT),
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 429 && attempt < 3) {
@@ -216,7 +227,7 @@ export class LiteApi {
 
   // Todos los hoteles de una ciudad, con descripción y país en `lang`.
   // keep: false para consultas de fondo (datos para buscadores) que no deben llenar la memoria.
-  async hotels(city, { lang = 'es', keep = true, country: selectedCountry } = {}) {
+  async hotels(city, { lang = 'es', keep = true, country: selectedCountry, priority = keep } = {}) {
     const parts = String(city).split(',').map(s => s.trim());
     const explicitCountry = parts.length > 1 ? countryCode(parts.at(-1)) : null;
     const text = explicitCountry ? parts.slice(0, -1).join(', ') : String(city).trim();
@@ -229,16 +240,16 @@ export class LiteApi {
     let location;
     if (country) location = `countryCode=${encodeURIComponent(country)}&cityName=${encodeURIComponent(cityQuery)}`;
     else {
-      const placeId = await this.#placeId(text, lang, keep);
+      const placeId = await this.#placeId(text, lang, priority);
       if (!placeId) return [];
       location = `placeId=${encodeURIComponent(placeId)}`;
     }
-    let { data = [] } = await this.#request('GET', `${API}/data/hotels?${location}&limit=${MAX_HOTELS}&language=${lang}`, null, { priority: keep });
+    let { data = [] } = await this.#request('GET', `${API}/data/hotels?${location}&limit=${MAX_HOTELS}&language=${lang}`, null, { priority });
     // Islands and smaller destinations may not be a city in the hotel catalogue.
     // Keep geographic search, qualified by country, instead of silently losing them.
     if (country && !data.length) {
-      const placeId = await this.#placeId(`${text}, ${countryName(country,'en')}`,lang,keep);
-      if (placeId) ({data = []} = await this.#request('GET', `${API}/data/hotels?placeId=${encodeURIComponent(placeId)}&countryCode=${encodeURIComponent(country)}&limit=${MAX_HOTELS}&language=${lang}`,null,{priority:keep}));
+      const placeId = await this.#placeId(`${text}, ${countryName(country,'en')}`,lang,priority);
+      if (placeId) ({data = []} = await this.#request('GET', `${API}/data/hotels?placeId=${encodeURIComponent(placeId)}&countryCode=${encodeURIComponent(country)}&limit=${MAX_HOTELS}&language=${lang}`,null,{priority}));
     }
     const hotels = data.filter(h => !country || !h.country || countryCode(h.country) === country).map((h) => this.#toHotel(h, lang, keep));
     if (keep) {
@@ -353,7 +364,7 @@ export class LiteApi {
 
   // Presupuesto de una estancia: todas las habitaciones disponibles (la más barata de cada
   // tipo, régimen y cancelación) y la elegida (room = su clave; si no, la más barata).
-  async quote({ itemId, checkIn, checkOut, units = 1, adults, children, board, room }) {
+  async quote({ itemId, checkIn, checkOut, units = 1, adults, children, board, room, priority = true }) {
     const hotel = this.hotelsById.get(itemId);
     if (!hotel) throw new LiteApiError('Hotel no encontrado. Vuelve a buscar la ciudad.');
     const rooms = Math.max(1, Math.min(4, Number(units) || 1));
@@ -370,8 +381,8 @@ export class LiteApi {
     // Con roomMapping cada tarifa dice a qué habitación del catálogo corresponde (fotos y datos);
     // sin ella llegan también las tarifas sin habitación conocida (a veces más baratas).
     const [mapped, all] = await Promise.all([
-      this.#request('POST', `${API}/hotels/rates`, { ...body, roomMapping: true }).catch(noAvailability),
-      this.#request('POST', `${API}/hotels/rates`, body).catch(noAvailability),
+      this.#request('POST', `${API}/hotels/rates`, { ...body, roomMapping: true }, { priority }).catch(noAvailability),
+      this.#request('POST', `${API}/hotels/rates`, body, { priority }).catch(noAvailability),
     ]);
     const roomOf = new Map();
     for (const o of mapped.data?.[0]?.roomTypes || []) {
