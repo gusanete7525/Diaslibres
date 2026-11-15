@@ -722,6 +722,7 @@ export default {
   "Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.": "Total de alojamento para 2 adultos, 1 quarto. Transporte excluído. 3 dias incluem 2 noites. Feriados não verificados.",
   "Descubrir dónde puedo ir": "Descobrir para onde posso ir",
   "O cuéntanos tu viaje con tus palabras": "Ou descreve a tua viagem",
+  "Pregúntale a Manake IA": "Pergunta à Manake IA",
   "Escapadas de 3 días para el próximo mes": "Escapadinhas de 3 dias no próximo mês",
   "Escapadas de {n} días": "Escapadinhas de {n} dias",
   "Comparamos algunas fechas y destinos para inspirarte. No es una búsqueda exhaustiva ni incluye el transporte.": "Comparamos algumas datas e destinos. A pesquisa não é exaustiva nem inclui transporte.",

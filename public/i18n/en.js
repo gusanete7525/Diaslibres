@@ -721,6 +721,7 @@ export default {
   "Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.": "Accommodation total for 2 adults, 1 room. Transport excluded. A 3-day trip includes 2 nights. Public holidays are not checked.",
   "Descubrir dónde puedo ir": "Discover where I can go",
   "O cuéntanos tu viaje con tus palabras": "Or describe your trip in your own words",
+  "Pregúntale a Manake IA": "Ask Manake IA",
   "Escapadas de 3 días para el próximo mes": "3-day getaways for next month",
   "Escapadas de {n} días": "{n}-day getaways",
   "Comparamos algunas fechas y destinos para inspirarte. No es una búsqueda exhaustiva ni incluye el transporte.": "We compare a selection of dates and destinations for inspiration. This is not an exhaustive search and transport is excluded.",
