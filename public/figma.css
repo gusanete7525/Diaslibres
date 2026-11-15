@@ -91,7 +91,8 @@ h1,h2,h3,.logo { font-family:inherit; }
 .escape-range > div { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
 .escape-scope { margin:0; font-size:12px; line-height:1.5; color:var(--text-2); }
 .escape-ai { margin-top:16px; width:100%; box-sizing:border-box; }
-.escape-ai .ai-title { margin:0 0 8px; font-size:16px; font-weight:700; color:var(--text); }
+.escape-ai .ai-title { margin:0 0 2px; font-size:18px; font-weight:700; color:var(--text); }
+.escape-ai .ai-sub { margin:0 0 8px; font-size:14px; color:var(--text-2); }
 .escape-featured { padding-top:36px; scroll-margin-top:20px; }
 .escape-featured h2 { font-size:28px; line-height:1.25; }
 .escape-featured > p { color:var(--text-2); line-height:1.5; }
