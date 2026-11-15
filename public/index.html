@@ -72,13 +72,14 @@
           <button type="submit" class="btn primary" data-i18n>Descubrir dónde puedo ir</button>
         </form>
         </div>
-        <details class="escape-ai"><summary data-i18n>O cuéntanos tu viaje con tus palabras</summary>
+        <section class="escape-ai" aria-labelledby="aiHeading">
+        <h2 id="aiHeading" class="ai-title" data-i18n>O cuéntanos tu viaje con tus palabras</h2>
         <form id="aiForm" class="ai-box" autocomplete="off">
           <label class="sr-only" for="aiQuery" data-i18n>Describe tu viaje</label>
           <input id="aiQuery" type="search" placeholder="Una semana en Canarias, playa y hotel para dos…" aria-label="Describe tu viaje" />
           <div class="ai-actions"><span class="ai-badge">✦ <span data-i18n>Con ayuda de IA</span></span><button type="button" data-send class="btn primary"><span data-i18n>Encontrar mi viaje</span> →</button></div>
         </form>
-        </details>
+        </section>
         <div class="manual-links"><span data-i18n>¿Ya sabes adónde?</span><button type="button" data-manual-view="hotels" data-i18n>Buscar hoteles</button><button type="button" data-manual-view="flights" data-i18n>Buscar vuelos</button></div>
       </div>
       <figure class="hero-visual"><img src="/img/hero.jpg" width="574" height="350" alt="Playa al atardecer" fetchpriority="high" /><figcaption><span aria-hidden="true">↗</span><div><strong data-i18n>Tu destino. Tus fechas. Tu mejor precio.</strong><p data-i18n>El calendario te ayuda a elegir cuándo viajar.</p></div></figcaption></figure>

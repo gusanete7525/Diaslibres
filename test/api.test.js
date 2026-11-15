@@ -255,8 +255,11 @@ test('la IA entiende días concretos, intervalos y personas', () => {
   assert.equal(r.adults, 2);
   assert.equal(r.maxPrice, 100);
   assert.match(r.checkIn, /-10$/);
-  const s = localParse('somos 3 en Sevilla del 5 al 8 de noviembre');
-  assert.match(s.checkIn, /-11-05$/);
+  // Un mes que siempre esté dentro de la ventana de reserva (dentro de dos meses).
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const m = (new Date().getUTCMonth() + 2) % 12;
+  const s = localParse(`somos 3 en Sevilla del 5 al 8 de ${MESES[m]}`);
+  assert.match(s.checkIn, new RegExp(`-${String(m + 1).padStart(2, '0')}-05$`));
   assert.equal(s.nights, 3);
   assert.equal(s.adults, 3);
   assert.equal(localParse('hotel de 4 estrellas en Valencia').checkIn, null);
