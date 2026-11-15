@@ -756,5 +756,16 @@ export default {
   "Página no encontrada": "Page introuvable",
   "La dirección no existe o ha cambiado.": "Cette adresse n'existe pas ou a changé.",
   "Ir al inicio": "Aller à l'accueil",
-  "No encontrado.": "Introuvable."
+  "No encontrado.": "Introuvable.",
+  "Tipo de búsqueda": "Type de recherche",
+  "Por días libres": "Selon mes jours libres",
+  "Hotel con fechas": "Hôtel avec dates",
+  "Vuelo con fechas": "Vol avec dates",
+  "Ciudad o zona": "Ville ou quartier",
+  "Vuelta (opcional)": "Retour (facultatif)",
+  "Busca un hotel concreto en tus fechas. Si las fechas no están libres, el calendario de cada hotel te muestra los días más cercanos.": "Trouvez un hôtel pour vos dates précises. Si elles ne sont pas disponibles, le calendrier de chaque hôtel montre les jours les plus proches.",
+  "La salida debe ser posterior a la entrada.": "Le départ doit être après l'arrivée.",
+  "Como máximo 30 noches por reserva.": "30 nuits maximum par réservation.",
+  "La vuelta debe ser posterior a la ida.": "Le retour doit être après l'aller.",
+  "El origen y el destino deben ser distintos.": "L'origine et la destination doivent être différentes."
 };

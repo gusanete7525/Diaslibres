@@ -756,5 +756,16 @@ export default {
   "Página no encontrada": "Página não encontrada",
   "La dirección no existe o ha cambiado.": "Este endereço não existe ou mudou.",
   "Ir al inicio": "Ir para o início",
-  "No encontrado.": "Não encontrado."
+  "No encontrado.": "Não encontrado.",
+  "Tipo de búsqueda": "Tipo de pesquisa",
+  "Por días libres": "Por dias livres",
+  "Hotel con fechas": "Hotel com datas",
+  "Vuelo con fechas": "Voo com datas",
+  "Ciudad o zona": "Cidade ou zona",
+  "Vuelta (opcional)": "Regresso (opcional)",
+  "Busca un hotel concreto en tus fechas. Si las fechas no están libres, el calendario de cada hotel te muestra los días más cercanos.": "Encontra um hotel para as tuas datas exatas. Se não estiverem livres, o calendário de cada hotel mostra os dias mais próximos.",
+  "La salida debe ser posterior a la entrada.": "A saída tem de ser depois da entrada.",
+  "Como máximo 30 noches por reserva.": "No máximo 30 noites por reserva.",
+  "La vuelta debe ser posterior a la ida.": "O regresso tem de ser depois da ida.",
+  "El origen y el destino deben ser distintos.": "A origem e o destino têm de ser diferentes."
 };

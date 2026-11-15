@@ -480,12 +480,68 @@ function setManual(open) {
   $('#manualToggle span').textContent = open ? t('Ocultar búsqueda manual') : t('Búsqueda manual');
 }
 $('#manualToggle').addEventListener('click', () => setManual(!document.body.classList.contains('manual-open')));
+// Buscador clásico arriba del todo: «Por días libres» (escapadas), «Hotel con fechas» y
+// «Vuelo con fechas». Los dos últimos rellenan los filtros de siempre y lanzan la misma búsqueda.
+const quickForms = { escape: $('#escapeForm'), hotels: $('#quickHotel'), flights: $('#quickFlight') };
+function setSearchMode(mode, focus = false) {
+  if (!quickForms[mode]) return;
+  document.querySelectorAll('.search-modes [data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
+  for (const [m, form] of Object.entries(quickForms)) form.hidden = m !== mode;
+  if (mode !== 'escape') setView(mode);
+  if (focus) $('input', quickForms[mode])?.focus({ preventScroll: true });
+}
+document.querySelectorAll('.search-modes [data-mode]').forEach((b) => b.addEventListener('click', () => setSearchMode(b.dataset.mode, true)));
 document.querySelectorAll('[data-manual-view]').forEach(button => button.addEventListener('click', () => {
-  setView(button.dataset.manualView);
-  setManual(true);
-  filters.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  filters.destination.focus({ preventScroll: true });
+  setSearchMode(button.dataset.manualView, true);
+  $('.quick-search').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }));
+// Las pestañas Hoteles / Vuelos de arriba también cambian el buscador.
+document.querySelectorAll('.tabs [data-view]').forEach((b) => b.addEventListener('click', () => {
+  if (quickForms[b.dataset.view]) setSearchMode(b.dataset.view);
+}));
+{
+  const today = new Date().toISOString().slice(0, 10);
+  const max = addDays(today, 330);
+  const h = quickForms.hotels, f = quickForms.flights;
+  for (const input of [h.checkIn, h.checkOut, f.date, f.returnDate]) { input.min = today; input.max = max; }
+  // La salida (o la vuelta) nunca antes de la entrada (o la ida): se propone 2 noches después.
+  const follow = (from, to, gap) => from.addEventListener('change', () => {
+    if (!from.value) return;
+    to.min = addDays(from.value, gap ? 1 : 0);
+    if (gap && (!to.value || to.value <= from.value)) to.value = addDays(from.value, gap);
+    else if (to.value && to.value < from.value) to.value = '';
+  });
+  follow(h.checkIn, h.checkOut, 2);
+  follow(f.date, f.returnDate, 0);
+}
+const showResults = () => results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+quickForms.hotels.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = quickForms.hotels;
+  const nights = diffDays(q.checkIn.value, q.checkOut.value);
+  if (!(nights >= 1)) return toast(t('La salida debe ser posterior a la entrada.'));
+  if (nights > 30) return toast(t('Como máximo 30 noches por reserva.'));
+  filters.destination.value = q.destination.value.trim();
+  filters.checkIn.value = q.checkIn.value;
+  filters.nights.value = String(nights);
+  filters.adults.value = q.adults.value;
+  filters.kids.value = '0';
+  renderKidAges();
+  setView('hotels');
+  search();
+  showResults();
+});
+quickForms.flights.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const q = quickForms.flights;
+  if (q.returnDate.value && q.returnDate.value < q.date.value) return toast(t('La vuelta debe ser posterior a la ida.'));
+  if (q.origin.value.trim().toLowerCase() === q.destination.value.trim().toLowerCase()) return toast(t('El origen y el destino deben ser distintos.'));
+  for (const k of ['origin', 'destination', 'date', 'returnDate']) filters[k].value = q[k].value.trim();
+  filters.passengers.value = q.passengers.value;
+  setView('flights');
+  search();
+  showResults();
+});
 
 
 // ---------- Render ----------
@@ -1916,6 +1972,7 @@ $('#mineList').addEventListener('click', async (e) => {
 const configReady = api('/api/config').then((config) => {
   state.config = config;
   if (config.liveFlights) document.body.dataset.liveFlights = '1';
+  if (config.flights === false) $('.search-modes [data-mode="flights"]').hidden = true;
   if (config.facilities) renderFacilityList();
   // Sin vuelos (datos reales de hoteles y vuelos apagados): fuera la pestaña y el ejemplo de vuelos.
   if (config.flights === false) {

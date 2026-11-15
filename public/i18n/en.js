@@ -755,5 +755,16 @@ export default {
   "Página no encontrada": "Page not found",
   "La dirección no existe o ha cambiado.": "This address doesn't exist or has changed.",
   "Ir al inicio": "Go to the home page",
-  "No encontrado.": "Not found."
+  "No encontrado.": "Not found.",
+  "Tipo de búsqueda": "Search type",
+  "Por días libres": "By free days",
+  "Hotel con fechas": "Hotel with dates",
+  "Vuelo con fechas": "Flight with dates",
+  "Ciudad o zona": "City or area",
+  "Vuelta (opcional)": "Return (optional)",
+  "Busca un hotel concreto en tus fechas. Si las fechas no están libres, el calendario de cada hotel te muestra los días más cercanos.": "Find a hotel for your exact dates. If those dates are taken, each hotel's calendar shows the nearest available days.",
+  "La salida debe ser posterior a la entrada.": "Check-out must be after check-in.",
+  "Como máximo 30 noches por reserva.": "30 nights maximum per booking.",
+  "La vuelta debe ser posterior a la ida.": "The return must be after the outbound flight.",
+  "El origen y el destino deben ser distintos.": "Origin and destination must be different."
 };

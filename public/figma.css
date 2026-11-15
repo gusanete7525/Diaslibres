@@ -109,3 +109,13 @@ h1,h2,h3,.logo { font-family:inherit; }
 .market-flight-card small:last-of-type { padding-bottom:18px; }
 .escape-card .market-discount { color:var(--brand); font-weight:600; }
 @media(max-width:700px) { .escape-list { grid-template-columns:1fr; } .escape-form { padding:14px; } .escape-form label { font-size:13px; } .escape-featured h2 { font-size:24px; } }
+/* Buscador: por días libres, hotel con fechas o vuelo con fechas */
+.quick-search { display:flex; flex-direction:column; gap:12px; }
+.search-modes { display:flex; flex-wrap:wrap; gap:6px; }
+.search-modes button { min-height:40px; padding:8px 14px; border:1px solid var(--border); border-radius:999px; background:var(--surface); color:var(--text); font:inherit; font-size:14px; font-weight:600; cursor:pointer; }
+.search-modes button[aria-selected="true"] { border-color:var(--brand); background:var(--brand); color:#fff; }
+.search-modes button:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+.quick-form { grid-template-columns:1fr 1fr; }
+.quick-form .q-wide { grid-column:1/-1; }
+.escape-form[hidden] { display:none; }
+@media(max-width:700px) { .search-modes { display:grid; grid-template-columns:repeat(3,1fr); } .search-modes button { padding:6px 6px; font-size:12.5px; line-height:1.2; border-radius:12px; } }

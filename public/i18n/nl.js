@@ -755,5 +755,16 @@ export default {
   "Página no encontrada": "Pagina niet gevonden",
   "La dirección no existe o ha cambiado.": "Dit adres bestaat niet of is gewijzigd.",
   "Ir al inicio": "Naar de startpagina",
-  "No encontrado.": "Niet gevonden."
+  "No encontrado.": "Niet gevonden.",
+  "Tipo de búsqueda": "Zoektype",
+  "Por días libres": "Op vrije dagen",
+  "Hotel con fechas": "Hotel met data",
+  "Vuelo con fechas": "Vlucht met data",
+  "Ciudad o zona": "Stad of gebied",
+  "Vuelta (opcional)": "Terug (optioneel)",
+  "Busca un hotel concreto en tus fechas. Si las fechas no están libres, el calendario de cada hotel te muestra los días más cercanos.": "Vind een hotel voor je exacte data. Zijn die bezet, dan toont de kalender van elk hotel de dichtstbijzijnde vrije dagen.",
+  "La salida debe ser posterior a la entrada.": "Het vertrek moet na de aankomst liggen.",
+  "Como máximo 30 noches por reserva.": "Maximaal 30 nachten per boeking.",
+  "La vuelta debe ser posterior a la ida.": "De terugvlucht moet na de heenvlucht liggen.",
+  "El origen y el destino deben ser distintos.": "Vertrek en bestemming moeten verschillend zijn."
 };

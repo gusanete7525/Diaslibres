@@ -40,6 +40,28 @@
         <p class="eyebrow" data-i18n>TUS DÍAS LIBRES EMPIEZAN AQUÍ</p>
         <h1><span data-i18n>Tú pones los días.</span><br /><span data-i18n>Nosotros, el destino.</span></h1>
         <p class="sub" data-i18n>Dinos cuántos días tienes libres y tu presupuesto; descubre a dónde puedes escaparte.</p>
+        <div class="quick-search">
+        <div class="search-modes" role="tablist" aria-label="Tipo de búsqueda">
+          <button type="button" role="tab" data-mode="escape" aria-selected="true" data-i18n>Por días libres</button>
+          <button type="button" role="tab" data-mode="hotels" aria-selected="false" data-i18n>Hotel con fechas</button>
+          <button type="button" role="tab" data-mode="flights" aria-selected="false" data-i18n>Vuelo con fechas</button>
+        </div>
+        <form id="quickHotel" class="escape-form quick-form" hidden>
+          <label class="q-wide"><span data-i18n>Destino</span><input name="destination" required autocomplete="off" placeholder="Ciudad o zona" /></label>
+          <label><span data-i18n>Entrada</span><input name="checkIn" type="date" required /></label>
+          <label><span data-i18n>Salida</span><input name="checkOut" type="date" required /></label>
+          <label><span data-i18n>Adultos</span><select name="adults"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+          <p class="escape-scope" data-i18n>Busca un hotel concreto en tus fechas. Si las fechas no están libres, el calendario de cada hotel te muestra los días más cercanos.</p>
+          <button type="submit" class="btn primary" data-i18n>Buscar hoteles</button>
+        </form>
+        <form id="quickFlight" class="escape-form quick-form" hidden>
+          <label><span data-i18n>Origen</span><input name="origin" required autocomplete="off" list="destList" placeholder="Ciudad o aeropuerto" /></label>
+          <label><span data-i18n>Destino</span><input name="destination" required autocomplete="off" list="destList" placeholder="Ciudad o aeropuerto" /></label>
+          <label><span data-i18n>Ida</span><input name="date" type="date" required /></label>
+          <label><span data-i18n>Vuelta (opcional)</span><input name="returnDate" type="date" /></label>
+          <label><span data-i18n>Pasajeros</span><select name="passengers"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
+          <button type="submit" class="btn primary" data-i18n>Buscar vuelos</button>
+        </form>
         <form id="escapeForm" class="escape-form">
           <label><span data-i18n>¿Cuántos días libres tienes?</span><select name="kind"><option value="any" data-i18n>Días sueltos</option><option value="weekend" data-i18n>Fin de semana · 3 días</option><option value="bridge" data-i18n>Puente · 4 días</option><option value="week" data-i18n>Semana completa · 7 días</option></select></label>
           <label><span data-i18n>Días</span><input name="days" type="number" min="2" max="15" value="3" required /></label>
@@ -49,6 +71,7 @@
           <p class="escape-scope" data-i18n>Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.</p>
           <button type="submit" class="btn primary" data-i18n>Descubrir dónde puedo ir</button>
         </form>
+        </div>
         <details class="escape-ai"><summary data-i18n>O cuéntanos tu viaje con tus palabras</summary>
         <form id="aiForm" class="ai-box" autocomplete="off">
           <label class="sr-only" for="aiQuery" data-i18n>Describe tu viaje</label>
