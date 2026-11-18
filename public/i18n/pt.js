@@ -1,4 +1,5 @@
 export default {
+  "Sugerencias de destino": "Sugestões de destino",
   "Aeropuertos de referencia": "Aeroportos de referência",
   "Origen: {from} ({code}). Destino: {to} ({arrival}). Los aeropuertos concretos se confirman en la oferta elegida.": "Origem: {from} ({code}). Destino: {to} ({arrival}). Os aeroportos exatos são confirmados na oferta escolhida.",
   "Alternativa en tren": "Alternativa de comboio",

@@ -551,6 +551,11 @@ export class LiteApi {
     });
   }
 
+  // Respuesta tal cual del buscador de lugares (autocompletado del campo de destino).
+  async placesRaw(text, lang = 'es') {
+    return this.#request('GET', `${API}/data/places?textQuery=${encodeURIComponent(text)}&language=${lang}`);
+  }
+
   async airports(q) {
     const { data = [] } = await this.#request('GET', `${API}/data/flights/airports?q=${encodeURIComponent(q)}`);
     return data.flatMap((set) => set.airports || []).filter((a) => a.iata).map((a) => ({ code: a.iata, name: a.name, city: a.city, country: a.country }));

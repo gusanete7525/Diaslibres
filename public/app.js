@@ -120,8 +120,8 @@ function setView(view) {
   $('#searchSection').hidden = view === 'mine';
   results.hidden = view === 'mine';
   // Hoteles: destino libre (cualquier ciudad). Vuelos: solo aeropuertos con rutas.
-  if (view === 'flights') filters.destination.setAttribute('list', 'destList');
-  else filters.destination.removeAttribute('list');
+  filters.destination.dataset.kind = view === 'flights' ? 'airport' : 'city';
+  filters.origin.dataset.kind = view === 'trains' ? 'city' : 'airport';
   filters.destination.placeholder = view === 'flights' ? t('Ciudad o aeropuerto') : view === 'trains' ? t('Ciudad (p. ej. Barcelona)') : t('Escribe cualquier ciudad');
   filters.origin.placeholder = view === 'trains' ? t('Ciudad (p. ej. Madrid)') : state.config.liveFlights ? t('Ciudad o código (MAD)') : t('Cualquiera');
   if (view === 'mine') {
@@ -2365,6 +2365,97 @@ $('#accountDialog').addEventListener('click', async (e) => {
   await configReady.catch(() => {});
   loadForYou();
 })();
+
+// ---------- Sugerencias de destino ----------
+// Al escribir 2 letras en Origen/Destino se proponen ciudades («par» → París).
+// Teclado: flechas para moverse, Intro para elegir, Escape para cerrar. Se puede
+// seguir escribiendo una ciudad a mano sin elegir ninguna sugerencia.
+const acFold = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+let acSeq = 0;
+function attachSuggestions(input) {
+  if (!input || input.dataset.ac) return;
+  input.dataset.ac = '1';
+  // Sin la lista nativa del navegador: se usa la nuestra.
+  if (input.getAttribute('list')) { input.dataset.kind ||= 'airport'; input.removeAttribute('list'); }
+  const id = `ac-${++acSeq}`;
+  const box = document.createElement('ul');
+  box.id = id;
+  box.className = 'ac-list';
+  box.setAttribute('role', 'listbox');
+  box.setAttribute('aria-label', t('Sugerencias de destino'));
+  box.hidden = true;
+  input.insertAdjacentElement('afterend', box);
+  input.parentElement.classList.add('ac-host');
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-controls', id);
+  input.setAttribute('autocomplete', 'off');
+  let items = [];
+  let active = -1;
+  let timer = 0;
+  let ctrl = null;
+  const cache = new Map();
+  const close = () => {
+    box.hidden = true;
+    active = -1;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  };
+  const mark = (i) => {
+    active = i;
+    [...box.children].forEach((li, n) => li.setAttribute('aria-selected', String(n === i)));
+    if (i >= 0) { input.setAttribute('aria-activedescendant', `${id}-${i}`); box.children[i]?.scrollIntoView({ block: 'nearest' }); }
+    else input.removeAttribute('aria-activedescendant');
+  };
+  const choose = (i) => {
+    const p = items[i];
+    if (!p) return;
+    input.value = p.name;
+    close();
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const show = (list) => {
+    items = list;
+    if (!list.length || document.activeElement !== input) return close();
+    box.innerHTML = list.map((p, i) => `<li id="${id}-${i}" role="option" aria-selected="false"><span class="ac-name">${esc(p.name)}</span>${p.region || p.country ? `<span class="ac-meta">${esc([p.region, p.country].filter(Boolean).join(', '))}${p.iata && input.dataset.kind === 'airport' ? ` · ${esc(p.iata)}` : ''}</span>` : ''}</li>`).join('');
+    box.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    mark(-1);
+  };
+  const load = async () => {
+    const q = input.value.trim();
+    const kind = input.dataset.kind === 'airport' ? 'airport' : 'city';
+    if (acFold(q).length < 2) return close();
+    const key = kind + '|' + acFold(q);
+    if (cache.has(key)) return show(cache.get(key));
+    ctrl?.abort();
+    ctrl = new AbortController();
+    try {
+      const { places = [] } = await api(`/api/places?q=${encodeURIComponent(q)}&lang=${LANG}&kind=${kind}`, { signal: ctrl.signal });
+      cache.set(key, places);
+      if (input.value.trim() === q) show(places);
+    } catch { /* sin sugerencias: se puede escribir a mano */ }
+  };
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(load, 250); });
+  input.addEventListener('keydown', (e) => {
+    if (box.hidden) { if (e.key === 'ArrowDown' && acFold(input.value).length >= 2) { e.preventDefault(); load(); } return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); mark((active + 1) % items.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); mark(active <= 0 ? items.length - 1 : active - 1); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(active); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'Tab') close();
+  });
+  // mousedown y no click: si no, el campo pierde el foco y la lista se cierra antes.
+  box.addEventListener('mousedown', (e) => {
+    const li = e.target.closest('li[role="option"]');
+    if (!li) return;
+    e.preventDefault();
+    choose([...box.children].indexOf(li));
+  });
+  input.addEventListener('blur', () => setTimeout(close, 120));
+}
+document.querySelectorAll('input[name="destination"], input[name="origin"]').forEach(attachSuggestions);
 
 // App instalable (Android, escritorio): funciona sin conexión con la última versión vista.
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
