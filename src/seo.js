@@ -154,13 +154,34 @@ function faq(lang, name, s) {
   return items;
 }
 
+const HOTEL_SEARCH_COPY_EN = {
+  WAW: {
+    piscina: {
+      title: 'Warsaw Hotels with a Pool | Compare Nightly Rates',
+      description: 'Find Warsaw hotels with a pool, compare nightly rates and check which dates are available. Check the hotel details for pool type and opening hours before booking.',
+    },
+    parking: {
+      title: 'Warsaw Hotels with Parking | Compare Nightly Rates',
+      description: 'Find Warsaw hotels with parking and compare nightly rates by date. Check the hotel’s parking fees and reservation requirements before you book.',
+    },
+  },
+  HEL: {
+    spa: {
+      title: 'Helsinki Hotels with a Spa | Compare Nightly Rates',
+      description: 'Find Helsinki hotels with a spa and compare nightly rates and available dates. Check which spa facilities are included in your room rate before booking.',
+    },
+  },
+};
+
 // Página de hoteles de una ciudad (con filtro o sin él). stats: datos de la ciudad, si ya se tienen.
 export function cityPage(lang, city, filter, stats) {
   const name = cityName(city, lang);
   const t = (k, v = {}) => tr(lang, k, { city: name, ...v });
   const fTitle = filter ? t(filter.title) : null;
   const fs = filter && stats?.filters?.[filter.id];
-  const parts = [`<p>${esc(filter ? t('{title}: compara el precio de cada noche de los próximos 30 días y mira qué días están libres.', { title: fTitle }) : t('Todos los hoteles de {city} con su calendario de disponibilidad y el precio de cada noche de los próximos 30 días.'))}</p>`];
+  const searchCopy = lang === 'en' && filter ? HOTEL_SEARCH_COPY_EN[city.iata]?.[filter.id] : undefined;
+  const intro = searchCopy?.description ?? (filter ? t('{title}: compara el precio de cada noche de los próximos 30 días y mira qué días están libres.', { title: fTitle }) : t('Todos los hoteles de {city} con su calendario de disponibilidad y el precio de cada noche de los próximos 30 días.'));
+  const parts = [`<p>${esc(intro)}</p>`];
   let faqs = [];
   if (stats?.total) {
     if (!filter) {
@@ -191,8 +212,8 @@ export function cityPage(lang, city, filter, stats) {
   const ld = faqs.length ? [{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] : [];
   return {
     key: { type: 'city', city, filter },
-    title: filter ? `${fTitle} · ${t('Precios y disponibilidad')} | DíasLibres` : t('Hoteles en {city} · Precios por día y disponibilidad | DíasLibres'),
-    description: filter ? t('{title}: compara precios de cada noche, mira qué días están libres y reserva con pago seguro.', { title: fTitle }) : t('Hoteles en {city} con calendario de días libres y precio de cada noche. Compara, elige las fechas más baratas y reserva con pago seguro.'),
+    title: searchCopy ? `${searchCopy.title} | DíasLibres` : filter ? `${fTitle} · ${t('Precios y disponibilidad')} | DíasLibres` : t('Hoteles en {city} · Precios por día y disponibilidad | DíasLibres'),
+    description: searchCopy?.description ?? (filter ? t('{title}: compara precios de cada noche, mira qué días están libres y reserva con pago seguro.', { title: fTitle }) : t('Hoteles en {city} con calendario de días libres y precio de cada noche. Compara, elige las fechas más baratas y reserva con pago seguro.')),
     h1: filter ? fTitle : t('Hoteles en {city}: mira qué días están libres y cuándo es más barato'),
     crumb: fTitle || t('Hoteles en {city}'),
     view: 'hotels',
