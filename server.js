@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { minify } from 'terser';
 import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, hubPage, HUBS, cityStats, cityKey, cityByName, cityByIata, placeName, cityName, CITIES } from './src/seo.js';
 import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
+import { createSuggester } from './src/suggest.js';
 import { OsmHotels } from './src/osm.js';
 import { Mailer } from './src/mail.js';
 import { Accounts, COOKIE, publicUser, mergeHistory } from './src/accounts.js';
@@ -103,6 +104,8 @@ export function createApp({
   };
   app.use(express.json({ limit: '20kb' }));
   const metricLimit = rateLimit({max:120,windowMs:60000});
+  const placesLimit = rateLimit({ max: 120, windowMs: 60000 });
+  const suggestPlaces = createSuggester({ live });
   app.post('/api/metrics', metricLimit, async (req,res) => {
     res.set('Cache-Control','no-store');
     const origin = req.get('origin');
@@ -746,6 +749,12 @@ export function createApp({
     }
   });
 
+  // Sugerencias de destino mientras se escribe (mínimo 2 letras).
+  app.get('/api/places', placesLimit, async (req, res) => {
+    const lang = isLang(req.query.lang) ? req.query.lang : langOf(req);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.json({ places: await suggestPlaces(req.query.q, lang, req.query.kind === 'airport' ? 'airport' : 'city') });
+  });
   app.get('/api/airports', (req, res) => res.json(Object.fromEntries(Object.entries(AIRPORTS).map(([code, name]) => [code, placeName(code, langOf(req), name)]))));
   // flights: false con datos reales de hoteles y los vuelos apagados (no se enseñan vuelos simulados).
   app.get('/api/config', (_req, res) => res.json({

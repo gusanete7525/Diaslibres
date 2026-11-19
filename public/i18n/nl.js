@@ -1,4 +1,5 @@
 export default {
+  "Sugerencias de destino": "Bestemmingssuggesties",
   "Aeropuertos de referencia": "Referentieluchthavens",
   "Origen: {from} ({code}). Destino: {to} ({arrival}). Los aeropuertos concretos se confirman en la oferta elegida.": "Vertrek: {from} ({code}). Bestemming: {to} ({arrival}). De exacte luchthavens worden bevestigd in de gekozen aanbieding.",
   "Alternativa en tren": "Alternatief met de trein",

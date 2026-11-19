@@ -55,8 +55,8 @@
           <button type="submit" class="btn primary" data-i18n>Buscar hoteles</button>
         </form>
         <form id="quickFlight" class="escape-form quick-form" hidden>
-          <label><span data-i18n>Origen</span><input name="origin" required autocomplete="off" list="destList" placeholder="Ciudad o aeropuerto" /></label>
-          <label><span data-i18n>Destino</span><input name="destination" required autocomplete="off" list="destList" placeholder="Ciudad o aeropuerto" /></label>
+          <label><span data-i18n>Origen</span><input name="origin" required autocomplete="off" data-kind="airport" placeholder="Ciudad o aeropuerto" /></label>
+          <label><span data-i18n>Destino</span><input name="destination" required autocomplete="off" data-kind="airport" placeholder="Ciudad o aeropuerto" /></label>
           <label><span data-i18n>Ida</span><input name="date" type="date" required /></label>
           <label><span data-i18n>Vuelta (opcional)</span><input name="returnDate" type="date" /></label>
           <label><span data-i18n>Pasajeros</span><select name="passengers"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>
@@ -116,7 +116,7 @@
     <button type="button" class="btn manual-toggle" id="manualToggle" aria-expanded="false" aria-controls="filters"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg> <span>Búsqueda manual</span></button>
     <form id="filters" class="filters">
       <label class="flight-only f-origin">Origen
-        <input name="origin" list="destList" placeholder="Cualquiera" />
+        <input name="origin" data-kind="airport" placeholder="Cualquiera" />
       </label>
       <label class="f-dest">Destino
         <input name="destination" placeholder="Escribe cualquier ciudad" autocomplete="off" />
