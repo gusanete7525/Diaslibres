@@ -40,3 +40,14 @@ test('sugerencias de aeropuerto: solo ciudades con aeropuerto', async () => {
   assert.equal(out[0].iata, 'CDG');
   assert.ok(out.every((p) => p.iata));
 });
+
+test('sugerencias: no repite una ciudad propia con su nombre en otro idioma', async () => {
+  const live = { placesRaw: async () => ({ data: [
+    { displayName: 'München', formattedAddress: 'Alemania', types: ['locality'] },
+    { displayName: 'Münchberg', formattedAddress: 'Alemania', types: ['locality'] },
+  ] }) };
+  const names = (await createSuggester({ live })('münch', 'es')).map((p) => p.name);
+  assert.deepEqual(names, ['Múnich', 'Münchberg']);
+  const json = JSON.stringify(await createSuggester()('par', 'es'));
+  assert.ok(!json.includes('names'));
+});

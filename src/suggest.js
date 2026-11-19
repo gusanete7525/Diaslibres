@@ -43,9 +43,10 @@ export function localMatches(q, lang = 'es', { airports = false } = {}) {
     }
     if (!score) continue;
     seen.add(id);
-    scored.push({ score, item: { name, country: countryName(c.country, lang), code: c.country, iata: c.iata || null, source: 'local' } });
+    scored.push({ score, names, item: { name, country: countryName(c.country, lang), code: c.country, iata: c.iata || null, source: 'local' } });
   }
-  return scored.sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name, lang)).map((s) => s.item);
+  // `names` (todos sus nombres) no se envía al navegador: solo sirve para quitar duplicados.
+  return scored.sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name, lang)).map((s) => Object.defineProperty(s.item, 'names', { value: s.names, enumerable: false }));
 }
 
 function fromLite(data = []) {
@@ -61,13 +62,13 @@ function fromLite(data = []) {
 const withTimeout = (promise, ms) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
 
 // Aeropuertos de LiteAPI agrupados por ciudad (para Origen/Destino de vuelos).
-function fromAirports(list = []) {
+function fromAirports(list = [], lang = 'es') {
   const byCity = new Map();
   for (const a of list) {
     const city = a.city || a.name;
     if (!city) continue;
     const id = norm(city) + '|' + norm(a.country);
-    if (!byCity.has(id)) byCity.set(id, { name: city, country: a.country || null, iata: a.code, source: 'liteapi' });
+    if (!byCity.has(id)) byCity.set(id, { name: city, country: /^[A-Z]{2}$/.test(a.country || '') ? countryName(a.country, lang) : a.country || null, iata: a.code, source: 'liteapi' });
   }
   return [...byCity.values()];
 }
@@ -87,7 +88,7 @@ export function createSuggester({ live = null, timeoutMs = 2500, maxEntries = 10
     if (live && local.length < MAX) {
       try {
         remote = airports
-          ? fromAirports(await withTimeout(live.airports(text), timeoutMs))
+          ? fromAirports(await withTimeout(live.airports(text), timeoutMs), lang)
           : fromLite((await withTimeout(live.placesRaw(text, lang), timeoutMs)).data);
         ok = true;
       } catch { /* sin LiteAPI: solo la lista propia */ }
@@ -96,7 +97,8 @@ export function createSuggester({ live = null, timeoutMs = 2500, maxEntries = 10
     const value = [...local];
     for (const p of remote) {
       const id = norm(p.name) + '|' + norm(p.country);
-      if (seen.has(id) || local.some((l) => norm(l.name) === norm(p.name) && !p.region)) continue;
+      // Mismo sitio que una ciudad propia con otro nombre («München» = «Múnich»).
+      if (seen.has(id) || local.some((l) => (l.names || [norm(l.name)]).includes(norm(p.name)) && (!p.region || p.iata))) continue;
       seen.add(id);
       value.push(p);
     }
