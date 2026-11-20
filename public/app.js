@@ -1030,6 +1030,7 @@ function bookingRequest() {
 async function refreshQuote() {
   const err = $('#bookError');
   const btn = $('#bookConfirm');
+  btn.disabled = true;
   try {
     let q;
     try {
@@ -1111,7 +1112,7 @@ async function renderRooms(q) {
       <span class="room-price">${eur2(o.total)}${promotionHtml(o.promotion)}</span>
     </label>`;
   }).join('');
-  box.hidden = false;
+  box.hidden = state.booking.reviewing;
   box.onchange = (e) => {
     const o = offers.find((x) => x.key === e.target.value);
     if (!o) return;
@@ -1130,8 +1131,8 @@ async function renderRooms(q) {
 function openBooking(item, ui, isFlight) {
   metric('booking_start');
   state.booking = { item, isFlight, start: ui.start, end: ui.end, room: null };
+  $('#roomBox').replaceChildren();
   $('#roomBox').hidden = true;
-  $('#bookTitle').textContent = isFlight ? t('Reservar vuelo') : t('Reservar hotel');
   $('#unitsLabel').textContent = isFlight ? t('Pasajeros') : t('Habitaciones');
   $('#bookSummary').innerHTML = isFlight
     ? `<b>${esc(item.airline)}</b> ${esc(item.originCity)} → ${esc(item.destinationCity)}<br>${fmtDay.format(toDate(ui.start))} · ${t('sale {time}', { time: esc(item.departure) })}`
@@ -1145,7 +1146,7 @@ function openBooking(item, ui, isFlight) {
   state.bookingBlocked = !isFlight && item.origin === 'liteapi' && state.data.live?.bookingEnabled === false;
   state.booking.pays = !isFlight && item.origin === 'liteapi' && state.data.live?.payment === 'customer';
   $('#bookConfirm').hidden = state.bookingBlocked;
-  $('#bookConfirm').textContent = state.booking.pays ? t('Pagar y reservar') : t('Confirmar reserva');
+  setHotelReview(false);
   $('#bookNote').textContent = item.origin !== 'liteapi'
     ? t('Reserva de prueba: no se envía al hotel ni a la aerolínea.')
     : state.data.live?.sandbox
@@ -1161,6 +1162,10 @@ function openBooking(item, ui, isFlight) {
 bookForm.units.addEventListener('change', refreshQuote);
 
 $('#bookCancel').addEventListener('click', () => dialog.close());
+$('#bookEdit').addEventListener('click', () => {
+  setHotelReview(false);
+  bookForm.name.focus();
+});
 // ---------- Pago con tarjeta (pasarela de LiteAPI) ----------
 const PAYMENT_SDK = 'https://payment-wrapper.liteapi.travel/dist/liteAPIPayment.js?v=a1';
 let sdkPromise;
@@ -1207,11 +1212,22 @@ async function mountNuiteePayment(co, target) {
 
 // Oculta los datos del cliente y muestra el formulario de tarjeta (o al revés).
 function showPayForm(on) {
-  for (const el of bookForm.querySelectorAll('label, #bookNote')) el.hidden = on;
-  if (on) $('#roomBox').hidden = true;
+  for (const el of bookForm.querySelectorAll(':scope > label')) el.hidden = on || state.booking.reviewing;
+  $('#roomBox').hidden = on || state.booking.reviewing || !$('#roomBox').querySelector('[name="room"]');
+  $('#bookEdit').hidden = on || !state.booking.reviewing;
   $('#payBox').hidden = !on;
   $('#bookConfirm').hidden = on || state.bookingBlocked;
   if (!on) $('#paymentElement').innerHTML = '';
+}
+
+function setHotelReview(reviewing) {
+  state.booking.reviewing = reviewing;
+  const review = $('#bookReview');
+  review.hidden = !reviewing;
+  review.textContent = reviewing ? `${bookForm.name.value.trim()} · ${bookForm.email.value.trim()} · ${t('Habitaciones')}: ${bookForm.units.value}` : '';
+  $('#bookTitle').textContent = reviewing ? t('Revisa tu reserva') : state.booking.isFlight ? t('Reservar vuelo') : t('Reservar hotel');
+  $('#bookConfirm').textContent = state.booking.pays ? t(reviewing ? 'Continuar al pago' : 'Revisar y pagar') : t('Confirmar reserva');
+  showPayForm(false);
 }
 
 async function startPayment() {
@@ -1252,18 +1268,28 @@ async function finishPayment(id) {
 
 onSend(bookForm, async () => {
   const btn = $('#bookConfirm');
+  if (btn.disabled || btn.hidden) return;
+  if (state.booking.pays && !state.booking.reviewing) {
+    $('#bookError').hidden = true;
+    setHotelReview(true);
+    btn.focus();
+    return;
+  }
   btn.disabled = true;
   btn.textContent = state.booking.pays ? t('Preparando el pago…') : t('Reservando…');
   if (state.booking.pays) {
     try {
       await startPayment();
     } catch (err) {
-      if (err.body?.newTotal != null) await refreshQuote();
+      if (err.body?.newTotal != null) {
+        setHotelReview(false);
+        await refreshQuote();
+      }
       $('#bookError').textContent = err.message;
       $('#bookError').hidden = false;
     } finally {
       btn.disabled = false;
-      btn.textContent = t('Pagar y reservar');
+      btn.textContent = t(state.booking.reviewing ? 'Continuar al pago' : 'Revisar y pagar');
     }
     return;
   }
@@ -1767,17 +1793,29 @@ function flightError(msg) {
   $('#flightError').hidden = !msg;
 }
 function showFlightPay(on) {
-  $('#flightFields').hidden = on;
+  $('#flightFields').hidden = on || !!state.flight?.reviewing;
+  $('#flightEdit').hidden = on || !state.flight?.reviewing;
   $('#flightPayBox').hidden = !on;
   if (!on) $('#flightPayment').innerHTML = '';
 }
 
+function setFlightReview(reviewing) {
+  state.flight.reviewing = reviewing;
+  const review = $('#flightReview');
+  review.hidden = !reviewing;
+  review.textContent = reviewing ? [...flightCustomer().passengers.map(p => `${p.firstName} ${p.lastName}`), flightForm.email.value.trim()].join(' · ') : '';
+  $('h2', flightForm).textContent = t(reviewing ? 'Revisa tu reserva' : 'Reservar vuelo');
+  $('#flightConfirm').textContent = t(reviewing ? 'Continuar al pago' : 'Revisar y pagar');
+  showFlightPay(false);
+}
+
 // Total a pagar, gastos de emisión y quién hace el cargo.
-function flightPayHint(co, sandbox) {
+function flightPayHint(co, sandbox, reviewedTotal) {
   const fee = co.total - co.searchTotal;
   return t('Total a pagar: <b>{total}</b>', { total: eur2(co.total) }) +
     (Math.abs(fee) > 0.01 ? ' ' + t('(incluye {fee} de gastos de emisión del billete)', { fee: eur2(fee) }) : '') +
     ' · ' + t('código {code}', { code: esc(co.code) }) +
+    (Math.abs(co.total - reviewedTotal) > 0.01 ? '<br>' + t('El precio ha cambiado desde la búsqueda (antes {price}).', { price: eur2(reviewedTotal) }) : '') +
     '<br>' + t('El cargo lo hace Nuitée, el proveedor de los billetes, y aparecerá a su nombre en tu tarjeta.') +
     (sandbox ? '<br>' + t('Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.') : '');
 }
@@ -1788,7 +1826,7 @@ async function payFlightWithWrapper(co) {
   showFlightPay(true);
   $('#flightConfirm').hidden = true;
   $('#flightTotal').textContent = eur2(co.total);
-  $('#flightPayHint').innerHTML = flightPayHint(co, co.publicKey === 'sandbox');
+  $('#flightPayHint').innerHTML = flightPayHint(co, co.publicKey === 'sandbox', state.flight.total);
   await mountNuiteePayment(co, '#flightPayment');
 }
 
@@ -1805,11 +1843,10 @@ async function openFlightBooking(trip, data) {
   $('#flightTotal').textContent = '…';
   $('#flightExtra').hidden = true;
   flightError('');
-  showFlightPay(false);
+  setFlightReview(false);
   const btn = $('#flightConfirm');
   btn.hidden = false;
   btn.disabled = true;
-  btn.textContent = t('Continuar al pago');
   flightDialog.showModal();
   try {
     const v = await api('/api/flights/quote', { method: 'POST', body: JSON.stringify({ offerId: trip.offerId }) });
@@ -1830,6 +1867,10 @@ async function openFlightBooking(trip, data) {
   }
 }
 $('#flightCancel').addEventListener('click', () => flightDialog.close());
+$('#flightEdit').addEventListener('click', () => {
+  setFlightReview(false);
+  flightForm.email.focus();
+});
 
 function flightCustomer() {
   const passengers = [...flightForm.querySelectorAll('[data-pax]')].map((fs) => {
@@ -1854,7 +1895,13 @@ function loadStripe() {
 onSend(flightForm, async () => {
   const f = state.flight;
   const btn = $('#flightConfirm');
+  if (btn.disabled || btn.hidden) return;
   flightError('');
+  if (!f.reviewing) {
+    setFlightReview(true);
+    btn.focus();
+    return;
+  }
   btn.disabled = true;
   // Paso 2: pagar con la tarjeta (Stripe lleva al cliente de vuelta a /?vuelo=<id>).
   if (f.checkout) {
@@ -1895,7 +1942,7 @@ onSend(flightForm, async () => {
     });
     payment.mount('#flightPayment');
     $('#flightTotal').textContent = eur2(co.total);
-    $('#flightPayHint').innerHTML = flightPayHint(co, !!state.data?.live?.sandbox);
+    $('#flightPayHint').innerHTML = flightPayHint(co, co.publicKey === 'sandbox', f.total);
     btn.textContent = t('Pagar {total}', { total: eur2(co.total) });
   } catch (err) {
     if (checkoutPrepared) {

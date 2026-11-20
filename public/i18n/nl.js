@@ -1,4 +1,7 @@
 export default {
+ "Revisar y pagar": "Controleren en betalen",
+ "Revisa tu reserva": "Controleer je boeking",
+ "Editar datos": "Gegevens wijzigen",
   "Sugerencias de destino": "Bestemmingssuggesties",
   "Aeropuertos de referencia": "Referentieluchthavens",
   "Origen: {from} ({code}). Destino: {to} ({arrival}). Los aeropuertos concretos se confirman en la oferta elegida.": "Vertrek: {from} ({code}). Bestemming: {to} ({arrival}). De exacte luchthavens worden bevestigd in de gekozen aanbieding.",

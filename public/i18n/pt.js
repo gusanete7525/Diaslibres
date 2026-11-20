@@ -1,4 +1,7 @@
 export default {
+ "Revisar y pagar": "Rever e pagar",
+ "Revisa tu reserva": "Reveja a sua reserva",
+ "Editar datos": "Editar dados",
   "Sugerencias de destino": "Sugestões de destino",
   "Aeropuertos de referencia": "Aeroportos de referência",
   "Origen: {from} ({code}). Destino: {to} ({arrival}). Los aeropuertos concretos se confirman en la oferta elegida.": "Origem: {from} ({code}). Destino: {to} ({arrival}). Os aeroportos exatos são confirmados na oferta escolhida.",
