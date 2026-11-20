@@ -212,6 +212,7 @@ export function cityPage(lang, city, filter, stats) {
   const ld = faqs.length ? [{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] : [];
   return {
     key: { type: 'city', city, filter },
+    resultsLink: Boolean(searchCopy),
     title: searchCopy ? `${searchCopy.title} | DíasLibres` : filter ? `${fTitle} · ${t('Precios y disponibilidad')} | DíasLibres` : t('Hoteles en {city} · Precios por día y disponibilidad | DíasLibres'),
     description: searchCopy?.description ?? (filter ? t('{title}: compara precios de cada noche, mira qué días están libres y reserva con pago seguro.', { title: fTitle }) : t('Hoteles en {city} con calendario de días libres y precio de cada noche. Compara, elige las fechas más baratas y reserva con pago seguro.')),
     h1: filter ? fTitle : t('Hoteles en {city}: mira qué días están libres y cuándo es más barato'),
@@ -404,6 +405,9 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
       .map(([l, u]) => `<a href="${esc(u.slice(site.length) || '/')}" hreflang="${l}" lang="${l}"${l === lang ? ' aria-current="true"' : ''}>${esc(LANGS[l].name)}</a>`).join(''))
     .replace('<!--POPULAR-->', popular(lang));
   if (page.h1) out = out.replace(/<h1( data-i18n)?>[\s\S]*?<\/h1>/, `<h1>${esc(page.h1)}</h1>`);
+  if (page.resultsLink) {
+    out = out.replace(/<p class="sub"[^>]*>[^<]*<\/p>/, () => `<p class="sub">${esc(page.description)}</p><a class="btn primary" href="#results">See hotels and prices</a>`);
+  }
   // data-hub: página general; la web no lanza una búsqueda al abrirla y deja visibles sus enlaces.
   if (page.view) out = out.replace('<body>', `<body data-start-view="${esc(page.view)}"${page.hub ? ` data-hub="${esc(page.hub)}"` : ''}${page.filters ? ` data-start-filters="${esc(JSON.stringify(page.filters))}"` : ''}>`);
   if (page.destination) out = out.replace('<input name="destination" ', `<input name="destination" value="${esc(page.destination)}" `);
