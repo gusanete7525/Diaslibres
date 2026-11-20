@@ -202,11 +202,13 @@
       <label><span id="unitsLabel">Habitaciones</span>
         <select name="units"><option>1</option><option>2</option><option>3</option><option>4</option></select>
       </label>
+      <div aria-live="polite">
+        <p class="total">Total: <strong id="bookTotal">—</strong></p>
+        <p id="bookExtra" class="meta" hidden></p>
+      </div>
       <label>Nombre completo <input name="name" required minlength="2" autocomplete="name" /></label>
       <label>Email <input name="email" type="email" required autocomplete="email" /></label>
       <label class="check"><input name="terms" type="checkbox" required /> <span data-i18n>Acepto las <a href="/legal.html#condiciones" target="_blank" rel="noopener">condiciones de reserva</a> y la <a href="/legal.html#privacidad" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
-      <p class="total">Total: <strong id="bookTotal">—</strong></p>
-      <p id="bookExtra" class="meta" hidden></p>
       <p id="bookNote" class="meta">Reserva de prueba: no se envía al hotel ni a la aerolínea.</p>
       <div id="payBox" class="paybox" hidden>
         <p class="meta" id="payHint"></p>

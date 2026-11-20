@@ -1072,7 +1072,13 @@ function promotionHtml(p) {
   if (!p || p.currency !== 'EUR' || !(p.originalTotal > p.total) || !(p.savings > 0)) return '';
   return `<span class="rate-promotion" style="display:block;font-size:.85em"><del>${eur2(p.originalTotal)}</del> · ${esc(t('Ahorras {amount}', {amount:eur2(p.savings)}))}${p.names?.length ? ' · ' + p.names.map(esc).join(' · ') : ''}</span>`;
 }
-const cancelText = (o) => (o.refundable ? (o.freeCancellationUntil ? t('cancelación gratuita hasta el {day}', { day: fmtDay.format(new Date(o.freeCancellationUntil.replace(' ', 'T') + 'Z')) }) : t('cancelación gratuita')) : t('no reembolsable'));
+function cancelText(offer) {
+  if (!offer.refundable) return t('no reembolsable');
+  const raw = offer.freeCancellationUntil?.replace(' ', 'T');
+  if (!raw) return t('cancelación gratuita');
+  const date = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw) ? raw : `${raw}Z`);
+  return Number.isNaN(date.getTime()) ? t('cancelación gratuita') : t('cancelación gratuita hasta el {day}', { day: fmtDay.format(date) });
+}
 
 // Ficha del hotel (se pide una vez por hotel).
 const detailCache = new Map();
@@ -1159,7 +1165,6 @@ $('#bookCancel').addEventListener('click', () => dialog.close());
 const PAYMENT_SDK = 'https://payment-wrapper.liteapi.travel/dist/liteAPIPayment.js?v=a1';
 let sdkPromise;
 function loadPaymentSdk() {
-  metric('checkout_start');
   sdkPromise ??= new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = PAYMENT_SDK;
@@ -1168,6 +1173,36 @@ function loadPaymentSdk() {
     document.head.append(s);
   }).catch((e) => { sdkPromise = null; throw e; });
   return sdkPromise;
+}
+
+// El SDK de Nuitée no expone el evento ready de Stripe Elements.
+function trackNuiteeForm(target) {
+  const observer = new MutationObserver(() => {
+    if (!target.querySelector('iframe')) return;
+    metric('payment_form_mounted');
+    stop();
+  });
+  const timeout = setTimeout(() => observer.disconnect(), 15000);
+  const stop = () => { observer.disconnect(); clearTimeout(timeout); };
+  observer.observe(target, { childList: true, subtree: true });
+  return stop;
+}
+
+async function mountNuiteePayment(co, target) {
+  const stop = trackNuiteeForm($(target));
+  try {
+    await new window.LiteAPIPayment({
+      publicKey: co.publicKey,
+      appearance: { theme: 'flat' },
+      options: { business: { name: 'DíasLibres' } },
+      targetElement: target,
+      secretKey: co.secretKey,
+      returnUrl: co.returnUrl,
+    }).handlePayment();
+  } catch (err) {
+    stop();
+    throw err;
+  }
 }
 
 // Oculta los datos del cliente y muestra el formulario de tarjeta (o al revés).
@@ -1180,33 +1215,28 @@ function showPayForm(on) {
 }
 
 async function startPayment() {
+  metric('checkout_start');
   const co = await api('/api/checkout', {
     method: 'POST',
     body: JSON.stringify({ ...bookingRequest(), expectedTotal: state.booking.total, name: bookForm.name.value, email: bookForm.email.value }),
-  });
+  }).catch((err) => { metric('checkout_error'); throw err; });
   store.set('dl-email', bookForm.email.value.trim());
   $('#payHint').innerHTML = t('Total a pagar: <b>{total}</b>', { total: eur2(co.total) }) + ' · ' + t('código {code}', { code: esc(co.code) }) +
     (co.publicKey === 'sandbox' ? '<br>' + t('Entorno de pruebas: usa la tarjeta <b>4242 4242 4242 4242</b>, cualquier fecha futura y cualquier CVC.') : '');
   showPayForm(true);
   try {
     await loadPaymentSdk();
+    await mountNuiteePayment(co, '#paymentElement');
   } catch {
+    metric('payment_form_error');
     showPayForm(false);
     throw new Error(t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'));
   }
-  // La pasarela muestra el formulario de tarjeta y, al pagar, vuelve a returnUrl.
-  new window.LiteAPIPayment({
-    publicKey: co.publicKey,
-    appearance: { theme: 'flat' },
-    options: { business: { name: 'DíasLibres' } },
-    targetElement: '#paymentElement',
-    secretKey: co.secretKey,
-    returnUrl: co.returnUrl,
-  }).handlePayment();
 }
 
 // Al volver de pagar: /?pago=<id> → confirmar la reserva.
 async function finishPayment(id) {
+  metric('payment_return');
   history.replaceState(null, '', location.pathname);
   toast(t('Confirmando tu reserva…'));
   try {
@@ -1754,20 +1784,12 @@ function flightPayHint(co, sandbox) {
 
 // Sin clave de Stripe en el prebook: la pasarela de LiteAPI (la de los hoteles) muestra la tarjeta y su propio botón de pagar.
 async function payFlightWithWrapper(co) {
-  state.flight.checkout = co;
-  await loadPaymentSdk().catch(() => { throw new Error(t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.')); });
+  await loadPaymentSdk();
   showFlightPay(true);
   $('#flightConfirm').hidden = true;
   $('#flightTotal').textContent = eur2(co.total);
   $('#flightPayHint').innerHTML = flightPayHint(co, co.publicKey === 'sandbox');
-  new window.LiteAPIPayment({
-    publicKey: co.publicKey,
-    appearance: { theme: 'flat' },
-    options: { business: { name: 'DíasLibres' } },
-    targetElement: '#flightPayment',
-    secretKey: co.secretKey,
-    returnUrl: co.returnUrl,
-  }).handlePayment();
+  await mountNuiteePayment(co, '#flightPayment');
 }
 
 async function openFlightBooking(trip, data) {
@@ -1819,7 +1841,6 @@ function flightCustomer() {
 
 let stripePromise;
 function loadStripe() {
-  metric('checkout_start');
   stripePromise ??= new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://js.stripe.com/v3/';
@@ -1838,16 +1859,25 @@ onSend(flightForm, async () => {
   // Paso 2: pagar con la tarjeta (Stripe lleva al cliente de vuelta a /?vuelo=<id>).
   if (f.checkout) {
     btn.textContent = t('Procesando el pago…');
-    const { error } = await f.stripe.confirmPayment({ elements: f.elements, confirmParams: { return_url: f.checkout.returnUrl } });
-    flightError(error?.message || t('No se pudo completar el pago.'));
-    btn.disabled = false;
-    btn.textContent = t('Pagar {total}', { total: eur2(f.checkout.total) });
+    try {
+      const { error } = await f.stripe.confirmPayment({ elements: f.elements, confirmParams: { return_url: f.checkout.returnUrl } });
+      if (error) throw error;
+    } catch (err) {
+      metric('payment_error');
+      flightError(err.message || t('No se pudo completar el pago.'));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = t('Pagar {total}', { total: eur2(f.checkout.total) });
+    }
     return;
   }
   // Paso 1: bloquear la tarifa con los datos de los pasajeros y preparar el pago.
   btn.textContent = t('Reservando la tarifa…');
+  metric('checkout_start');
+  let checkoutPrepared = false;
   try {
     const co = await api('/api/flights/checkout', { method: 'POST', body: JSON.stringify({ offerId: f.trip.offerId, adults: f.adults, ...flightCustomer() }) });
+    checkoutPrepared = true;
     store.set('dl-email', flightForm.email.value.trim());
     if (!co.publishableKey) return await payFlightWithWrapper(co);
     await loadStripe().catch(() => { throw new Error(t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.')); });
@@ -1856,12 +1886,27 @@ onSend(flightForm, async () => {
     const dark = document.documentElement.dataset.theme === 'dark' || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
     f.elements = f.stripe.elements({ clientSecret: co.secretKey, appearance: { theme: dark ? 'night' : 'stripe' }, locale: LANG });
     showFlightPay(true);
-    f.elements.create('payment').mount('#flightPayment');
+    const payment = f.elements.create('payment');
+    payment.on('ready', () => metric('payment_form_mounted'));
+    payment.on('loaderror', () => {
+      metric('payment_form_error');
+      flightError(t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.'));
+      btn.disabled = true;
+    });
+    payment.mount('#flightPayment');
     $('#flightTotal').textContent = eur2(co.total);
     $('#flightPayHint').innerHTML = flightPayHint(co, !!state.data?.live?.sandbox);
     btn.textContent = t('Pagar {total}', { total: eur2(co.total) });
   } catch (err) {
-    flightError(err.message);
+    if (checkoutPrepared) {
+      metric('payment_form_error');
+      f.checkout = null;
+      showFlightPay(false);
+      btn.hidden = false;
+    } else {
+      metric('checkout_error');
+    }
+    flightError(checkoutPrepared ? t('No se pudo cargar el formulario de pago. Revisa tu conexión e inténtalo de nuevo.') : err.message);
     btn.textContent = t('Continuar al pago');
   } finally {
     btn.disabled = false;
@@ -1870,9 +1915,10 @@ onSend(flightForm, async () => {
 
 // Al volver de pagar: /?vuelo=<id> → confirmar el billete con la aerolínea.
 async function finishFlightPayment(id, redirectStatus) {
+  metric('payment_return');
   history.replaceState(null, '', location.pathname);
   setView('mine');
-  if (redirectStatus === 'failed') { toast(t('El pago no se ha completado. No se ha hecho ningún cargo.')); return; }
+  if (redirectStatus === 'failed') { metric('payment_error'); toast(t('El pago no se ha completado. No se ha hecho ningún cargo.')); return; }
   toast(t('Confirmando tu billete con la aerolínea…'));
   try {
     const b = await api(`/api/flights/checkout/${encodeURIComponent(id)}/confirm`, { method: 'POST', body: '{}' });
