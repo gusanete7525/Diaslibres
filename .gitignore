@@ -3,3 +3,9 @@ data/bookings.json
 data/bookings.json.metrics.json*
 .env
 data/osm-cache.json
+.wrangler/
+.dev.vars
+.dev.vars.*
+cloudflare/wrangler.local.json
+cloudflare/.migration-state.json
+cloudflare/.assets/
