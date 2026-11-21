@@ -305,6 +305,12 @@ export function hubPage(lang, kind) {
     }
   } else if (kind === 'escapes') {
     parts.push(`<p>${esc(t('Ideas para una escapada de fin de semana o unas vacaciones. Cada enlace muestra los hoteles con su calendario y el precio de cada noche.'))}</p>`);
+    if (lang === 'es') {
+      const select = (codes) => codes.map((code) => CITIES.find((city) => city.iata === code)).filter(Boolean);
+      parts.push(section('Escapadas en España', cityLinks(select(['MAD', 'VLC', 'SVQ', 'GRX']))));
+      parts.push(section('Escapadas al extranjero', cityLinks(select(['LIS', 'OPO', 'CDG', 'FCO', 'LHR', 'RAK']))));
+      parts.push(`<p>Si aún no has elegido cómo llegar, <a href="${hubUrl(lang, 'flights')}">compara vuelos por fecha</a>.</p>`);
+    }
     const sea = es.filter((c) => c.type === 'beach' || c.type === 'island');
     parts.push(section('Hoteles en la playa', cityLinks(sea.slice(0, 16), FILTER.playa)));
     parts.push(section('Escapadas a la montaña', cityLinks(CITIES.filter((c) => c.type === 'mountain').slice(0, 16))));
@@ -329,9 +335,9 @@ export function hubPage(lang, kind) {
   const spanishGetaways = kind === 'escapes' && lang === 'es';
   return {
     key: { type: 'hub', kind },
-    title: spanishGetaways ? 'Escapadas de fin de semana: destinos y hoteles | DíasLibres' : t(x.title),
-    description: spanishGetaways ? 'Encuentra ideas para una escapada de fin de semana en España. Elige playa, montaña, spa o un plan con niños y compara el precio por noche.' : t(x.description, { n: num(lang, n) }),
-    h1: spanishGetaways ? 'Escapadas de fin de semana en España' : t(x.h1),
+    title: spanishGetaways ? 'Escapadas de fin de semana en España y el extranjero | DíasLibres' : t(x.title),
+    description: spanishGetaways ? 'Encuentra escapadas de fin de semana en España y el extranjero. Descubre destinos y compara hoteles por noche y vuelos por fecha.' : t(x.description, { n: num(lang, n) }),
+    h1: spanishGetaways ? 'Escapadas de fin de semana en España y el extranjero' : t(x.h1),
     resultsLink: spanishGetaways ? 'Ver destinos y hoteles' : null,
     image: HUB_IMAGES[kind],
     crumb: t(x.crumb),
