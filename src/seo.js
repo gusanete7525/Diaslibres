@@ -212,7 +212,7 @@ export function cityPage(lang, city, filter, stats) {
   const ld = faqs.length ? [{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] : [];
   return {
     key: { type: 'city', city, filter },
-    resultsLink: Boolean(searchCopy),
+    resultsLink: searchCopy && 'See hotels and prices',
     title: searchCopy ? `${searchCopy.title} | DíasLibres` : filter ? `${fTitle} · ${t('Precios y disponibilidad')} | DíasLibres` : t('Hoteles en {city} · Precios por día y disponibilidad | DíasLibres'),
     description: searchCopy?.description ?? (filter ? t('{title}: compara precios de cada noche, mira qué días están libres y reserva con pago seguro.', { title: fTitle }) : t('Hoteles en {city} con calendario de días libres y precio de cada noche. Compara, elige las fechas más baratas y reserva con pago seguro.')),
     h1: filter ? fTitle : t('Hoteles en {city}: mira qué días están libres y cuándo es más barato'),
@@ -276,6 +276,10 @@ const HUB_TEXT = {
   whereTo: { title: '¿Dónde viajar? Ideas y buscador de viajes con IA | DíasLibres', description: 'Cuéntale a la IA de DíasLibres cómo quieres viajar y te propone hoteles y vuelos con el precio de cada día. Ideas de playa, islas, montaña y ciudades.', h1: '¿Dónde viajar? Cuéntaselo a la IA y mira qué días están libres', crumb: '¿Dónde viajar?', view: 'hotels' },
 };
 const AI_EXAMPLES = ['Escapada romántica de fin de semana', 'Hotel de montaña menos de 100 €', 'Vuelos directos de Madrid a Lisboa', 'Playa con niños en Canarias 5 noches'];
+const HUB_IMAGES = {
+  escapes: { path: '/img/ex-playa.jpg', width: 640, height: 400 },
+  flights: { path: '/img/ex-vuelos.jpg', width: 640, height: 400 },
+};
 
 export function hubPage(lang, kind) {
   const t = (k, v = {}) => tr(lang, k, v);
@@ -322,11 +326,14 @@ export function hubPage(lang, kind) {
   const others = HUBS.filter((k) => k !== kind);
   parts.push(section('Más ideas', links(others.map((k) => [hubUrl(lang, k), t(HUB_TEXT[k].crumb)]))));
   const x = HUB_TEXT[kind];
+  const spanishGetaways = kind === 'escapes' && lang === 'es';
   return {
     key: { type: 'hub', kind },
-    title: t(x.title),
-    description: t(x.description, { n: num(lang, n) }),
-    h1: t(x.h1),
+    title: spanishGetaways ? 'Escapadas de fin de semana: destinos y hoteles | DíasLibres' : t(x.title),
+    description: spanishGetaways ? 'Encuentra ideas para una escapada de fin de semana en España. Elige playa, montaña, spa o un plan con niños y compara el precio por noche.' : t(x.description, { n: num(lang, n) }),
+    h1: spanishGetaways ? 'Escapadas de fin de semana en España' : t(x.h1),
+    resultsLink: spanishGetaways ? 'Ver destinos y hoteles' : null,
+    image: HUB_IMAGES[kind],
     crumb: t(x.crumb),
     view: x.view,
     hub: kind,
@@ -386,13 +393,13 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
     `<meta property="og:title" content="${esc(page.title)}" />`,
     `<meta property="og:description" content="${esc(page.description)}" />`,
     `<meta property="og:url" content="${esc(url)}" />`,
-    `<meta property="og:image" content="${esc(site)}/og.png" />`,
-    `<meta property="og:image:width" content="1200" />`,
-    `<meta property="og:image:height" content="630" />`,
+    `<meta property="og:image" content="${esc(site + (page.image?.path || '/og.png'))}" />`,
+    `<meta property="og:image:width" content="${page.image?.width ?? 1200}" />`,
+    `<meta property="og:image:height" content="${page.image?.height ?? 630}" />`,
     `<meta property="og:image:alt" content="${esc(page.title)}" />`,
     `<meta name="twitter:title" content="${esc(page.title)}" />`,
     `<meta name="twitter:description" content="${esc(page.description)}" />`,
-    `<meta name="twitter:image" content="${esc(site)}/og.png" />`,
+    `<meta name="twitter:image" content="${esc(site + (page.image?.path || '/og.png'))}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`,
   ].filter(Boolean).join('\n  ');
@@ -406,7 +413,7 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
     .replace('<!--POPULAR-->', popular(lang));
   if (page.h1) out = out.replace(/<h1( data-i18n)?>[\s\S]*?<\/h1>/, `<h1>${esc(page.h1)}</h1>`);
   if (page.resultsLink) {
-    out = out.replace(/<p class="sub"[^>]*>[^<]*<\/p>/, () => `<p class="sub">${esc(page.description)}</p><a class="btn primary" href="#results">See hotels and prices</a>`);
+    out = out.replace(/<p class="sub"[^>]*>[^<]*<\/p>/, () => `<p class="sub">${esc(page.description)}</p><a class="btn primary" href="#results">${esc(page.resultsLink)}</a>`);
   }
   // data-hub: página general; la web no lanza una búsqueda al abrirla y deja visibles sus enlaces.
   if (page.view) out = out.replace('<body>', `<body data-start-view="${esc(page.view)}"${page.hub ? ` data-hub="${esc(page.hub)}"` : ''}${page.filters ? ` data-start-filters="${esc(JSON.stringify(page.filters))}"` : ''}>`);
