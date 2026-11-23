@@ -13,6 +13,7 @@ import { AIRPORTS } from './src/catalog.js';
 import { readFileSync } from 'node:fs';
 import { minify } from 'terser';
 import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, hubPage, seasonalPage, HUBS, cityStats, cityKey, cityByName, cityByIata, placeName, cityName, CITIES } from './src/seo.js';
+import { CHRISTMAS_CITIES, CHRISTMAS_TRIP, makeChristmasSearch } from './src/christmas-cities.js';
 import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { createSuggester } from './src/suggest.js';
 import { OsmHotels } from './src/osm.js';
@@ -325,6 +326,12 @@ export function createApp({
   // Si paga el cliente, se puede reservar siempre. Si se carga a la cuenta del titular,
   // con la clave real solo con ALLOW_REAL_BOOKINGS=1 (si no, cualquiera reservaría a su costa).
   const liveFlights = !!live && process.env.LITEAPI_FLIGHTS !== 'off';
+  const christmasSearch = makeChristmasSearch(live, liveFlights);
+  app.get('/api/christmas-cities/:city', rateLimit({ max: 25, windowMs: 10 * 60 * 1000 }), async (req, res) => {
+    const city = CHRISTMAS_CITIES.find(city => city.slug === req.params.city);
+    if (!city || todayISO() >= CHRISTMAS_TRIP.checkIn) return res.sendStatus(404);
+    res.set('Cache-Control', 'no-store').json(await christmasSearch(city));
+  });
   const liveBookingEnabled = !!live && (livePayment === 'customer' || live.sandbox || process.env.ALLOW_REAL_BOOKINGS === '1');
   // Datos internos de la reserva que no salen al navegador.
   const publicBooking = (b) => {

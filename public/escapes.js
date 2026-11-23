@@ -122,6 +122,29 @@ async function discover(scroll = false) {
   } finally { if (id === requestId) button.disabled = false; }
 }
 form.addEventListener('submit', e => { e.preventDefault(); if (form.reportValidity()) discover(true); });
+document.getElementById('europa-en-navidad')?.addEventListener('click', async event => {
+  const button = event.target.closest('[data-quote-city]');
+  if (!button || button.disabled) return;
+  const card = button.closest('[data-christmas-city]');
+  const prices = card.querySelector('[data-city-prices]');
+  button.disabled = true;
+  prices.textContent = 'Consultando Nuitée…';
+  try {
+    const response = await fetch(`/api/christmas-cities/${encodeURIComponent(card.dataset.christmasCity)}`, { cache: 'no-store', signal: AbortSignal.timeout(60000) });
+    if (!response.ok) throw new Error('No se pudieron consultar las tarifas ahora.');
+    const { hotel, flight, sandbox, checkedAt } = await response.json();
+    prices.replaceChildren();
+    element('p', hotel ? `Alojamiento · ${money(hotel.total)} · ${hotel.name}` : 'Sin tarifa de alojamiento en la muestra consultada.', prices);
+    for (const tax of hotel?.payAtHotel || []) element('small', `A pagar en el hotel: ${tax.amount} ${tax.currency} · ${tax.description}`, prices);
+    element('p', flight ? `Vuelos de ida y vuelta · ${money(flight.total)} para dos` : 'Sin tarifa de vuelo compatible con las fechas consultadas.', prices);
+    if ((hotel || flight) && checkedAt) element('small', 'Tarifas consultadas a las ' + new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(checkedAt)) + '. Sujetas a disponibilidad.', prices);
+    if (sandbox) element('small', 'Entorno de pruebas. Estas tarifas no son ofertas para reservar.', prices);
+  } catch {
+    prices.textContent = 'No se pudieron consultar las tarifas ahora. Puedes abrir los buscadores de vuelos y hoteles.';
+  } finally {
+    button.disabled = false;
+  }
+});
 // Load after the first paint; never delay the initial page or booking return.
 if ((!document.body.dataset.startView || activeSeason) && !location.search) {
   if ('requestIdleCallback' in window) requestIdleCallback(() => discover(), { timeout: 1500 });

@@ -2084,7 +2084,7 @@ filters.checkIn.max = addDays(filters.checkIn.min, 330);
   } catch { /* datalist opcional */ }
   await configReady;
   const params = new URLSearchParams(location.search);
-  if (params.has('escape')) {
+  if (params.has('escape') || params.has('tripHotel')) {
     filters.destination.value = (params.get('destination') || '').slice(0, 120);
     filters.checkIn.value = params.get('checkIn') || '';
     filters.nights.value = Math.max(1, Math.min(14, Number(params.get('nights')) || 2));
@@ -2096,8 +2096,8 @@ filters.checkIn.max = addDays(filters.checkIn.min, 330);
     filters.origin.value = (params.get('origin') || '').slice(0, 120);
     filters.destination.value = (params.get('destination') || '').slice(0, 120);
     filters.date.value = params.get('date') || '';
-    filters.returnDate.value = '';
-    filters.passengers.value = '1';
+    filters.returnDate.value = params.get('returnDate') || '';
+    filters.passengers.value = /^[1-6]$/.test(params.get('adults') || '') ? params.get('adults') : '1';
     setManual(true);
   }
   if (params.get('pago')) return finishPayment(params.get('pago'));

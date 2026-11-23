@@ -7,6 +7,7 @@ import { RAIL_TABLE } from './rail-data.js';
 import { LANGS, LANG_CODES, tr, translateHtml } from './i18n.js';
 import { christmasCampaign } from './markets.js';
 import { todayISO } from './availability.js';
+import { CHRISTMAS_CITIES, CHRISTMAS_TRIP } from './christmas-cities.js';
 
 const norm = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 export const slug = (x) => norm(x).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -111,11 +112,34 @@ export function seasonalPage(kind, day = todayISO()) {
     key: { type: 'seasonal', path: blackFriday ? '/black-friday' : '/navidad' },
     title: `${heading} | DíasLibres`, h1: heading, crumb: blackFriday ? 'Black Friday' : 'Navidad',
     description, hub: kind, view: 'hotels', image: { path: `/img/${kind}-2026.jpg`, width: 1200, height: 600 },
-    seasonal: { kind, active },
+    seasonal: { kind, active, guide: blackFriday ? '' : christmasCityGuide(day) },
     html: blackFriday
       ? `<h2>Cómo comprobamos los descuentos</h2><p>Mostramos el precio anterior y el actual de la misma tarifa cuando el proveedor facilita ambos. El importe se vuelve a comprobar antes de pagar.</p><p><a href="/navidad">Ver viajes de Navidad y escapadas a la nieve</a></p>`
       : `<h2>Destinos de esquí</h2><img class="ski-illustration" src="/img/esqui-2026.jpg" width="1200" height="600" alt="Ilustración de una estación de esquí en una montaña nevada" loading="lazy" />${links(skiLinks)}<p>Comprueba la ubicación del hotel antes de reservar. Las tarifas de alojamiento no incluyen forfait, alquiler de equipo ni clases. Consulta la apertura de pistas con la estación.</p><h2>Más viajes para estas fechas</h2>${links([['/escapadas','Escapadas en España y el extranjero'],['/vuelos','Comparar vuelos por fecha'],['/black-friday','Black Friday de viajes']])}`,
   };
+}
+
+function christmasCityGuide(day) {
+  const { checkIn, checkOut, adults, nights, origin } = CHRISTMAS_TRIP;
+  const active = day < checkIn;
+  const card = city => {
+    const hotelQuery = new URLSearchParams({ tripHotel: '1', destination: `${city.name}, ${city.country}`, checkIn, nights });
+    const flightQuery = new URLSearchParams({ dealFlight: '1', origin, destination: city.airport, date: checkIn, returnDate: checkOut, adults });
+    return `<article class="escape-card christmas-city" data-christmas-city="${city.slug}">
+      <img src="/img/navidad-${city.slug}.jpg" alt="Ilustración de ${esc(city.name)} en Navidad" width="1200" height="600" loading="lazy" />
+      <h3>${esc(city.name)}</h3><p>${esc(city.description)}</p>
+      <p>Vuelo desde Madrid a ${esc(city.airportName)} (${city.airport}).${city.transfer ? ' ' + esc(city.transfer) : ''}</p>
+      ${active ? '<button class="btn primary" type="button" data-quote-city>Consultar precios para dos</button><div data-city-prices aria-live="polite"></div>' : ''}
+      <div class="seasonal-actions"><a href="${active ? '/?' + esc(hotelQuery) : '/hoteles'}">Buscar alojamiento</a>
+      <a href="${active ? '/?' + esc(flightQuery) : '/vuelos'}">Buscar vuelos</a></div>
+    </article>`;
+  };
+  return `<section id="europa-en-navidad" class="christmas-guide">
+    <h2>Europa en Navidad</h2>
+    <p>${active ? 'Propuesta del 18 al 21 de diciembre de 2026. Vuelo de ida y vuelta desde Madrid para dos adultos y tres noches de alojamiento. Se reservan por separado.' : 'Explora estos destinos y elige tus fechas para comparar vuelos y alojamiento.'}</p>
+    <div class="escape-list">${CHRISTMAS_CITIES.filter(city => city.country !== 'US').map(card).join('')}</div>
+    <h2>Nueva York en Navidad</h2><div class="escape-list">${CHRISTMAS_CITIES.filter(city => city.country === 'US').map(card).join('')}</div>
+  </section>`;
 }
 
 // ---------- Datos de cada ciudad (de la lista completa de sus hoteles) ----------
@@ -441,10 +465,10 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
     .replace('<!--POPULAR-->', popular(lang));
   if (page.h1) out = out.replace(/<h1( data-i18n)?>[\s\S]*?<\/h1>/, `<h1>${esc(page.h1)}</h1>`);
   if (page.seasonal) {
-    const { kind, active } = page.seasonal;
+    const { kind, active, guide } = page.seasonal;
     const ski = kind === 'navidad';
     const label = ski ? 'Ver alojamientos para esquiar' : 'Ver descuentos de hoteles';
-    const navigation = `<nav class="seasonal-actions" aria-label="Viajes de temporada"><a class="btn primary" href="${active ? '#escapeFeatured' : ski ? '#results' : '/hoteles'}">${label}</a><a class="btn ghost" href="${ski ? '/black-friday' : '/navidad'}">${ski ? 'Black Friday' : 'Viajes de Navidad'}</a></nav>`;
+    const navigation = `<nav class="seasonal-actions" aria-label="Viajes de temporada">${ski ? '<a class="btn primary" href="#europa-en-navidad">Europa en Navidad</a>' : ''}<a class="btn ${ski ? 'ghost' : 'primary'}" href="${active ? '#escapeFeatured' : ski ? '#results' : '/hoteles'}">${label}</a><a class="btn ghost" href="${ski ? '/black-friday' : '/navidad'}">${ski ? 'Black Friday' : 'Viajes de Navidad'}</a></nav>`;
     out = out
       .replace('<body>', `<body data-seasonal="${kind}"${active ? ' data-seasonal-active="true"' : ''}>`)
       .replace(/<p class="eyebrow"[^>]*>[^<]*<\/p>/, `<p class="eyebrow">${esc(page.crumb)}</p>`)
@@ -455,6 +479,7 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
         ? 'Estancias de dos noches entre el 23 y el 28 de diciembre para dos adultos.'
         : 'Estancias de dos noches en fechas seleccionadas del 4 al 13 de diciembre para dos adultos.'}</p>`)
       .replace(/<p id="escapeMarket"[^>]*>[^<]*<\/p>/, '<p id="escapeMarket" class="market-note"></p>');
+    if (guide) out = out.replace('<section id="escapeFeatured"', () => `${guide}<section id="escapeFeatured"`);
     if (!active) out = out.replace('<section id="escapeFeatured"', '<section id="escapeFeatured" hidden');
   } else if (key.type === 'home' && lang === 'es') {
     const promos = ['navidad', 'black-friday'].map(kind => seasonalPage(kind)).filter(page => page.seasonal.active);

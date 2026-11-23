@@ -97,6 +97,10 @@ h1,h2,h3,.logo { font-family:inherit; }
 .seasonal-actions a { text-decoration:none; }
 [data-seasonal="navidad"] .hero-copy .eyebrow { color:var(--brand); }
 .ski-illustration { display:block; width:min(100%, 560px); height:auto; border-radius:16px; margin-block:16px; }
+.christmas-guide { scroll-margin-top:24px; margin-bottom:32px; }
+.christmas-guide > h2 { margin-top:28px; }
+.christmas-city p { line-height:1.4; }
+.christmas-city [data-city-prices]:not(:empty) { margin-top:12px; }
 .escape-featured h2 { font-size:28px; line-height:1.25; }
 .escape-featured > p { color:var(--text-2); line-height:1.5; }
 .escape-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
