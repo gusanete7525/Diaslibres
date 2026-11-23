@@ -17,11 +17,14 @@ async function load() {
     if (!configResponse.ok || !(await configResponse.json()).liveFlights) return;
     section.hidden = false;
     for (let attempt = 0; attempt < 24; attempt++) {
-      const response = await fetch('/api/flights/deals', { headers: { 'X-Lang': lang }, cache: 'no-store', signal: AbortSignal.timeout(10000) });
+      const response = await fetch('/api/flights/deals?featured=1', { headers: { 'X-Lang': lang }, cache: 'no-store', signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(t('No se pudieron comprobar los vuelos ahora. Prueba Buscar vuelos.'));
       const data = await response.json();
       list.replaceChildren();
-      if (data.market?.basedOn === 'country') {
+      if (data.market?.season === 'christmas') {
+        document.getElementById('marketFlightsHeading').textContent = 'Vuelos para Navidad desde España';
+        document.getElementById('marketFlightIntro').textContent = 'Compara salidas desde Madrid y Barcelona a destinos nacionales e internacionales.';
+      } else if (data.market?.basedOn === 'country') {
         const origin = new Intl.DisplayNames([lang], { type: 'region' }).of(data.market.origin);
         document.getElementById('marketFlightsHeading').textContent = t('Vuelos sugeridos para viajeros desde {country}', { country: origin });
         document.getElementById('marketFlightIntro').textContent = t('Salidas habituales desde {country}. Puedes cambiar el origen en Buscar vuelos.', { country: origin });

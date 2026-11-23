@@ -432,7 +432,7 @@ export function createApp({
   // Solo la portada en español (visitantes de España y sin país), cada 30 min, para no gastar
   // LiteAPI de más (~1.700 cotizaciones al día). Lo demás se sirve al momento y se renueva al pedirlo,
   // como mucho una vez cada 30 min por búsqueda.
-  app.locals.warmEscapes = () => escapeSearch.warm([[{}, 'es', 'ES'], [{}, 'es', null]], { recent: false });
+  app.locals.warmEscapes = () => escapeSearch.warm([[{ featured: '1' }, 'es', 'ES'], [{ featured: '1' }, 'es', null]], { recent: false });
   const escapeLimit = rateLimit({ max: 20, windowMs: 10 * 60 * 1000 });
   app.get('/api/escapes', escapeLimit, async (req, res) => {
     try { escapePlan(req.query); }
@@ -564,8 +564,8 @@ export function createApp({
   // ---------- Ofertas: el vuelo más barato de rutas populares (se renuevan cada 2 h) ----------
   const DEALS_TTL = 2 * 60 * 60 * 1000;
   const dealsByLanguage = new Map();
-  function dealsFor(language, country = null) {
-    const market = promotionMarket(language, todayISO(), country);
+  function dealsFor(language, country = null, featured = false) {
+    const market = promotionMarket(language, todayISO(), country, featured);
     // One cache per market (language or visitor country) and day, since routes rotate daily.
     const key = market.id + ':' + market.day;
     if (!dealsByLanguage.has(key)) {
@@ -574,10 +574,10 @@ export function createApp({
     }
     return { market, deals: dealsByLanguage.get(key) };
   }
-  function refreshDeals(language = 'es', country = null) {
-    const { market, deals } = dealsFor(language, country);
+  function refreshDeals(language = 'es', country = null, featured = false) {
+    const { market, deals } = dealsFor(language, country, featured);
     if (!liveFlights || deals.running) return deals.running;
-    const date = addDays(todayISO(), 14);
+    const date = market.christmas?.flightDate ?? addDays(market.day, 14);
     const fresh = [];
     const place = code => ({ code, name: AIRPORTS[code] || DEAL_AIRPORTS[code] || code });
     deals.running = Promise.all(market.routes.map(async ([o, d]) => {
@@ -600,12 +600,13 @@ export function createApp({
     if (!liveFlights) return res.status(404).json({ error: 'Los vuelos reales no están activados.' });
     const lang = langOf(req);
     const country = countryOf(req);
-    const { deals } = dealsFor(lang, country);
-    if (Date.now() - deals.at > DEALS_TTL) refreshDeals(lang, country);
+    const featured = req.query.featured === '1';
+    const { market, deals } = dealsFor(lang, country, featured);
+    if (Date.now() - deals.at > DEALS_TTL) refreshDeals(lang, country, featured);
     const named = p => ({ ...p, name: placeName(p.code, lang, p.name) });
     // A previous day's price must not masquerade as a current offer during refresh.
     const visible = deals.date >= todayISO() ? deals.list : [];
-    res.set('Cache-Control', 'no-store').json({ date: deals.date, checkedAt: deals.at ? new Date(deals.at).toISOString() : null, sandbox: !!live.sandbox, market: marketInfo(lang, todayISO(), country), deals: [...visible].sort((a, b) => a.total - b.total).map(d => ({ ...d, origin: named(d.origin), destination: named(d.destination) })), pending: !!deals.running });
+    res.set('Cache-Control', 'no-store').json({ date: deals.date, checkedAt: deals.at ? new Date(deals.at).toISOString() : null, sandbox: !!live.sandbox, market: marketInfo(lang, market.day, country, featured), deals: [...visible].sort((a, b) => a.total - b.total).map(d => ({ ...d, origin: named(d.origin), destination: named(d.destination) })), pending: !!deals.running });
   });
 
   app.post('/api/flights/quote', async (req, res) => {
@@ -1217,7 +1218,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (!process.env.ANTHROPIC_API_KEY) console.log('Sin ANTHROPIC_API_KEY: la búsqueda con IA usa el intérprete local.');
     if (process.env.LITEAPI_KEY?.trim()) console.log(`Hoteles con datos reales de LiteAPI${process.env.LITEAPI_KEY.trim().replace(/^["']/, '').startsWith('sand_') ? ' (entorno de pruebas)' : ''}.`);
     else console.log('Sin LITEAPI_KEY: hoteles con precios y disponibilidad simulados.');
-    app.locals.refreshDeals(); // las ofertas de vuelos ya preparadas para la primera visita
+    app.locals.refreshDeals('es', null, true); // ofertas preparadas para la primera visita
     // Datos de las ciudades para las páginas de buscadores: una ciudad cada 20 s, sin prisa.
     setInterval(() => app.locals.statsTick(), 20000).unref();
     // Escapadas de la portada calculadas por adelantado: el visitante no espera a LiteAPI.

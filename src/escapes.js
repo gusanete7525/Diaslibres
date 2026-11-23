@@ -76,11 +76,16 @@ export function makeEscapeSearch(live, { now = () => Date.now(), freshMs = FRESH
     }, err => { if (!entry.result) cache.delete(key); throw err; }).finally(() => { entry.promise = null; });
     return entry.promise;
   }
+  function selection(q, lang, country) {
+    const featured = q.featured === '1';
+    const market = promotionMarket(lang, undefined, country, featured);
+    const plan = escapePlan(market.christmas ? { from: market.christmas.from, to: market.christmas.to } : q, market.day);
+    const context = marketInfo(market.language, market.day, country, featured);
+    return { market, plan, context };
+  }
   async function search(q = {}, lang = 'es', country = null) {
-    const plan = escapePlan(q);
-    const market = promotionMarket(lang, undefined, country);
+    const { market, plan, context } = selection(q, lang, country);
     lang = market.language;
-    const context = marketInfo(lang, market.day, market.origin);
     if (!live) return { ...plan, results: [], unavailable: true, sandbox: false, market: context };
     const args = JSON.stringify([q, lang, country]);
     recent.delete(args);
@@ -111,8 +116,7 @@ export function makeEscapeSearch(live, { now = () => Date.now(), freshMs = FRESH
     for (const d of defaults) if (!list.some(a => JSON.stringify(a) === JSON.stringify(d))) list.push(d);
     for (const [q, lang, country] of list.slice(0, WARM_MAX)) {
       try {
-        const plan = escapePlan(q);
-        const market = promotionMarket(lang, undefined, country);
+        const { market, plan, context } = selection(q, lang, country);
         const key = JSON.stringify([plan, market.id, market.language, market.day]);
         const entry = cache.get(key);
         if (entry?.promise || (entry?.result && t - entry.at < maxAge)) continue;
@@ -120,7 +124,7 @@ export function makeEscapeSearch(live, { now = () => Date.now(), freshMs = FRESH
           if (cache.size >= 100) cache.delete(cache.keys().next().value);
           cache.set(key, { promise: null, result: null, at: 0 });
         }
-        await refresh(key, cache.get(key), plan, market, market.language, marketInfo(market.language, market.day, market.origin));
+        await refresh(key, cache.get(key), plan, market, market.language, context);
       } catch { /* la siguiente ronda lo vuelve a intentar */ }
     }
   };

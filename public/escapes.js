@@ -40,13 +40,16 @@ async function discover(scroll = false) {
   status.textContent = t('Comprobando precios de alojamiento…');
   document.getElementById('escapeHeading').textContent = t('Escapadas de {n} días', { n: form.elements.days.value });
   if (scroll) document.getElementById('escapeFeatured').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  const query = new URLSearchParams(new FormData(form));
+  const query = scroll ? new URLSearchParams(new FormData(form)) : new URLSearchParams({ featured: '1' });
   for (const [key, value] of [...query]) if (!value) query.delete(key);
   try {
     const response = await fetch(`/api/escapes?${query}`, { headers: { 'X-Lang': lang }, cache: 'no-store', signal: AbortSignal.timeout(60000) });
     const data = await response.json();
     if (id !== requestId) return;
     if (!response.ok) throw new Error(data.error || t('No se pudieron comprobar las escapadas. Inténtalo de nuevo.'));
+    if (data.market?.season === 'christmas') {
+      document.getElementById('escapeHeading').textContent = 'Escapadas de Navidad en España y Europa';
+    }
     if (data.market?.basedOn === 'country') {
       const origin = new Intl.DisplayNames([lang], { type: 'region' }).of(data.market.origin);
       document.getElementById('escapeMarket').textContent = t('Ideas de alojamiento pensadas para viajeros desde {country}.', { country: origin });

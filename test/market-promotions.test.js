@@ -1,6 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promotionMarket } from '../src/markets.js';
+
+test('campaña de Navidad solo para la portada del mercado español y dentro de las fechas', () => {
+  const day = '2026-11-23';
+  const market = promotionMarket('es', day, 'ES', true);
+  assert.deepEqual(market.christmas, { from: '2026-12-23', to: '2026-12-28', flightDate: '2026-12-23' });
+  assert.ok(market.hotels.includes('Granada, ES') && market.hotels.includes('Viena, AT'));
+  assert.ok(market.routes.some(([origin, destination]) => origin === 'MAD' && destination === 'MEX'));
+  assert.equal(promotionMarket('es', '2026-12-26', null, true).christmas.flightDate, '2026-12-26');
+  assert.equal(promotionMarket('es', '2026-12-27', null, true).christmas, undefined);
+  assert.equal(promotionMarket('es', day, 'MX', true).christmas, undefined);
+  assert.equal(promotionMarket('es', day, 'ES').christmas, undefined);
+});
 import { makeEscapeSearch } from '../src/escapes.js';
 import { todayISO, addDays } from '../src/availability.js';
 import { createApp } from '../server.js';

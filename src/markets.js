@@ -100,9 +100,26 @@ export function rotate(pool, count, day = todayISO()) {
   return Array.from({ length: count }, (_, i) => pool[(start + i * step) % pool.length]);
 }
 
-export function promotionMarket(language = 'es', day = todayISO(), country = null) {
+// Campaña 2026 para España. Datos de demanda de KAYAK orientan la selección;
+// los importes se consultan siempre al proveedor para las fechas de cada tarjeta.
+export function christmasCampaign(language, day, country) {
+  if (language !== 'es' || (country && country !== 'ES') || day < '2026-11-23' || day > '2026-12-26') return null;
+  return { from: '2026-12-23', to: '2026-12-28', flightDate: day > '2026-12-23' ? day : '2026-12-23' };
+}
+
+export function promotionMarket(language = 'es', day = todayISO(), country = null, featured = false) {
   const lang = Object.hasOwn(MARKETS, language) ? language : 'es';
   const origin = typeof country === 'string' && Object.hasOwn(COUNTRY_MARKETS, country) ? country : null;
+  const christmas = featured && christmasCampaign(lang, day, country);
+  if (christmas) {
+    return {
+      language: lang, origin, day, id: 'christmas-2026:' + (origin || lang),
+      countries: ['ES', 'AT', 'CZ'],
+      hotels: ['Granada, ES', 'Palma de Mallorca, ES', 'Viena, AT', 'Praga, CZ'],
+      routes: [['MAD', 'PMI'], ['MAD', 'PRG'], ['BCN', 'VIE'], ['MAD', 'JFK'], ['MAD', 'MEX'], ['MAD', 'BOG']],
+      christmas,
+    };
+  }
   const m = origin ? COUNTRY_MARKETS[origin] : MARKETS[lang];
   const cities = rotate(m.hotels, HOTELS_SHOWN, day);
   const routes = rotate(m.routes, m.routesShown || ROUTES_SHOWN, day);
@@ -116,8 +133,9 @@ export function promotionMarket(language = 'es', day = todayISO(), country = nul
     routes: routes.map(r => [...r]),
   };
 }
-export function marketInfo(language, day = todayISO(), country = null) {
-  const { language: lang, countries, origin, routes } = promotionMarket(language, day, country);
+export function marketInfo(language, day = todayISO(), country = null, featured = false) {
+  const { language: lang, countries, origin, routes, christmas } = promotionMarket(language, day, country, featured);
+  if (christmas) return { language: lang, countries, basedOn: origin ? 'country' : 'language', origin, shown: routes.length, season: 'christmas' };
   return origin
     ? { language: lang, countries, basedOn: 'country', origin, shown: routes.length }
     : { language: lang, countries, basedOn: 'language', shown: routes.length };
