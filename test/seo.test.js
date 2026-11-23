@@ -34,8 +34,14 @@ test('portada: título y descripción nuevos, H1 de la propuesta Figma y traducc
   assert.equal(es.status, 200);
   assert.equal(title(es.body), 'DíasLibres · Escapadas según tus días libres y presupuesto');
   assert.match(es.body, /<meta name="description" content="Dinos cuántos días tienes libres/);
-  assert.match(h1(es.body), /Tú pones los días\./);
-  assert.match(h1(es.body), /Nosotros, el destino\./);
+  if (homePage('es').homeCampaign.christmas) {
+    assert.match(h1(es.body), /Viajes de Navidad y escapadas a la nieve/);
+    assert.match(es.body, /src="\/img\/navidad-2026.jpg"/);
+    assert.match(es.body, /href="\/navidad#europa-en-navidad"/);
+  } else {
+    assert.match(h1(es.body), /Tú pones los días\./);
+    assert.match(h1(es.body), /Nosotros, el destino\./);
+  }
   assert.match(es.body, /Encontrar mi viaje/);
   assert.match(es.body, /figma\.css/);
   assert.equal(canonical(es.body), base + '/');

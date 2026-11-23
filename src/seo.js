@@ -302,12 +302,16 @@ export function routePage(lang, o, d) {
   };
 }
 
-export function homePage(lang, noindex) {
+export function homePage(lang, noindex, day = todayISO()) {
+  const christmas = Boolean(christmasCampaign('es', day, null));
+  const blackFriday = day >= '2026-11-23' && day <= '2026-11-30';
   return {
     key: { type: 'home' },
     title: tr(lang, 'DíasLibres · Escapadas según tus días libres y presupuesto'),
     description: tr(lang, 'Dinos cuántos días tienes libres y tu presupuesto. Descubre destinos con fechas flexibles y compara el total del alojamiento antes de reservar.'),
     noindex,
+    homeCampaign: { christmas, blackFriday },
+    image: christmas ? { path: '/img/navidad-2026.jpg', width: 1200, height: 600 } : undefined,
   };
 }
 
@@ -481,9 +485,14 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
       .replace(/<p id="escapeMarket"[^>]*>[^<]*<\/p>/, '<p id="escapeMarket" class="market-note"></p>');
     if (guide) out = out.replace('<section id="escapeFeatured"', () => `${guide}<section id="escapeFeatured"`);
     if (!active) out = out.replace('<section id="escapeFeatured"', '<section id="escapeFeatured" hidden');
-  } else if (key.type === 'home' && lang === 'es') {
-    const promos = ['navidad', 'black-friday'].map(kind => seasonalPage(kind)).filter(page => page.seasonal.active);
-    if (promos.length) out = out.replace('<div class="quick-search">', () => `<nav class="seasonal-actions" aria-label="Viajes de temporada">${promos.map(p => `<a class="btn ghost" href="${p.key.path}">${p.seasonal.kind === 'navidad' ? 'Navidad y esquí' : 'Black Friday'}</a>`).join('')}</nav><div class="quick-search">`);
+  } else if (page.homeCampaign?.christmas) {
+    out = out.replace(/<img src="\/img\/hero\.jpg"[^>]*>/, '<img src="/img/navidad-2026.jpg" width="1200" height="600" alt="" fetchpriority="high" />');
+    if (lang === 'es') {
+      out = out
+        .replace(/<h1>[\s\S]*?<\/h1>/, '<h1>Viajes de Navidad y escapadas a la nieve</h1>')
+        .replace(/<p class="sub"[^>]*>[^<]*<\/p>/, '<p class="sub">Compara hoteles y vuelos para estas fiestas, en España y en el extranjero.</p>')
+        .replace('<div class="quick-search">', () => `<nav class="seasonal-actions home-seasonal-actions" aria-label="Viajes de temporada"><a class="btn primary" href="/navidad#europa-en-navidad">Europa en Navidad</a><a class="btn ghost" href="/navidad#escapeFeatured">Alojamientos de esquí</a>${page.homeCampaign.blackFriday ? '<a class="btn ghost" href="/black-friday">Black Friday</a>' : ''}</nav><div class="quick-search">`);
+    }
   }
   if (page.resultsLink) {
     out = out.replace(/<p class="sub"[^>]*>[^<]*<\/p>/, () => `<p class="sub">${esc(page.description)}</p><a class="btn primary" href="#results">${esc(page.resultsLink)}</a>`);
