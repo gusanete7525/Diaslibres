@@ -4,6 +4,8 @@ const t = (s, vars = {}) => Object.entries(vars).reduce((a, [k, v]) => a.replace
 const form = document.getElementById('escapeForm');
 const status = document.getElementById('escapeStatus');
 const list = document.getElementById('escapeList');
+const seasonal = document.body.dataset.seasonal;
+const activeSeason = document.body.dataset.seasonalActive === 'true';
 const money = n => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR' }).format(n);
 const date = s => new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(s + 'T00:00:00Z'));
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -32,25 +34,37 @@ function element(tag, text, parent, className) {
 let requestId = 0;
 async function discover(scroll = false) {
   const id = ++requestId;
+  document.getElementById('escapeFeatured').hidden = false;
   const button = form.querySelector('button[type="submit"]');
   // Background inspiration must leave the main search available.
   button.disabled = scroll;
   list.replaceChildren();
   document.getElementById('escapeSchema')?.remove();
   status.textContent = t('Comprobando precios de alojamiento…');
-  document.getElementById('escapeHeading').textContent = t('Escapadas de {n} días', { n: form.elements.days.value });
+  const heading = document.getElementById('escapeHeading');
+  heading.textContent = !scroll && seasonal === 'navidad' ? 'Alojamiento para esquiar en Navidad'
+    : !scroll && seasonal === 'black-friday' ? 'Hoteles con descuento comprobado'
+    : t('Escapadas de {n} días', { n: form.elements.days.value });
   if (scroll) document.getElementById('escapeFeatured').scrollIntoView({ behavior: 'smooth', block: 'start' });
   const query = scroll ? new URLSearchParams(new FormData(form)) : new URLSearchParams({ featured: '1' });
+  if (!scroll && seasonal === 'navidad') query.set('theme', 'ski');
+  if (!scroll && seasonal === 'black-friday') {
+    query.set('theme', 'black-friday');
+    query.set('from', '2026-12-04');
+    query.set('to', '2026-12-13');
+  }
   for (const [key, value] of [...query]) if (!value) query.delete(key);
   try {
     const response = await fetch(`/api/escapes?${query}`, { headers: { 'X-Lang': lang }, cache: 'no-store', signal: AbortSignal.timeout(60000) });
     const data = await response.json();
     if (id !== requestId) return;
     if (!response.ok) throw new Error(data.error || t('No se pudieron comprobar las escapadas. Inténtalo de nuevo.'));
-    if (data.market?.season === 'christmas') {
+    if (data.market?.season === 'christmas' && data.market.theme !== 'ski') {
       document.getElementById('escapeHeading').textContent = 'Escapadas de Navidad en España y Europa';
     }
-    if (data.market?.basedOn === 'country') {
+    if (data.market?.theme === 'ski') {
+      document.getElementById('escapeMarket').textContent = 'Sierra Nevada, Baqueira Beret y Andorra';
+    } else if (data.market?.basedOn === 'country') {
       const origin = new Intl.DisplayNames([lang], { type: 'region' }).of(data.market.origin);
       document.getElementById('escapeMarket').textContent = t('Ideas de alojamiento pensadas para viajeros desde {country}.', { country: origin });
     } else if (data.market?.countries?.length) {
@@ -65,6 +79,10 @@ async function discover(scroll = false) {
     status.textContent = data.results.length
       ? t('Muestra de {cities} destinos y {dates} fechas de llegada. Total de alojamiento para 2 adultos; transporte no incluido.', { cities: data.citiesChecked, dates: data.datesChecked })
       : t('No hemos encontrado opciones verificadas en esta muestra. Amplía el presupuesto o cambia las fechas.');
+    if (data.market?.theme === 'ski') status.textContent = data.results.length
+      ? 'Total de alojamiento para dos adultos. Forfait, equipo y transporte se contratan aparte.'
+      : 'Nuitée no devolvió disponibilidad para estas fechas. Consulta los destinos de esquí más abajo.';
+    if (data.market?.theme === 'black-friday' && !data.results.length) status.textContent = 'Nuitée no devolvió descuentos verificables en las fechas consultadas.';
     if (data.sandbox) status.textContent += ' ' + t('Entorno de pruebas: estos precios no son ofertas para reservar.');
     const trips = [];
     for (const offer of data.results) {
@@ -105,7 +123,7 @@ async function discover(scroll = false) {
 }
 form.addEventListener('submit', e => { e.preventDefault(); if (form.reportValidity()) discover(true); });
 // Load after the first paint; never delay the initial page or booking return.
-if (!document.body.dataset.startView && !location.search) {
+if ((!document.body.dataset.startView || activeSeason) && !location.search) {
   if ('requestIdleCallback' in window) requestIdleCallback(() => discover(), { timeout: 1500 });
   else setTimeout(() => discover(), 0);
 } else {

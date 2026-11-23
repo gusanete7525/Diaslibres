@@ -53,7 +53,7 @@ async function load() {
     if (!section.hidden) status.textContent = err.name === 'TimeoutError' ? t('La consulta está tardando. Puedes continuar en Buscar vuelos.') : err.message;
   }
 }
-if (section && !document.body.dataset.startView && !location.search) {
+if (section && (!document.body.dataset.startView || (document.body.dataset.seasonal === 'navidad' && document.body.dataset.seasonalActive === 'true')) && !location.search) {
   if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 2000 });
   else setTimeout(load, 0);
 }

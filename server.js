@@ -12,7 +12,7 @@ import { makeResolver } from './src/resolve.js';
 import { AIRPORTS } from './src/catalog.js';
 import { readFileSync } from 'node:fs';
 import { minify } from 'terser';
-import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, hubPage, HUBS, cityStats, cityKey, cityByName, cityByIata, placeName, cityName, CITIES } from './src/seo.js';
+import { renderPage, sitemap, sitemapIndex, cityFromSlug, routeFromSlug, filterFromSlug, cityPage, routePage, homePage, hubPage, seasonalPage, HUBS, cityStats, cityKey, cityByName, cityByIata, placeName, cityName, CITIES } from './src/seo.js';
 import { LANGS, LANG_CODES, isLang, langOf, trText } from './src/i18n.js';
 import { createSuggester } from './src/suggest.js';
 import { OsmHotels } from './src/osm.js';
@@ -242,6 +242,7 @@ export function createApp({
       sendPage(req, res, routePage(lang, route.o, route.d), lang);
     });
   }
+  for (const campaign of ['navidad', 'black-friday']) app.get('/' + campaign, (req, res) => sendPage(req, res, seasonalPage(campaign), 'es'));
   app.get('/robots.txt', (req, res) => {
     res.type('text/plain').send(`User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${siteUrl(req)}/sitemap.xml\n`);
   });

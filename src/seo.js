@@ -5,6 +5,8 @@
 import { CITIES, ROUTES } from './places.js';
 import { RAIL_TABLE } from './rail-data.js';
 import { LANGS, LANG_CODES, tr, translateHtml } from './i18n.js';
+import { christmasCampaign } from './markets.js';
+import { todayISO } from './availability.js';
 
 const norm = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 export const slug = (x) => norm(x).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -94,7 +96,27 @@ export const routeUrl = (lang, o, d) => `${LANGS[lang].prefix}/${LANGS[lang].fli
 // Páginas generales: /hoteles, /vuelos, /escapadas y /donde-viajar (con su palabra en cada idioma).
 export const HUBS = ['hotels', 'flights', 'escapes', 'whereTo'];
 export const hubUrl = (lang, kind) => `${LANGS[lang].prefix}/${LANGS[lang][kind]}`;
-const urlOf = (lang, key) => (key.type === 'city' ? cityUrl(lang, key.city, key.filter) : key.type === 'route' ? routeUrl(lang, key.o, key.d) : key.type === 'hub' ? hubUrl(lang, key.kind) : homeUrl(lang));
+const urlOf = (lang, key) => (key.type === 'city' ? cityUrl(lang, key.city, key.filter) : key.type === 'route' ? routeUrl(lang, key.o, key.d) : key.type === 'hub' ? hubUrl(lang, key.kind) : key.path || homeUrl(lang));
+
+export function seasonalPage(kind, day = todayISO()) {
+  const blackFriday = kind === 'black-friday';
+  const active = blackFriday ? day >= '2026-11-23' && day <= '2026-11-30' : Boolean(christmasCampaign('es', day, null));
+  const heading = blackFriday ? 'Black Friday de viajes' : 'Viajes de Navidad y escapadas a la nieve';
+  const description = blackFriday
+    ? 'Compara hoteles con descuentos comprobados para dos adultos. Consulta el precio anterior, el precio actual y las fechas de estancia.'
+    : 'Encuentra escapadas de Navidad en España y el extranjero. Compara vuelos y consulta alojamiento en Sierra Nevada, Baqueira Beret y Andorra.';
+  const skiLinks = ['sierra-nevada', 'baqueira-beret', 'andorra'].map(slug => cityFromSlug('es', slug))
+    .filter(Boolean).map(city => [cityUrl('es', city), cityName(city, 'es')]);
+  return {
+    key: { type: 'seasonal', path: blackFriday ? '/black-friday' : '/navidad' },
+    title: `${heading} | DíasLibres`, h1: heading, crumb: blackFriday ? 'Black Friday' : 'Navidad',
+    description, hub: kind, view: 'hotels', image: { path: `/img/${kind}-2026.jpg`, width: 1200, height: 600 },
+    seasonal: { kind, active },
+    html: blackFriday
+      ? `<h2>Cómo comprobamos los descuentos</h2><p>Mostramos el precio anterior y el actual de la misma tarifa cuando el proveedor facilita ambos. El importe se vuelve a comprobar antes de pagar.</p><p><a href="/navidad">Ver viajes de Navidad y escapadas a la nieve</a></p>`
+      : `<h2>Destinos de esquí</h2><img class="ski-illustration" src="/img/esqui-2026.jpg" width="1200" height="600" alt="Ilustración de una estación de esquí en una montaña nevada" loading="lazy" />${links(skiLinks)}<p>Comprueba la ubicación del hotel antes de reservar. Las tarifas de alojamiento no incluyen forfait, alquiler de equipo ni clases. Consulta la apertura de pistas con la estación.</p><h2>Más viajes para estas fechas</h2>${links([['/escapadas','Escapadas en España y el extranjero'],['/vuelos','Comparar vuelos por fecha'],['/black-friday','Black Friday de viajes']])}`,
+  };
+}
 
 // ---------- Datos de cada ciudad (de la lista completa de sus hoteles) ----------
 const brief = (h) => ({ name: h.name, stars: h.stars || null, rating: h.rating || null, reviews: h.reviewCount || 0 });
@@ -361,7 +383,7 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
   const key = page.key || { type: 'home' };
   const url = site + urlOf(lang, key);
   // Versiones en otros idiomas (no para destinos inventados: su nombre no se traduce).
-  const alternates = key.city?.adhoc ? [] : LANG_CODES.map((l) => [l, site + urlOf(l, key)]);
+  const alternates = key.city?.adhoc || key.type === 'seasonal' ? [] : LANG_CODES.map((l) => [l, site + urlOf(l, key)]);
   const ld = [{
     '@context': 'https://schema.org',
     '@type': 'WebSite',
@@ -418,11 +440,31 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
       .map(([l, u]) => `<a href="${esc(u.slice(site.length) || '/')}" hreflang="${l}" lang="${l}"${l === lang ? ' aria-current="true"' : ''}>${esc(LANGS[l].name)}</a>`).join(''))
     .replace('<!--POPULAR-->', popular(lang));
   if (page.h1) out = out.replace(/<h1( data-i18n)?>[\s\S]*?<\/h1>/, `<h1>${esc(page.h1)}</h1>`);
+  if (page.seasonal) {
+    const { kind, active } = page.seasonal;
+    const ski = kind === 'navidad';
+    const label = ski ? 'Ver alojamientos para esquiar' : 'Ver descuentos de hoteles';
+    const navigation = `<nav class="seasonal-actions" aria-label="Viajes de temporada"><a class="btn primary" href="${active ? '#escapeFeatured' : ski ? '#results' : '/hoteles'}">${label}</a><a class="btn ghost" href="${ski ? '/black-friday' : '/navidad'}">${ski ? 'Black Friday' : 'Viajes de Navidad'}</a></nav>`;
+    out = out
+      .replace('<body>', `<body data-seasonal="${kind}"${active ? ' data-seasonal-active="true"' : ''}>`)
+      .replace(/<p class="eyebrow"[^>]*>[^<]*<\/p>/, `<p class="eyebrow">${esc(page.crumb)}</p>`)
+      .replace(/<p class="sub"[^>]*>[^<]*<\/p>/, () => `<p class="sub">${esc(page.description)}</p>${navigation}`)
+      .replace(/<figure class="hero-visual">[\s\S]*?<\/figure>/, () => `<figure class="hero-visual"><img src="${esc(page.image.path)}" width="1200" height="600" alt="" fetchpriority="high" /></figure>`)
+      .replace(/<h2 id="escapeHeading"[^>]*>[^<]*<\/h2>/, `<h2 id="escapeHeading">${label}</h2>`)
+      .replace(/<p id="escapeIntro"[^>]*>[^<]*<\/p>/, `<p id="escapeIntro">${ski
+        ? 'Estancias de dos noches entre el 23 y el 28 de diciembre para dos adultos.'
+        : 'Estancias de dos noches en fechas seleccionadas del 4 al 13 de diciembre para dos adultos.'}</p>`)
+      .replace(/<p id="escapeMarket"[^>]*>[^<]*<\/p>/, '<p id="escapeMarket" class="market-note"></p>');
+    if (!active) out = out.replace('<section id="escapeFeatured"', '<section id="escapeFeatured" hidden');
+  } else if (key.type === 'home' && lang === 'es') {
+    const promos = ['navidad', 'black-friday'].map(kind => seasonalPage(kind)).filter(page => page.seasonal.active);
+    if (promos.length) out = out.replace('<div class="quick-search">', () => `<nav class="seasonal-actions" aria-label="Viajes de temporada">${promos.map(p => `<a class="btn ghost" href="${p.key.path}">${p.seasonal.kind === 'navidad' ? 'Navidad y esquí' : 'Black Friday'}</a>`).join('')}</nav><div class="quick-search">`);
+  }
   if (page.resultsLink) {
     out = out.replace(/<p class="sub"[^>]*>[^<]*<\/p>/, () => `<p class="sub">${esc(page.description)}</p><a class="btn primary" href="#results">${esc(page.resultsLink)}</a>`);
   }
   // data-hub: página general; la web no lanza una búsqueda al abrirla y deja visibles sus enlaces.
-  if (page.view) out = out.replace('<body>', `<body data-start-view="${esc(page.view)}"${page.hub ? ` data-hub="${esc(page.hub)}"` : ''}${page.filters ? ` data-start-filters="${esc(JSON.stringify(page.filters))}"` : ''}>`);
+  if (page.view) out = out.replace(/<body(?=[ >])/, `<body data-start-view="${esc(page.view)}"${page.hub ? ` data-hub="${esc(page.hub)}"` : ''}${page.filters ? ` data-start-filters="${esc(JSON.stringify(page.filters))}"` : ''}`);
   if (page.destination) out = out.replace('<input name="destination" ', `<input name="destination" value="${esc(page.destination)}" `);
   if (page.origin) out = out.replace('<input name="origin" ', `<input name="origin" value="${esc(page.origin)}" `);
   // Texto visible para buscadores (y para quien entra antes de que cargue la web);
@@ -449,6 +491,7 @@ export const SITEMAP_FILTER_MIN = 10;
 export function sitemap(site, lang, statsOf = () => null) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [[homeUrl(lang), 'daily', '1.0'], ...HUBS.map((k) => [hubUrl(lang, k), 'weekly', '0.9'])];
+  if (lang === 'es') urls.push(['/navidad', 'weekly', '0.8'], ['/black-friday', 'weekly', '0.8']);
   for (const c of CITIES) {
     urls.push([cityUrl(lang, c), 'daily', '0.8']);
     const s = statsOf(c);

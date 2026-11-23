@@ -49,12 +49,13 @@ export function makeEscapeSearch(live, { now = () => Date.now(), freshMs = FRESH
         const modest = hotels.filter(h => h.rating >= 7 && h.stars > 0 && h.stars <= 3);
         const pool = modest.length ? modest : hotels.filter(h => h.rating >= 8);
         // Rotate daily through the best few so the home page does not repeat the same two hotels.
-        const selected = rotate((pool.length ? pool : hotels).slice(0, 6), 2, market.day);
+        const selected = market.ski ? hotels.slice(0, 4) : rotate((pool.length ? pool : hotels).slice(0, 6), 2, market.day);
         const offers = await Promise.all(selected.flatMap(hotel => plan.dates.map(async checkIn => {
           try {
             const checkOut = addDays(checkIn, plan.nights);
             const rate = await live.quote({ itemId: hotel.id, checkIn, checkOut, units: 1, adults: 2, children: [], priority: 'background' });
             if (!Number.isFinite(rate.total) || rate.total <= 0) return null;
+            if (market.discountOnly && !(rate.promotion?.percent > 0 && rate.promotion.originalTotal > rate.total)) return null;
             const taxes = rate.payAtHotel || [];
             const knownTotal = Math.round((rate.total + taxes.filter(t => t.currency === 'EUR').reduce((s, t) => s + t.amount, 0)) * 100) / 100;
             // Unknown-currency extras cannot honestly be compared to a euro budget.
@@ -78,10 +79,21 @@ export function makeEscapeSearch(live, { now = () => Date.now(), freshMs = FRESH
   }
   function selection(q, lang, country) {
     const featured = q.featured === '1';
-    const market = promotionMarket(lang, undefined, country, featured);
+    const day = todayISO();
+    if (q.theme === 'black-friday') {
+      const base = promotionMarket(lang, day, country);
+      const plan = escapePlan(q, day);
+      const market = { ...base, id: base.id + ':black-friday', discountOnly: true };
+      const context = { ...marketInfo(lang, day, country), theme: 'black-friday' };
+      return { market, plan, context };
+    }
+    const marketCountry = q.theme === 'ski' && featured && lang === 'es' ? 'ES' : country;
+    const base = promotionMarket(lang, day, marketCountry, featured);
+    const ski = q.theme === 'ski' && base.christmas;
+    const market = ski ? { ...base, id: base.id + ':ski', hotels: ['Sierra Nevada, ES', 'Baqueira Beret, ES', 'Andorra, AD'], ski: true } : base;
     const plan = escapePlan(market.christmas ? { from: market.christmas.from, to: market.christmas.to } : q, market.day);
-    const context = marketInfo(market.language, market.day, country, featured);
-    return { market, plan, context };
+    const context = marketInfo(market.language, market.day, marketCountry, featured);
+    return { market, plan, context: ski ? { ...context, countries: ['ES', 'AD'], theme: 'ski' } : context };
   }
   async function search(q = {}, lang = 'es', country = null) {
     const { market, plan, context } = selection(q, lang, country);
