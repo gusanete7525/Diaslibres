@@ -146,11 +146,10 @@ function homePromotionCards(blackFriday) {
   const cards = [
     ['/navidad#europa-en-navidad', 'navidad-colmar.jpg', 'Europa en Navidad'],
     ['/navidad#escapeFeatured', 'esqui-2026.jpg', 'Escapadas de esquí'],
-    ...(blackFriday ? [['/black-friday', 'black-friday-2026.jpg', 'Black Friday']] : []),
   ];
   return `<nav class="home-promo-cards" aria-label="Viajes de temporada">${cards.map(([href, image, label]) =>
     `<a class="home-promo-card" href="${esc(href)}"><img src="/img/${esc(image)}" width="1200" height="600" alt="" /><span>${esc(label)}</span></a>`
-  ).join('')}</nav>`;
+  ).join('')}${blackFriday ? '<a class="home-promo-card home-promo-card--black-friday" href="/black-friday"><strong>Black<br /> Friday</strong><span>Ver promociones</span></a>' : ''}</nav>`;
 }
 
 // ---------- Datos de cada ciudad (de la lista completa de sus hoteles) ----------

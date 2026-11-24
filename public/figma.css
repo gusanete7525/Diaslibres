@@ -99,6 +99,9 @@ h1,h2,h3,.logo { font-family:inherit; }
 .home-promo-card { display:grid; grid-template-rows:clamp(58px,9vw,112px) 1fr; overflow:hidden; min-width:0; border-radius:12px; background:#123d53; color:#fff; text-decoration:none; }
 .home-promo-card img { width:100%; height:100%; object-fit:cover; display:block; }
 .home-promo-card span { display:flex; align-items:center; padding:8px 10px; font-size:clamp(12px,1.25vw,15px); line-height:1.2; font-weight:700; }
+.home-promo-card--black-friday { background:#16131b; }
+.home-promo-card--black-friday strong { display:grid; align-content:center; justify-items:center; padding:4px; background:#21152b; color:#ffe169; font-size:clamp(14px,3vw,36px); font-weight:900; line-height:.92; text-align:center; text-transform:uppercase; }
+.home-promo-card--black-friday span { color:#fff; }
 .home-promo-card:hover span { text-decoration:underline; }
 .home-promo-card:focus-visible { outline:3px solid var(--brand); outline-offset:3px; }
 [data-seasonal="navidad"] .hero-copy .eyebrow { color:var(--brand); }
