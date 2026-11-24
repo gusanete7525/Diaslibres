@@ -504,6 +504,12 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
         .replace('<div class="quick-search">', () => `${homePromotionCards(page.homeCampaign.blackFriday)}<div class="quick-search">`);
     }
   }
+  if (page.homeCampaign) {
+    out = out
+      .replace('<body>', '<body class="home-page">')
+      .replace(/(<figure class="hero-visual">[\s\S]*?<\/figure>)([\s\S]*?)(<section id="escapeFeatured"[\s\S]*?<\/section>)/,
+        (_, visual, between, escapes) => `<div class="home-first-look">${escapes}${visual}</div>${between}`);
+  }
   if (page.resultsLink) {
     out = out.replace(/<p class="sub"[^>]*>[^<]*<\/p>/, () => `<p class="sub">${esc(page.description)}</p><a class="btn primary" href="#results">${esc(page.resultsLink)}</a>`);
   }

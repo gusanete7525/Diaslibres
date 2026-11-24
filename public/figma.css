@@ -137,3 +137,39 @@ h1,h2,h3,.logo { font-family:inherit; }
 .quick-form .q-wide { grid-column:1/-1; }
 .escape-form[hidden] { display:none; }
 @media(max-width:700px) { .search-modes { display:grid; grid-template-columns:repeat(3,1fr); } .search-modes button { padding:6px 6px; font-size:12.5px; line-height:1.2; border-radius:12px; } }
+
+/* Home: date ranges and prices share the first view with the search. */
+.home-page .hero-intro { padding-block:clamp(20px,3vw,40px); }
+.home-page .hero .eyebrow { display:none; }
+.home-page .hero h1 { margin-bottom:10px; }
+.home-page .hero .sub { margin-bottom:14px; }
+.home-first-look { min-width:0; width:100%; }
+.home-first-look .escape-featured { padding:0; }
+.home-first-look .escape-featured h2 { margin:0 0 10px; font-size:clamp(19px,2vw,26px); }
+.home-first-look #escapeIntro, .home-first-look #escapeMarket { display:none; }
+.home-first-look #escapeStatus { font-size:13px; margin:0 0 10px; }
+.home-first-look .escape-list { grid-template-columns:minmax(0,1fr); gap:8px; }
+.home-first-look .escape-card { padding:12px; border-radius:12px; }
+.home-first-look .escape-summary { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:2px 12px; }
+.home-first-look .escape-summary h3 { margin:0; font-size:17px; overflow-wrap:anywhere; }
+.home-first-look .escape-dates { grid-column:1; margin:0; font-size:14px; color:var(--text-2); }
+.home-first-look .escape-total { grid-column:2; grid-row:1 / span 2; margin:0; white-space:nowrap; font-size:clamp(19px,2.2vw,26px); }
+.home-first-look .escape-card-details { margin-top:5px; }
+.home-first-look .escape-card-details summary { min-height:24px; color:var(--text-2); font-size:13px; cursor:pointer; }
+.home-first-look .escape-card-details > p, .home-first-look .escape-card > p { margin:6px 0 0; font-size:14px; }
+.home-first-look .escape-card small { margin:3px 0; font-size:12px; }
+.home-first-look .escape-card a { margin-top:8px; }
+.home-first-look .hero-visual { margin-top:16px; }
+.home-first-look .hero-visual > img { height:150px; }
+.home-first-look .hero-visual figcaption, .home-page .travel-benefits { display:none; }
+.home-page .home-promo-card { grid-template-rows:clamp(42px,5vw,72px) 1fr; }
+.home-page .home-promo-cards { margin-bottom:12px; }
+@media(max-width:760px) {
+  .home-first-look { display:contents; }
+  .home-first-look .escape-featured { order:2; width:100%; margin:0 0 16px; }
+  .home-page .quick-search { order:3; width:100%; }
+  .home-page .home-promo-cards { order:4; margin-top:16px; }
+  .home-first-look .hero-visual { order:5; }
+  .home-page .escape-ai { order:6; width:100%; }
+  .home-page .manual-links { order:7; }
+}

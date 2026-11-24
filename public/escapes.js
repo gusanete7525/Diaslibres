@@ -4,6 +4,7 @@ const t = (s, vars = {}) => Object.entries(vars).reduce((a, [k, v]) => a.replace
 const form = document.getElementById('escapeForm');
 const status = document.getElementById('escapeStatus');
 const list = document.getElementById('escapeList');
+const compactHome = document.body.classList.contains('home-page');
 const seasonal = document.body.dataset.seasonal;
 const activeSeason = document.body.dataset.seasonalActive === 'true';
 const money = n => new Intl.NumberFormat(lang, { style: 'currency', currency: 'EUR' }).format(n);
@@ -34,6 +35,7 @@ function element(tag, text, parent, className) {
 let requestId = 0;
 async function discover(scroll = false) {
   const id = ++requestId;
+  const preview = compactHome && !scroll;
   document.getElementById('escapeFeatured').hidden = false;
   const button = form.querySelector('button[type="submit"]');
   // Background inspiration must leave the main search available.
@@ -87,26 +89,29 @@ async function discover(scroll = false) {
     const trips = [];
     for (const offer of data.results) {
       const card = element('article', '', list, 'escape-card');
-      if (offer.photo?.startsWith('https://')) {
+      if (!preview && offer.photo?.startsWith('https://')) {
         const image = document.createElement('img');
         image.src = offer.photo; image.alt = offer.name; image.loading = 'lazy'; image.width = 400; image.height = 160;
         card.append(image);
       }
-      element('h3', offer.city, card);
-      element('p', offer.name, card);
-      element('p', `${date(offer.checkIn)} – ${date(offer.checkOut)} · ${data.nights} ${t('noches')}`, card);
-      element('p', money(offer.total), card, 'escape-total');
-      element('small', t('Total a pagar online · 2 adultos · 1 habitación'), card);
+      const summary = element('div', '', card, 'escape-summary');
+      element('h3', offer.city, summary);
+      element('p', `${date(offer.checkIn)} – ${date(offer.checkOut)} · ${data.nights} ${t('noches')}`, summary, 'escape-dates');
+      element('p', money(offer.total), summary, 'escape-total');
+      const details = preview ? element('details', '', card, 'escape-card-details') : card;
+      if (preview) element('summary', t('Ver detalles del hotel'), details);
+      element('p', offer.name, details);
+      element('small', t('Total a pagar online · 2 adultos · 1 habitación'), details);
       if (offer.promotion?.percent > 0 && offer.promotion.originalTotal > offer.total) {
-        element('small', t('Descuento verificado: {percent}% · antes {price}', { percent: offer.promotion.percent, price: money(offer.promotion.originalTotal) }), card, 'market-discount');
+        element('small', t('Descuento verificado: {percent}% · antes {price}', { percent: offer.promotion.percent, price: money(offer.promotion.originalTotal) }), details, 'market-discount');
       }
-      if (offer.roomName) element('small', offer.roomName, card);
-      for (const tax of offer.payAtHotel) element('small', `${t('A pagar en el hotel')}: ${tax.amount} ${tax.currency} · ${tax.description}`, card);
-      if (offer.knownTotal > offer.total) element('small', t('Total con tasas conocidas: {price}', { price: money(offer.knownTotal) }), card);
-      element('small', t('Comprobado a las {time}. Precio sujeto a disponibilidad; se vuelve a comprobar antes de pagar.', { time: new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(offer.checkedAt)) }), card);
+      if (offer.roomName) element('small', offer.roomName, details);
+      for (const tax of offer.payAtHotel) element('small', `${t('A pagar en el hotel')}: ${tax.amount} ${tax.currency} · ${tax.description}`, details);
+      if (offer.knownTotal > offer.total) element('small', t('Total con tasas conocidas: {price}', { price: money(offer.knownTotal) }), details);
+      element('small', t('Comprobado a las {time}. Precio sujeto a disponibilidad; se vuelve a comprobar antes de pagar.', { time: new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(offer.checkedAt)) }), details);
       const url = new URL(location.pathname, location.origin);
       url.search = new URLSearchParams({ escape: offer.id, destination: offer.city, checkIn: offer.checkIn, nights: data.nights });
-      const link = element('a', t('Ver disponibilidad y precio actual'), card, 'btn primary');
+      const link = element('a', t('Ver disponibilidad y precio actual'), details, 'btn primary');
       link.href = url.href;
       // Only verified production offers matching the visible cards get structured prices.
       if (!data.sandbox) trips.push({ '@type': 'TouristTrip', name: `${offer.city} · ${data.days} ${t('Días')}`, touristType: t('2 adultos'), itinerary: { '@type': 'Place', name: offer.city }, offers: { '@type': 'Offer', price: offer.total, priceCurrency: 'EUR', url: url.href, description: t('Total a pagar online · 2 adultos · 1 habitación'), validFrom: offer.checkedAt } });
