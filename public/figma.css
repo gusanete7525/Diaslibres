@@ -215,3 +215,26 @@ h1,h2,h3,.logo { font-family:inherit; }
   padding-inline-start:12px;
 }
 [data-seasonal="navidad"] .christmas-city { border-block-start:3px solid var(--christmas-green); }
+
+/* Keep the snow inside the decorative holiday photo. */
+:is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual { position:relative; }
+:is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after {
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 16px 22px, #fff 0 1.4px, transparent 2.4px) 0 0 / 97px 97px,
+    radial-gradient(circle at 44px 36px, #fff 0 2px, transparent 3px) 0 0 / 173px 173px,
+    radial-gradient(circle at 25px 61px, #fff 0 1px, transparent 2px) 0 0 / 131px 131px;
+  opacity:.74;
+}
+@media(prefers-reduced-motion:no-preference) {
+  :is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after {
+    animation:holiday-snow 18s linear 1;
+  }
+}
+@keyframes holiday-snow {
+  from { background-position:0 -97px, 0 -173px, 0 -131px; }
+  to { background-position:0 0, 0 0, 0 0; }
+}
