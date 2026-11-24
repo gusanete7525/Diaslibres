@@ -216,25 +216,32 @@ h1,h2,h3,.logo { font-family:inherit; }
 }
 [data-seasonal="navidad"] .christmas-city { border-block-start:3px solid var(--christmas-green); }
 
-/* Keep the snow inside the decorative holiday photo. */
-:is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual { position:relative; }
-:is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after {
+/* Snow stays within the holiday images, above the promotional label. */
+:is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual,
+.christmas-theme .home-promo-card:first-child { position:relative; }
+:is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after,
+.christmas-theme .home-promo-card:first-child::after {
   content:"";
   position:absolute;
   inset:0;
   pointer-events:none;
   background:
-    radial-gradient(circle at 16px 22px, #fff 0 1.4px, transparent 2.4px) 0 0 / 97px 97px,
-    radial-gradient(circle at 44px 36px, #fff 0 2px, transparent 3px) 0 0 / 173px 173px,
-    radial-gradient(circle at 25px 61px, #fff 0 1px, transparent 2px) 0 0 / 131px 131px;
-  opacity:.74;
+    radial-gradient(circle at 16px 22px, #fff 0 2.4px, #142c3a70 3px, transparent 4.2px) 0 0 / 81px 81px,
+    radial-gradient(circle at 44px 36px, #fff 0 3.2px, #142c3a70 4px, transparent 5.2px) 0 0 / 137px 137px,
+    radial-gradient(circle at 25px 61px, #fff 0 1.6px, #142c3a70 2.3px, transparent 3.2px) 0 0 / 107px 107px;
+  opacity:.93;
+}
+.christmas-theme .home-promo-card:first-child::after {
+  bottom:auto;
+  height:clamp(42px,5vw,72px);
 }
 @media(prefers-reduced-motion:no-preference) {
-  :is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after {
+  :is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after,
+  .christmas-theme .home-promo-card:first-child::after {
     animation:holiday-snow 18s linear 1;
   }
 }
 @keyframes holiday-snow {
-  from { background-position:0 -97px, 0 -173px, 0 -131px; }
+  from { background-position:0 -81px, 0 -137px, 0 -107px; }
   to { background-position:0 0, 0 0, 0 0; }
 }
