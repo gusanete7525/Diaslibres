@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" media="print" onload="this.media='all'" />
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&amp;display=swap" /></noscript>
   <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="/figma.css?v=christmas-snow-2" />
+  <link rel="stylesheet" href="/figma.css?v=trip-theme" />
 </head>
 <body>
   <header class="topbar">
@@ -67,6 +67,7 @@
           <label><span data-i18n>Días</span><input name="days" type="number" min="2" max="15" value="3" required /></label>
           <label><span data-i18n>Mes aproximado</span><input name="month" type="month" required /></label>
           <label><span data-i18n>Presupuesto máximo · €</span><input name="budget" type="number" min="1" max="50000" step="1" placeholder="Sin límite" /></label>
+          <label class="escape-theme"><span data-i18n>Tipo de viaje</span><select name="tripType"><option value="" data-i18n>Cualquier temática</option><option value="beach" data-i18n>Playa y costa</option><option value="nature" data-i18n>Montaña y naturaleza</option><option value="culture" data-i18n>Ciudades y cultura</option><option value="ski" data-i18n>Esquí y nieve</option></select></label>
           <details class="escape-range"><summary data-i18n>Prefiero un rango flexible</summary><div><label><span data-i18n>Desde</span><input name="from" type="date" /></label><label><span data-i18n>Hasta</span><input name="to" type="date" /></label></div></details>
           <p class="escape-scope" data-i18n>Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.</p>
           <button type="submit" class="btn primary" data-i18n>Descubrir dónde puedo ir</button>

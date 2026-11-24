@@ -1,11 +1,21 @@
 import { promotionMarket, marketInfo, rotate } from './markets.js';
 import { todayISO, addDays, isISODate, daysBetween } from './availability.js';
 
+// Accommodation destinations grouped by trip type, including Spain and other countries.
+const TRIP_DESTINATIONS = {
+  beach: ['Málaga, ES', 'Costa Adeje, ES', 'Cádiz, ES', 'Albufeira, PT', 'Faro, PT', 'Nice, FR'],
+  nature: ['Cangas de Onís, ES', 'Ronda, ES', 'Benasque, ES', 'Annecy, FR', 'Interlaken, CH', 'Bled, SI'],
+  culture: ['Granada, ES', 'Córdoba, ES', 'Toledo, ES', 'Florence, IT', 'Vienna, AT', 'Prague, CZ'],
+  ski: ['Sierra Nevada, ES', 'Baqueira Beret, ES', 'Formigal, ES', 'Andorra, AD', 'Chamonix, FR', 'Innsbruck, AT'],
+};
+
 // Bounded discovery: sample three arrival dates, never claim an exhaustive cheapest fare.
 export function escapePlan(q = {}, today = todayISO()) {
   const days = Number(q.days ?? 3);
   const budget = q.budget === undefined || q.budget === '' ? null : Number(q.budget);
   const kind = q.kind || 'any';
+  const tripType = q.tripType ?? '';
+  if (tripType !== '' && (typeof tripType !== 'string' || !Object.hasOwn(TRIP_DESTINATIONS, tripType))) throw new Error('Temática de viaje no válida.');
   if (!Number.isInteger(days) || days < 2 || days > 15 || (kind === 'weekend' && days !== 3)) throw new Error('Duración no válida.');
   if (!['any', 'weekend', 'bridge', 'week'].includes(kind)) throw new Error('Tipo de hueco no válido.');
   if (budget !== null && (!Number.isFinite(budget) || budget <= 0 || budget > 50000)) throw new Error('Presupuesto no válido.');
@@ -80,6 +90,14 @@ export function makeEscapeSearch(live, { now = () => Date.now(), freshMs = FRESH
   function selection(q, lang, country) {
     const featured = q.featured === '1';
     const day = todayISO();
+    if (!featured && !q.theme && typeof q.tripType === 'string' && Object.hasOwn(TRIP_DESTINATIONS, q.tripType)) {
+      const base = promotionMarket(lang, day, country);
+      const destinations = TRIP_DESTINATIONS[q.tripType];
+      const hotels = [...rotate(destinations.slice(0, 3), 2, day), ...rotate(destinations.slice(3), 2, day)];
+      const plan = escapePlan(q, day);
+      const market = { ...base, id: base.id + ':trip:' + q.tripType, hotels, ski: q.tripType === 'ski' };
+      return { market, plan, context: { tripType: q.tripType } };
+    }
     if (q.theme === 'black-friday') {
       const base = promotionMarket(lang, day, country);
       const plan = escapePlan(q, day);

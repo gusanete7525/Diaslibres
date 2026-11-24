@@ -1,4 +1,9 @@
 export default {
+ "Tipo de viaje": "Tipo de viagem",
+ "Cualquier temática": "Qualquer tipo",
+ "Playa y costa": "Praia e costa",
+ "Ciudades y cultura": "Cidades e cultura",
+ "Esquí y nieve": "Esqui e neve",
  "Revisar y pagar": "Rever e pagar",
  "Revisa tu reserva": "Reveja a sua reserva",
  "Editar datos": "Editar dados",

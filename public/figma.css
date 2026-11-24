@@ -86,7 +86,7 @@ h1,h2,h3,.logo { font-family:inherit; }
 .escape-form { display:grid; grid-template-columns:2fr 1fr; gap:14px; padding:20px; border:1px solid var(--border); border-radius:16px; background:var(--surface); }
 .escape-form label { display:flex; flex-direction:column; gap:6px; min-width:0; font-size:14px; font-weight:600; }
 .escape-form input,.escape-form select { width:100%; box-sizing:border-box; min-height:46px; padding:10px; border:1px solid var(--border); border-radius:9px; color:var(--text); background:var(--surface); font:inherit; }
-.escape-form .escape-range,.escape-form .escape-scope,.escape-form > button { grid-column:1/-1; }
+.escape-form .escape-theme,.escape-form .escape-range,.escape-form .escape-scope,.escape-form > button { grid-column:1/-1; }
 .escape-range summary { cursor:pointer; color:var(--brand); font-size:14px; padding:8px 0; }
 .escape-range > div { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:8px; }
 .escape-scope { margin:0; font-size:12px; line-height:1.5; color:var(--text-2); }

@@ -44,9 +44,13 @@ async function discover(scroll = false) {
   document.getElementById('escapeSchema')?.remove();
   status.textContent = t('Comprobando precios de alojamiento…');
   const heading = document.getElementById('escapeHeading');
+  const marketNote = document.getElementById('escapeMarket');
+  const tripType = form.elements.tripType;
+  const selectedTheme = scroll && tripType?.value ? tripType.selectedOptions[0].textContent : '';
+  marketNote.hidden = Boolean(selectedTheme);
   heading.textContent = !scroll && seasonal === 'navidad' ? 'Alojamiento para esquiar en Navidad'
     : !scroll && seasonal === 'black-friday' ? 'Hoteles con descuento comprobado'
-    : t('Escapadas de {n} días', { n: form.elements.days.value });
+    : [t('Escapadas de {n} días', { n: form.elements.days.value }), selectedTheme].filter(Boolean).join(' · ');
   if (scroll) document.getElementById('escapeFeatured').scrollIntoView({ behavior: 'smooth', block: 'start' });
   const query = scroll ? new URLSearchParams(new FormData(form)) : new URLSearchParams({ featured: '1' });
   if (!scroll && seasonal === 'navidad') query.set('theme', 'ski');
@@ -64,7 +68,9 @@ async function discover(scroll = false) {
     if (data.market?.season === 'christmas' && data.market.theme !== 'ski') {
       document.getElementById('escapeHeading').textContent = 'Escapadas de Navidad en España y Europa';
     }
-    if (data.market?.theme === 'ski') {
+    if (data.market?.tripType) {
+      marketNote.hidden = true;
+    } else if (data.market?.theme === 'ski') {
       document.getElementById('escapeMarket').textContent = 'Sierra Nevada, Baqueira Beret y Andorra';
     } else if (data.market?.basedOn === 'country') {
       const origin = new Intl.DisplayNames([lang], { type: 'region' }).of(data.market.origin);

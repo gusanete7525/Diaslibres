@@ -1,4 +1,9 @@
 export default {
+ "Tipo de viaje": "Type reis",
+ "Cualquier temática": "Elk type reis",
+ "Playa y costa": "Strand en kust",
+ "Ciudades y cultura": "Steden en cultuur",
+ "Esquí y nieve": "Skiën en sneeuw",
  "Revisar y pagar": "Controleren en betalen",
  "Revisa tu reserva": "Controleer je boeking",
  "Editar datos": "Gegevens wijzigen",
