@@ -105,12 +105,14 @@ export function seasonalPage(kind, day = todayISO()) {
   const heading = blackFriday ? 'Black Friday de viajes' : 'Viajes de Navidad y escapadas a la nieve';
   const description = blackFriday
     ? 'Compara hoteles con descuentos comprobados para dos adultos. Consulta el precio anterior, el precio actual y las fechas de estancia.'
-    : 'Encuentra escapadas de Navidad en España y el extranjero. Compara vuelos y consulta alojamiento en Sierra Nevada, Baqueira Beret y Andorra.';
+    : active
+      ? 'Compara vuelos y hoteles para Navidad 2026. Explora los mercadillos de Colmar, Viena o Praga, viajes a Laponia y escapadas de esquí.'
+      : 'Encuentra escapadas de Navidad en España y el extranjero. Compara vuelos y consulta alojamiento en Sierra Nevada, Baqueira Beret y Andorra.';
   const skiLinks = ['sierra-nevada', 'baqueira-beret', 'andorra'].map(slug => cityFromSlug('es', slug))
     .filter(Boolean).map(city => [cityUrl('es', city), cityName(city, 'es')]);
   return {
     key: { type: 'seasonal', path: blackFriday ? '/black-friday' : '/navidad' },
-    title: `${heading} | DíasLibres`, h1: heading, crumb: blackFriday ? 'Black Friday' : 'Navidad',
+    title: !blackFriday && active ? 'Viajes en Navidad 2026: mercadillos, vuelos y esquí | DíasLibres' : `${heading} | DíasLibres`, h1: heading, crumb: blackFriday ? 'Black Friday' : 'Navidad',
     description, hub: kind, view: 'hotels', image: { path: `/img/${kind}-2026.jpg`, width: 1200, height: 600 },
     seasonal: { kind, active, guide: blackFriday ? '' : christmasCityGuide(day) },
     html: blackFriday
@@ -210,21 +212,67 @@ function faq(lang, name, s) {
   return items;
 }
 
-const HOTEL_SEARCH_COPY_EN = {
-  WAW: {
-    piscina: {
-      title: 'Warsaw Hotels with a Pool | Compare Nightly Rates',
-      description: 'Find Warsaw hotels with a pool, compare nightly rates and check which dates are available. Check the hotel details for pool type and opening hours before booking.',
+const HOTEL_SEARCH_COPY = {
+  en: {
+    warsaw: {
+      piscina: {
+        title: 'Warsaw Hotels with a Pool | Compare Nightly Rates',
+        description: 'Find Warsaw hotels with a pool, compare nightly rates and check which dates are available. Check the hotel details for pool type and opening hours before booking.',
+      },
+      parking: {
+        title: 'Warsaw Hotels with Parking | Compare Nightly Rates',
+        description: 'Find Warsaw hotels with parking and compare nightly rates by date. Check the hotel’s parking fees and reservation requirements before you book.',
+      },
     },
-    parking: {
-      title: 'Warsaw Hotels with Parking | Compare Nightly Rates',
-      description: 'Find Warsaw hotels with parking and compare nightly rates by date. Check the hotel’s parking fees and reservation requirements before you book.',
+    helsinki: {
+      spa: {
+        title: 'Helsinki Hotels with a Spa | Compare Nightly Rates',
+        description: 'Find Helsinki hotels with a spa and compare nightly rates and available dates. Check which spa facilities are included in your room rate before booking.',
+      },
+    },
+    lima: {
+      parking: {
+        title: 'Lima Hotels with Parking | Compare by Date',
+        description: 'Compare hotels with parking in Lima by travel date. Check nightly rates and availability, and ask the hotel whether parking costs extra or requires a reservation.',
+      },
+    },
+    shanghai: {
+      familias: {
+        title: 'Family-Friendly Hotels in Shanghai | Compare Rates',
+        description: 'Find Shanghai hotels for a family trip and compare rates by night. Enter your dates and the ages of your children to check room options.',
+      },
+      '5-estrellas': {
+        title: '5-Star Hotels in Shanghai | Compare Nightly Rates',
+        description: 'Compare five-star hotels in Shanghai by date. Check nightly rates, room availability and guest ratings before choosing where to stay.',
+      },
+    },
+    cyprus: {
+      'todo-incluido': {
+        title: 'All-Inclusive Hotels in Cyprus | Compare by Date',
+        description: 'Find all-inclusive hotels in Cyprus and compare rates for your travel dates. Check the meals and drinks included in each room rate before booking.',
+      },
+    },
+    'costa-adeje': {
+      'todo-incluido': {
+        title: 'All-Inclusive Hotels in Costa Adeje, Tenerife',
+        description: 'Compare all-inclusive hotels in Costa Adeje, Tenerife, by date. Check available rooms, nightly rates and what the meal plan includes.',
+      },
     },
   },
-  HEL: {
-    spa: {
-      title: 'Helsinki Hotels with a Spa | Compare Nightly Rates',
-      description: 'Find Helsinki hotels with a spa and compare nightly rates and available dates. Check which spa facilities are included in your room rate before booking.',
+  es: {
+    benidorm: {
+      'todo-incluido': {
+        title: 'Hoteles todo incluido en Benidorm | Precios por fecha',
+        description: 'Compara hoteles todo incluido en Benidorm por fechas. Consulta disponibilidad y precio por noche, y revisa qué comidas y bebidas incluye cada tarifa.',
+      },
+    },
+  },
+  de: {
+    kreta: {
+      'todo-incluido': {
+        title: 'All-inclusive-Hotels auf Kreta | Preise vergleichen',
+        description: 'Vergleiche All-inclusive-Hotels auf Kreta für deine Reisedaten. Prüfe verfügbare Zimmer, Preise pro Nacht und welche Mahlzeiten und Getränke enthalten sind.',
+      },
     },
   },
 };
@@ -235,7 +283,7 @@ export function cityPage(lang, city, filter, stats) {
   const t = (k, v = {}) => tr(lang, k, { city: name, ...v });
   const fTitle = filter ? t(filter.title) : null;
   const fs = filter && stats?.filters?.[filter.id];
-  const searchCopy = lang === 'en' && filter ? HOTEL_SEARCH_COPY_EN[city.iata]?.[filter.id] : undefined;
+  const searchCopy = filter ? HOTEL_SEARCH_COPY[lang]?.[slug(name)]?.[filter.id] : undefined;
   const intro = searchCopy?.description ?? (filter ? t('{title}: compara el precio de cada noche de los próximos 30 días y mira qué días están libres.', { title: fTitle }) : t('Todos los hoteles de {city} con su calendario de disponibilidad y el precio de cada noche de los próximos 30 días.'));
   const parts = [`<p>${esc(intro)}</p>`];
   let faqs = [];
@@ -268,7 +316,7 @@ export function cityPage(lang, city, filter, stats) {
   const ld = faqs.length ? [{ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] : [];
   return {
     key: { type: 'city', city, filter },
-    resultsLink: searchCopy && 'See hotels and prices',
+    resultsLink: searchCopy && ({ en: 'See hotels and prices', es: 'Ver hoteles y precios', de: 'Hotels und Preise ansehen' })[lang],
     title: searchCopy ? `${searchCopy.title} | DíasLibres` : filter ? `${fTitle} · ${t('Precios y disponibilidad')} | DíasLibres` : t('Hoteles en {city} · Precios por día y disponibilidad | DíasLibres'),
     description: searchCopy?.description ?? (filter ? t('{title}: compara precios de cada noche, mira qué días están libres y reserva con pago seguro.', { title: fTitle }) : t('Hoteles en {city} con calendario de días libres y precio de cada noche. Compara, elige las fechas más baratas y reserva con pago seguro.')),
     h1: filter ? fTitle : t('Hoteles en {city}: mira qué días están libres y cuándo es más barato'),
@@ -369,6 +417,9 @@ export function hubPage(lang, kind) {
       const select = (codes) => codes.map((code) => CITIES.find((city) => city.iata === code)).filter(Boolean);
       parts.push(section('Escapadas en España', cityLinks(select(['MAD', 'VLC', 'SVQ', 'GRX']))));
       parts.push(section('Escapadas al extranjero', cityLinks(select(['LIS', 'OPO', 'CDG', 'FCO', 'LHR', 'RAK']))));
+      if (christmasCampaign('es', todayISO(), null)) {
+        parts.push('<p><a href="/navidad">Viajes en Navidad 2026: mercadillos, vuelos y escapadas de esquí</a></p>');
+      }
       parts.push(`<p>Si aún no has elegido cómo llegar, <a href="${hubUrl(lang, 'flights')}">compara vuelos por fecha</a>.</p>`);
     }
     const sea = es.filter((c) => c.type === 'beach' || c.type === 'island');
