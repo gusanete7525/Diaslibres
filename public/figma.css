@@ -218,9 +218,9 @@ h1,h2,h3,.logo { font-family:inherit; }
 
 /* Snow stays within the holiday images, above the promotional label. */
 :is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual,
-.christmas-theme .home-promo-card:first-child { position:relative; }
+.christmas-theme .home-promo-card { position:relative; }
 :is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after,
-.christmas-theme .home-promo-card:first-child::after {
+.christmas-theme .home-promo-card::after {
   content:"";
   position:absolute;
   inset:0;
@@ -231,17 +231,35 @@ h1,h2,h3,.logo { font-family:inherit; }
     radial-gradient(circle at 25px 61px, #fff 0 1.6px, #142c3a70 2.3px, transparent 3.2px) 0 0 / 107px 107px;
   opacity:.93;
 }
-.christmas-theme .home-promo-card:first-child::after {
+.christmas-theme .home-promo-card::after {
   bottom:auto;
   height:clamp(42px,5vw,72px);
 }
 @media(prefers-reduced-motion:no-preference) {
   :is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual::after,
-  .christmas-theme .home-promo-card:first-child::after {
+  .christmas-theme .home-promo-card::after {
     animation:holiday-snow 18s linear 1;
   }
 }
 @keyframes holiday-snow {
   from { background-position:0 -81px, 0 -137px, 0 -107px; }
   to { background-position:0 0, 0 0, 0 0; }
+}
+
+/* A scalloped snowbank marks the edge of each poster image. */
+.christmas-theme .home-promo-card::before {
+  content:"";
+  position:absolute;
+  z-index:1;
+  inset:calc(clamp(42px,5vw,72px) - 7px) 0 auto;
+  height:8px;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse at 8px 8px, #fff 0 7px, transparent 8px) repeat-x 0 0 / 23px 8px,
+    radial-gradient(ellipse at 10px 9px, #e4f4ff 0 7px, transparent 8px) repeat-x 7px 0 / 31px 8px;
+}
+.christmas-theme .home-promo-card--black-friday strong {
+  position:relative;
+  z-index:1;
+  background:transparent;
 }
