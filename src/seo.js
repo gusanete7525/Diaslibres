@@ -142,6 +142,17 @@ function christmasCityGuide(day) {
   </section>`;
 }
 
+function homePromotionCards(blackFriday) {
+  const cards = [
+    ['/navidad#europa-en-navidad', 'navidad-colmar.jpg', 'Europa en Navidad'],
+    ['/navidad#escapeFeatured', 'esqui-2026.jpg', 'Escapadas de esquí'],
+    ...(blackFriday ? [['/black-friday', 'black-friday-2026.jpg', 'Black Friday']] : []),
+  ];
+  return `<nav class="home-promo-cards" aria-label="Viajes de temporada">${cards.map(([href, image, label]) =>
+    `<a class="home-promo-card" href="${esc(href)}"><img src="/img/${esc(image)}" width="1200" height="600" alt="" /><span>${esc(label)}</span></a>`
+  ).join('')}</nav>`;
+}
+
 // ---------- Datos de cada ciudad (de la lista completa de sus hoteles) ----------
 const brief = (h) => ({ name: h.name, stars: h.stars || null, rating: h.rating || null, reviews: h.reviewCount || 0 });
 const best = (list, n) => [...list].sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviewCount || 0) - (a.reviewCount || 0))
@@ -491,7 +502,7 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
       out = out
         .replace(/<h1>[\s\S]*?<\/h1>/, '<h1>Viajes de Navidad y escapadas a la nieve</h1>')
         .replace(/<p class="sub"[^>]*>[^<]*<\/p>/, '<p class="sub">Compara hoteles y vuelos para estas fiestas, en España y en el extranjero.</p>')
-        .replace('<div class="quick-search">', () => `<nav class="seasonal-actions home-seasonal-actions" aria-label="Viajes de temporada"><a class="btn primary" href="/navidad#europa-en-navidad">Europa en Navidad</a><a class="btn ghost" href="/navidad#escapeFeatured">Alojamientos de esquí</a>${page.homeCampaign.blackFriday ? '<a class="btn ghost" href="/black-friday">Black Friday</a>' : ''}</nav><div class="quick-search">`);
+        .replace('<div class="quick-search">', () => `${homePromotionCards(page.homeCampaign.blackFriday)}<div class="quick-search">`);
     }
   }
   if (page.resultsLink) {

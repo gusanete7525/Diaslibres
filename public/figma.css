@@ -95,7 +95,12 @@ h1,h2,h3,.logo { font-family:inherit; }
 .escape-featured { padding-top:36px; scroll-margin-top:20px; }
 .seasonal-actions { display:flex; flex-wrap:wrap; gap:10px; margin:16px 0; }
 .seasonal-actions a { text-decoration:none; }
-.home-seasonal-actions { order:2; align-self:flex-start; }
+.home-promo-cards { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(0,1fr); gap:10px; width:100%; margin:0 0 18px; order:2; }
+.home-promo-card { display:grid; grid-template-rows:clamp(58px,9vw,112px) 1fr; overflow:hidden; min-width:0; border-radius:12px; background:#123d53; color:#fff; text-decoration:none; }
+.home-promo-card img { width:100%; height:100%; object-fit:cover; display:block; }
+.home-promo-card span { display:flex; align-items:center; padding:8px 10px; font-size:clamp(12px,1.25vw,15px); line-height:1.2; font-weight:700; }
+.home-promo-card:hover span { text-decoration:underline; }
+.home-promo-card:focus-visible { outline:3px solid var(--brand); outline-offset:3px; }
 [data-seasonal="navidad"] .hero-copy .eyebrow { color:var(--brand); }
 .ski-illustration { display:block; width:min(100%, 560px); height:auto; border-radius:16px; margin-block:16px; }
 .christmas-guide { scroll-margin-top:24px; margin-bottom:32px; }
