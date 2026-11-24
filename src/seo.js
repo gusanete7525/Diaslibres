@@ -506,7 +506,7 @@ export function renderPage(html, page, { site, verification, lang = 'es' } = {})
   }
   if (page.homeCampaign) {
     out = out
-      .replace('<body>', '<body class="home-page">')
+      .replace('<body>', page.homeCampaign.christmas ? '<body class="home-page christmas-theme">' : '<body class="home-page">')
       .replace(/(<figure class="hero-visual">[\s\S]*?<\/figure>)([\s\S]*?)(<section id="escapeFeatured"[\s\S]*?<\/section>)/,
         (_, visual, between, escapes) => `<div class="home-first-look">${escapes}${visual}</div>${between}`);
   }

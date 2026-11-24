@@ -173,3 +173,45 @@ h1,h2,h3,.logo { font-family:inherit; }
   .home-page .escape-ai { order:6; width:100%; }
   .home-page .manual-links { order:7; }
 }
+
+/* Holiday accents keep the offer cards and search fields on solid surfaces. */
+:is(.christmas-theme, [data-seasonal="navidad"]) {
+  --christmas-green:#176447;
+  --christmas-red:#92263b;
+  --christmas-gold:#deb75e;
+  --christmas-warm:rgba(222,183,94,.16);
+  --christmas-cool:rgba(39,128,93,.10);
+  background-image:radial-gradient(ellipse at 80% 0, var(--christmas-warm), transparent 68%),
+    radial-gradient(ellipse at 0 0, var(--christmas-cool), transparent 65%);
+  background-size:100% 620px;
+  background-repeat:no-repeat;
+}
+:is(.christmas-theme, [data-seasonal="navidad"]) .topbar {
+  box-shadow:inset 0 -3px var(--christmas-green), inset 0 -5px var(--christmas-gold);
+}
+:is(.christmas-theme, [data-seasonal="navidad"]) .hero-intro { position:relative; }
+:is(.christmas-theme, [data-seasonal="navidad"]) .hero-intro::before {
+  content:"";
+  position:absolute;
+  inset:5px 0 auto;
+  height:10px;
+  pointer-events:none;
+  background:radial-gradient(circle at 8px 4px, var(--christmas-gold) 0 2px, transparent 3px) repeat-x 0 0 / 64px 10px,
+    radial-gradient(circle at 8px 6px, var(--christmas-red) 0 2px, transparent 3px) repeat-x 32px 0 / 64px 10px;
+}
+:is(.christmas-theme, [data-seasonal="navidad"]) .hero-visual {
+  border:1px solid var(--christmas-gold);
+}
+.christmas-theme .home-promo-card:first-child {
+  background:var(--christmas-red);
+  box-shadow:inset 0 -2px var(--christmas-gold);
+}
+.christmas-theme .home-promo-card:nth-child(2) { background:var(--christmas-green); }
+.christmas-theme .home-first-look .escape-card {
+  border-inline-start:3px solid var(--christmas-green);
+}
+[data-seasonal="navidad"] .christmas-guide > h2 {
+  border-inline-start:4px solid var(--christmas-gold);
+  padding-inline-start:12px;
+}
+[data-seasonal="navidad"] .christmas-city { border-block-start:3px solid var(--christmas-green); }
