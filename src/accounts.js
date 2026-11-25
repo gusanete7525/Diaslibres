@@ -81,7 +81,8 @@ export class Accounts {
     this.microsoftClientId = String(microsoftClientId || '').trim() || null;
     this.facebookAppId = String(facebookAppId || '').trim() || null;
     this.jwks = new Map(); // url → { at, keys }
-    this.fetch = fetchImpl;
+    // Envuelto: en Cloudflare Workers, fetch falla («Illegal invocation») si se llama con otro `this`.
+    this.fetch = (...args) => fetchImpl(...args);
     this.now = now;
     this.ipHits = new Map(); // ip → [marcas de tiempo] (límite de emails por hora)
   }

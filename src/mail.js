@@ -17,7 +17,8 @@ export class Mailer {
     this.apiKey = String(apiKey || '').trim();
     this.admin = String(admin || '').trim();
     this.from = from || 'DíasLibres <onboarding@resend.dev>';
-    this.fetch = fetchImpl;
+    // Envuelto: en Cloudflare Workers, fetch falla («Illegal invocation») si se llama con otro `this`.
+    this.fetch = (...args) => fetchImpl(...args);
     this.lastError = null; // último error de Resend (sin la clave), para /api/health
   }
 

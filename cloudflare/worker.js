@@ -10,6 +10,10 @@ import {makeWorkersAiSearch} from './ai-search.js';
 import { SqliteMap } from './sqlite-map.js';
 import indexHtml from '../public/index.html';
 
+// Si el Durable Object se reinicia dentro del mismo aislamiento, el puerto anterior sigue ocupado:
+// cada arranque usa uno nuevo para no fallar con EADDRINUSE.
+let nextPort = 8080;
+
 // One stateful coordinator keeps provider concurrency limits and payment locks in one place.
 // Durable caches persist hotel IDs/offers; D1 persists bookings, accounts and sessions.
 export class DiasLibresApp extends DurableObject {
@@ -28,7 +32,7 @@ export class DiasLibresApp extends DurableObject {
       backgroundTask:promise=>ctx.waitUntil(promise),searchAi:makeWorkersAiSearch(env.AI,{model:env.WORKERS_AI_MODEL}),limiterFactory,lookupFailures:new SqliteMap(sql,'lookup-fails',5000)});
     this.app=app;
     this.env=env;
-    this.handler=httpServerHandler(app.listen(8080));
+    this.handler=httpServerHandler(app.listen(nextPort++));
   }
   async fetch(request) {
     // Staging reads/cotizaciones work, but it must not create/cancel real reservations or send emails.

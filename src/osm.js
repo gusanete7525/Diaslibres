@@ -33,7 +33,8 @@ function hash(s) {
 export class OsmHotels {
   constructor({ file = null, fetchImpl = globalThis.fetch } = {}) {
     this.file = file;
-    this.fetch = fetchImpl;
+    // Envuelto: en Cloudflare Workers, fetch falla («Illegal invocation») si se llama con otro `this`.
+    this.fetch = (...args) => fetchImpl(...args);
     this.cache = {}; // ciudad normalizada -> { at, hotels }
     this.pending = new Map();
     this.queue = Promise.resolve(); // serializa peticiones (máx. ~1/s a Nominatim)

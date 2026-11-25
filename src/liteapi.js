@@ -146,7 +146,8 @@ export class LiteApi {
     if (!key) throw new Error('Falta LITEAPI_KEY');
     this.key = key;
     this.lastError = null; // último error de LiteAPI (sin la clave), para /api/health
-    this.fetch = fetchImpl;
+    // Envuelto: en Cloudflare Workers, fetch falla («Illegal invocation») si se llama con otro `this`.
+    this.fetch = (...args) => fetchImpl(...args);
     this.sandbox = key.startsWith('sand_');
     this.active = 0;
     this.waiting = [];
