@@ -723,6 +723,7 @@ export default {
   "Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.": "Unterkunft gesamt für 2 Erwachsene, 1 Zimmer. Ohne Anreise. 3 Tage umfassen 2 Nächte. Feiertage werden nicht geprüft.",
   "Descubrir dónde puedo ir": "Entdecken, wohin ich reisen kann",
   "O cuéntanos tu viaje con tus palabras": "Oder beschreibe deine Reise mit eigenen Worten",
+  "Pregúntale a Manake IA": "Frag Manake IA",
   "Escapadas de 3 días para el próximo mes": "3-Tage-Reisen im nächsten Monat",
   "Escapadas de {n} días": "Kurzreisen für {n} Tage",
   "Comparamos algunas fechas y destinos para inspirarte. No es una búsqueda exhaustiva ni incluye el transporte.": "Wir vergleichen ausgewählte Termine und Ziele zur Inspiration. Keine vollständige Suche, ohne Anreise.",

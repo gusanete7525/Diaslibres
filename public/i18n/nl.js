@@ -722,6 +722,7 @@ export default {
   "Total de alojamiento para 2 adultos, 1 habitación. Transporte no incluido. Un viaje de 3 días incluye 2 noches. Puentes sin calendario de festivos.": "Totaal verblijf voor 2 volwassenen, 1 kamer. Vervoer niet inbegrepen. 3 dagen omvatten 2 nachten. Feestdagen worden niet gecontroleerd.",
   "Descubrir dónde puedo ir": "Ontdek waar ik heen kan",
   "O cuéntanos tu viaje con tus palabras": "Of beschrijf je reis in je eigen woorden",
+  "Pregúntale a Manake IA": "Vraag het aan Manake IA",
   "Escapadas de 3 días para el próximo mes": "3-daagse uitstapjes volgende maand",
   "Escapadas de {n} días": "Uitstapjes van {n} dagen",
   "Comparamos algunas fechas y destinos para inspirarte. No es una búsqueda exhaustiva ni incluye el transporte.": "We vergelijken enkele datums en bestemmingen ter inspiratie. Geen volledige zoekopdracht; vervoer is uitgesloten.",
